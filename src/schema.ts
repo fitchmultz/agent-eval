@@ -175,6 +175,38 @@ export const metricsSchema = z.object({
   inventory: z.array(inventoryRecordSchema),
 });
 
+export const summaryArtifactSchema = z.object({
+  evaluatorVersion: z.string().min(1),
+  schemaVersion: z.string().min(1),
+  generatedAt: z.string().min(1),
+  sessions: z.int().nonnegative(),
+  turns: z.int().nonnegative(),
+  incidents: z.int().nonnegative(),
+  labels: z.array(
+    z.object({
+      label: z.enum(labelTaxonomy),
+      count: z.int().nonnegative(),
+    }),
+  ),
+  severities: z.array(
+    z.object({
+      severity: z.enum(severityValues),
+      count: z.int().nonnegative(),
+    }),
+  ),
+  compliance: z.array(complianceAggregateSchema),
+  topIncidents: z.array(
+    z.object({
+      incidentId: z.string().min(1),
+      sessionId: z.string().min(1),
+      summary: z.string().min(1),
+      severity: z.enum(severityValues),
+      confidence: z.enum(confidenceValues),
+      evidencePreview: z.string().min(1).optional(),
+    }),
+  ),
+});
+
 export type SourceRef = z.infer<typeof sourceRefSchema>;
 export type LabelRecord = z.infer<typeof labelRecordSchema>;
 export type ToolCallSummary = z.infer<typeof toolCallSummarySchema>;
@@ -186,3 +218,4 @@ export type InventoryRecord = z.infer<typeof inventoryRecordSchema>;
 export type ComplianceAggregate = z.infer<typeof complianceAggregateSchema>;
 export type LabelCountRecord = z.infer<typeof labelCountSchema>;
 export type MetricsRecord = z.infer<typeof metricsSchema>;
+export type SummaryArtifact = z.infer<typeof summaryArtifactSchema>;

@@ -9,6 +9,7 @@ import { scoreCompliance } from "./compliance.js";
 import { discoverArtifacts } from "./discovery.js";
 import { writeJsonLinesFile, writeTextFile } from "./filesystem.js";
 import { labelTurn } from "./labels.js";
+import { createPresentationArtifacts } from "./presentation.js";
 import { renderReport } from "./report.js";
 import { createMessagePreviews } from "./sanitization.js";
 import type {
@@ -272,4 +273,25 @@ export async function writeEvaluationArtifacts(
     `${JSON.stringify(result.metrics, null, 2)}\n`,
   );
   await writeTextFile(join(outputDir, "report.md"), result.report);
+  const presentation = createPresentationArtifacts(
+    result.metrics,
+    result.incidents,
+  );
+  await writeTextFile(
+    join(outputDir, "summary.json"),
+    `${JSON.stringify(presentation.summary, null, 2)}\n`,
+  );
+  await writeTextFile(join(outputDir, "report.html"), presentation.reportHtml);
+  await writeTextFile(
+    join(outputDir, "label-counts.svg"),
+    presentation.labelChartSvg,
+  );
+  await writeTextFile(
+    join(outputDir, "compliance-summary.svg"),
+    presentation.complianceChartSvg,
+  );
+  await writeTextFile(
+    join(outputDir, "severity-breakdown.svg"),
+    presentation.severityChartSvg,
+  );
 }
