@@ -5,35 +5,91 @@
  */
 import type { IncidentRecord, MetricsRecord } from "./schema.js";
 
+function renderLabelLines(metrics: MetricsRecord): string {
+  const populated = Object.entries(metrics.labelCounts)
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .sort(
+      (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+    );
+
+  if (populated.length === 0) {
+    return "- No labels were detected.";
+  }
+
+  return populated.map(([label, count]) => `- ${label}: ${count}`).join("\n");
+}
+
+function renderComplianceLines(metrics: MetricsRecord): string {
+  return metrics.complianceSummary
+    .map(
+      (rule) =>
+        `- ${rule.rule}: pass ${rule.passCount}, fail ${rule.failCount}, n/a ${rule.notApplicableCount}, unknown ${rule.unknownCount}`,
+    )
+    .join("\n");
+}
+
+function renderSessionLines(metrics: MetricsRecord): string {
+  const rankedSessions = [...metrics.sessions].sort(
+    (left, right) =>
+      right.incidentCount - left.incidentCount ||
+      left.complianceScore - right.complianceScore ||
+      left.sessionId.localeCompare(right.sessionId),
+  );
+
+  if (rankedSessions.length === 0) {
+    return "- No sessions parsed.";
+  }
+
+  return rankedSessions
+    .slice(0, 10)
+    .map(
+      (session) =>
+        `- ${session.sessionId}: score ${session.complianceScore}, incidents ${session.incidentCount}, labeled turns ${session.labeledTurnCount}, writes ${session.writeCount}, verifications ${session.verificationPassedCount}/${session.verificationCount}`,
+    )
+    .join("\n");
+}
+
 function renderIncidentLines(incidents: readonly IncidentRecord[]): string {
   if (incidents.length === 0) {
     return "- No labeled incidents detected.\n";
   }
 
-  return incidents
+  const rankedIncidents = [...incidents].sort(
+    (left, right) =>
+      right.turnIndices.length - left.turnIndices.length ||
+      left.summary.localeCompare(right.summary),
+  );
+
+  return rankedIncidents
     .slice(0, 10)
-    .map(
-      (incident) =>
-        `- \`${incident.severity}\` / \`${incident.confidence}\` ${incident.summary} (${incident.sessionId})`,
-    )
+    .map((incident) => {
+      const evidence = incident.evidencePreviews[0];
+      const suffix = evidence ? ` | evidence: "${evidence}"` : "";
+      return `- \`${incident.severity}\` / \`${incident.confidence}\` ${incident.summary} (${incident.sessionId})${suffix}`;
+    })
     .join("\n");
+}
+
+function renderInventoryLines(metrics: MetricsRecord): string {
+  const required = metrics.inventory.filter((record) => record.required);
+  const optional = metrics.inventory.filter((record) => record.optional);
+
+  const requiredLines = required.map(
+    (record) =>
+      `- required ${record.kind}: ${record.discovered ? "present" : "missing"} at \`${record.path}\``,
+  );
+  const optionalLines = optional.map(
+    (record) =>
+      `- optional ${record.kind}: ${record.discovered ? "present" : "missing"} at \`${record.path}\``,
+  );
+
+  return [...requiredLines, ...optionalLines].join("\n");
 }
 
 export function renderReport(
   metrics: MetricsRecord,
   incidents: readonly IncidentRecord[],
 ): string {
-  const sessionLines = metrics.sessions
-    .map(
-      (session) =>
-        `- ${session.sessionId}: score ${session.complianceScore}, incidents ${session.incidentCount}, writes ${session.writeCount}, verifications ${session.verificationPassedCount}/${session.verificationCount}`,
-    )
-    .join("\n");
-
-  const labelLines = Object.entries(metrics.labelCounts)
-    .map(([label, count]) => `- ${label}: ${count}`)
-    .join("\n");
-
   return [
     "# Codex Evaluator Report",
     "",
@@ -46,11 +102,15 @@ export function renderReport(
     "",
     "## Label Counts",
     "",
-    labelLines.length > 0 ? labelLines : "- No labels were detected.",
+    renderLabelLines(metrics),
     "",
-    "## Session Compliance",
+    "## Compliance Summary",
     "",
-    sessionLines.length > 0 ? sessionLines : "- No sessions parsed.",
+    renderComplianceLines(metrics),
+    "",
+    "## Session Highlights",
+    "",
+    renderSessionLines(metrics),
     "",
     "## Top Incidents",
     "",
@@ -58,10 +118,9 @@ export function renderReport(
     "",
     "## Inventory",
     "",
-    ...metrics.inventory.map(
-      (record) =>
-        `- ${record.kind}: ${record.discovered ? "present" : "missing"} at \`${record.path}\``,
-    ),
+    renderInventoryLines(metrics),
+    "",
+    "_Incident evidence is redacted and truncated for compact, public-safe reporting._",
     "",
   ].join("\n");
 }

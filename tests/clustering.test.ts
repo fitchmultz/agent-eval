@@ -17,8 +17,13 @@ describe("clusterIncidents", () => {
           sessionId: "session-1",
           turnId: "turn-1",
           turnIndex: 0,
-          userMessages: ["Tests still fail"],
-          assistantMessages: [],
+          userMessageCount: 1,
+          assistantMessageCount: 0,
+          userMessagePreviews: [
+            "# AGENTS.md instructions for /tmp/demo <INSTRUCTIONS>",
+            "Tests still fail",
+          ],
+          assistantMessagePreviews: [],
           toolCalls: [],
           labels: [
             {
@@ -38,8 +43,10 @@ describe("clusterIncidents", () => {
           sessionId: "session-1",
           turnId: "turn-2",
           turnIndex: 1,
-          userMessages: ["Still failing after the last change"],
-          assistantMessages: [],
+          userMessageCount: 1,
+          assistantMessageCount: 0,
+          userMessagePreviews: ["Still failing after the last change"],
+          assistantMessagePreviews: [],
           toolCalls: [],
           labels: [
             {
@@ -62,5 +69,9 @@ describe("clusterIncidents", () => {
     expect(incidents).toHaveLength(1);
     expect(incidents[0]?.turnIndices).toEqual([0, 1]);
     expect(incidents[0]?.severity).toBe("high");
+    expect(incidents[0]?.evidencePreviews).toEqual([
+      "Tests still fail",
+      "Still failing after the last change",
+    ]);
   });
 });

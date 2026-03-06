@@ -23,7 +23,7 @@ const labelRules: LabelRule[] = [
     rationale:
       "User indicated the agent drifted away from the requested context or scope.",
     test: (text) =>
-      /context drift|lost context|wrong repo|not what i asked|off track|drifting/i.test(
+      /context drift|lost context|wrong repo|not what i asked|off track|drifting|you forgot the context/i.test(
         text,
       ),
   },
@@ -33,7 +33,7 @@ const labelRules: LabelRule[] = [
     confidence: "high",
     rationale: "User called out failing tests, build, lint, or CI behavior.",
     test: (text) =>
-      /(tests?|build|lint|typecheck|ci).*(fail|failing|broken|error)|still fails/i.test(
+      /(still fails?|still failing|tests? (are )?(still )?(failing|broken)|build (is )?(still )?(failing|broken)|lint (is )?(still )?(failing|broken)|typecheck (is )?(still )?(failing|broken)|ci (is )?(red|broken|failing)|make ci (still )?fails?|you (didn['’]t|did not) run (tests?|make ci))/i.test(
         text,
       ),
   },
@@ -43,7 +43,9 @@ const labelRules: LabelRule[] = [
     confidence: "high",
     rationale: "User explicitly interrupted or redirected ongoing work.",
     test: (text) =>
-      /\b(stop|pause|hold on|wait|carry on as planned)\b/i.test(text),
+      /\b(stop|pause|hold on|wait|sorry to interrupt|interrupting)\b/i.test(
+        text,
+      ),
   },
   {
     label: "regression_report",
@@ -52,7 +54,9 @@ const labelRules: LabelRule[] = [
     rationale:
       "User reported a regression or breakage introduced by prior work.",
     test: (text) =>
-      /\b(regression|broke|broken|used to work|now fails)\b/i.test(text),
+      /\b(regression(?! tests?\b)|you broke|this broke|broken now|used to work|now fails|now broken)\b/i.test(
+        text,
+      ),
   },
   {
     label: "praise",
@@ -64,8 +68,8 @@ const labelRules: LabelRule[] = [
   },
   {
     label: "context_reinjection",
-    severity: "medium",
-    confidence: "medium",
+    severity: "low",
+    confidence: "high",
     rationale: "User restated goals or constraints to re-anchor the agent.",
     test: (text) =>
       /(goals?:|constraints?:|deliverables?:|primary objective:|minimum you should evaluate)/i.test(
@@ -85,11 +89,11 @@ const labelRules: LabelRule[] = [
   {
     label: "stalled_or_guessing",
     severity: "high",
-    confidence: "medium",
+    confidence: "high",
     rationale:
       "User indicated the agent appears stalled, guessing, or not making progress.",
     test: (text) =>
-      /\b(stalled|guessing|not making progress|you can avoid|keep zod)\b/i.test(
+      /\b(stalled|guessing|not making progress|spinning|you seem unsure|don't guess|stop guessing)\b/i.test(
         text,
       ),
   },

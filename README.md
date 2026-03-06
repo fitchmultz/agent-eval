@@ -35,6 +35,7 @@ node dist/cli.js inspect --codex-home ~/.codex
 - `artifacts/report.md`
 
 Every machine-readable output includes `evaluatorVersion` and `schemaVersion`.
+Generated turn and incident artifacts contain redacted, truncated message previews rather than full transcript bodies so the default outputs stay compact and public-safe.
 
 ## Local Verification
 
@@ -49,3 +50,4 @@ make ci
 - Optional enrichment sources are inventoried but not deeply merged into canonical parsing yet.
 - Some Codex transcript shapes may drift over time; unknown shapes should be treated as schema drift candidates in future revisions.
 - Full-history local corpora can be large; use `--session-limit` for bounded exploratory runs while throughput and streaming improve.
+- Artifact previews redact home-directory paths and email addresses, but they are not a full secret-scanning system.

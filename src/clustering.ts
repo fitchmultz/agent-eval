@@ -68,6 +68,21 @@ function sharesAnyLabel(
   return right.some((label) => leftLabels.has(label.label));
 }
 
+function isBoilerplatePreview(preview: string): boolean {
+  return /AGENTS\.md instructions|<INSTRUCTIONS>|GLOBAL AGENTS GUIDANCE/i.test(
+    preview,
+  );
+}
+
+function buildEvidencePreviews(turns: readonly EvaluatedTurn[]): string[] {
+  const previews = turns.flatMap((turn) => turn.userMessagePreviews);
+  const preferred = previews.filter(
+    (preview) => !isBoilerplatePreview(preview),
+  );
+  const selected = preferred.length > 0 ? preferred : previews;
+  return selected.slice(0, 3);
+}
+
 export function clusterIncidents(
   turns: readonly EvaluatedTurn[],
   options: ClusterOptions,
@@ -94,6 +109,7 @@ export function clusterIncidents(
       labels.map((label) => label.confidence),
     );
     const summary = `${labels.map((label) => label.label).join(", ")} across ${currentCluster.length} turn(s)`;
+    const evidencePreviews = buildEvidencePreviews(currentCluster);
     const turnIds = currentCluster
       .map((turn) => turn.turnId)
       .filter((turnId): turnId is string => typeof turnId === "string");
@@ -107,6 +123,7 @@ export function clusterIncidents(
       turnIndices: currentCluster.map((turn) => turn.turnIndex),
       labels,
       summary,
+      evidencePreviews,
       severity,
       confidence,
       firstSeenAt: first.startedAt,

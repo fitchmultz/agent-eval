@@ -90,8 +90,10 @@ export const rawTurnSchema = z.object({
   turnIndex: z.int().nonnegative(),
   startedAt: z.string().min(1).optional(),
   cwd: z.string().min(1).optional(),
-  userMessages: z.array(z.string()),
-  assistantMessages: z.array(z.string()),
+  userMessageCount: z.int().nonnegative(),
+  assistantMessageCount: z.int().nonnegative(),
+  userMessagePreviews: z.array(z.string()),
+  assistantMessagePreviews: z.array(z.string()),
   toolCalls: z.array(toolCallSummarySchema),
   labels: z.array(labelRecordSchema),
   sourceRefs: z.array(sourceRefSchema).min(1),
@@ -106,6 +108,7 @@ export const incidentSchema = z.object({
   turnIndices: z.array(z.int().nonnegative()),
   labels: z.array(labelRecordSchema).min(1),
   summary: z.string().min(1),
+  evidencePreviews: z.array(z.string()),
   severity: z.enum(severityValues),
   confidence: z.enum(confidenceValues),
   firstSeenAt: z.string().min(1).optional(),
@@ -140,6 +143,14 @@ export const inventoryRecordSchema = z.object({
   optional: z.boolean(),
 });
 
+export const complianceAggregateSchema = z.object({
+  rule: z.enum(complianceRuleValues),
+  passCount: z.int().nonnegative(),
+  failCount: z.int().nonnegative(),
+  notApplicableCount: z.int().nonnegative(),
+  unknownCount: z.int().nonnegative(),
+});
+
 export const labelCountSchema = z.object({
   context_drift: z.int().nonnegative().optional(),
   test_build_lint_failure_complaint: z.int().nonnegative().optional(),
@@ -159,6 +170,7 @@ export const metricsSchema = z.object({
   turnCount: z.int().nonnegative(),
   incidentCount: z.int().nonnegative(),
   labelCounts: labelCountSchema,
+  complianceSummary: z.array(complianceAggregateSchema),
   sessions: z.array(sessionMetricsSchema),
   inventory: z.array(inventoryRecordSchema),
 });
@@ -171,5 +183,6 @@ export type IncidentRecord = z.infer<typeof incidentSchema>;
 export type ComplianceRuleResult = z.infer<typeof complianceRuleResultSchema>;
 export type SessionMetrics = z.infer<typeof sessionMetricsSchema>;
 export type InventoryRecord = z.infer<typeof inventoryRecordSchema>;
+export type ComplianceAggregate = z.infer<typeof complianceAggregateSchema>;
 export type LabelCountRecord = z.infer<typeof labelCountSchema>;
 export type MetricsRecord = z.infer<typeof metricsSchema>;

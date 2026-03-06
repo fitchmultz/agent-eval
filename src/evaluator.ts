@@ -10,7 +10,11 @@ import { discoverArtifacts } from "./discovery.js";
 import { writeJsonLinesFile, writeTextFile } from "./filesystem.js";
 import { labelTurn } from "./labels.js";
 import { renderReport } from "./report.js";
+import { createMessagePreviews } from "./sanitization.js";
 import type {
+  ComplianceAggregate,
+  ComplianceRuleName,
+  ComplianceStatus,
   IncidentRecord,
   LabelCountRecord,
   MetricsRecord,
@@ -18,6 +22,7 @@ import type {
   SessionMetrics,
   ToolCallSummary,
 } from "./schema.js";
+import { complianceRuleValues } from "./schema.js";
 import { parseTranscriptFile } from "./transcript.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
 
@@ -76,10 +81,48 @@ function createEmptyLabelCounts(): LabelCountRecord {
   return {};
 }
 
-function redactPath(path: string): string {
+function getHomeDirectory(): string | undefined {
   const homeEnvironmentKey = "HOME";
-  const homeDirectory = process.env[homeEnvironmentKey];
+  return process.env[homeEnvironmentKey];
+}
+
+function redactPath(path: string): string {
+  const homeDirectory = getHomeDirectory();
   return homeDirectory ? path.replace(homeDirectory, "~") : path;
+}
+
+function createEmptyComplianceSummary(): ComplianceAggregate[] {
+  return complianceRuleValues.map((rule) => ({
+    rule,
+    passCount: 0,
+    failCount: 0,
+    notApplicableCount: 0,
+    unknownCount: 0,
+  }));
+}
+
+function incrementComplianceSummary(
+  summary: readonly ComplianceAggregate[],
+  rule: ComplianceRuleName,
+  status: ComplianceStatus,
+): ComplianceAggregate[] {
+  return summary.map((entry) => {
+    if (entry.rule !== rule) {
+      return entry;
+    }
+
+    if (status === "pass") {
+      return { ...entry, passCount: entry.passCount + 1 };
+    }
+    if (status === "fail") {
+      return { ...entry, failCount: entry.failCount + 1 };
+    }
+    if (status === "not_applicable") {
+      return { ...entry, notApplicableCount: entry.notApplicableCount + 1 };
+    }
+
+    return { ...entry, unknownCount: entry.unknownCount + 1 };
+  });
 }
 
 export async function evaluateArtifacts(
@@ -98,9 +141,18 @@ export async function evaluateArtifacts(
   const rawTurns: RawTurnRecord[] = [];
   const sessionMetrics: SessionMetrics[] = [];
   let labelCounts = createEmptyLabelCounts();
+  let complianceSummary = createEmptyComplianceSummary();
+  const homeDirectory = getHomeDirectory();
 
   for (const session of parsedSessions) {
     const compliance = scoreCompliance(session);
+    for (const rule of compliance.rules) {
+      complianceSummary = incrementComplianceSummary(
+        complianceSummary,
+        rule.rule,
+        rule.status,
+      );
+    }
     let labeledTurnCount = 0;
 
     for (const turn of session.turns) {
@@ -121,8 +173,21 @@ export async function evaluateArtifacts(
         turnIndex: turn.turnIndex,
         startedAt: turn.startedAt,
         cwd: turn.cwd ? redactPath(turn.cwd) : undefined,
-        userMessages: turn.userMessages,
-        assistantMessages: turn.assistantMessages,
+        userMessageCount: turn.userMessages.length,
+        assistantMessageCount: turn.assistantMessages.length,
+        userMessagePreviews: createMessagePreviews(turn.userMessages, {
+          homeDirectory,
+          maxItems: 2,
+          maxLength: 220,
+        }),
+        assistantMessagePreviews: createMessagePreviews(
+          turn.assistantMessages,
+          {
+            homeDirectory,
+            maxItems: 2,
+            maxLength: 220,
+          },
+        ),
         toolCalls: turn.toolCalls.map((toolCall) => ({
           ...summarizeToolCall(toolCall.toolName, toolCall.argumentsText),
           status: toolCall.status,
@@ -173,6 +238,7 @@ export async function evaluateArtifacts(
     turnCount: rawTurns.length,
     incidentCount: incidents.length,
     labelCounts,
+    complianceSummary,
     sessions: sessionMetrics.map((session) => ({
       ...session,
       incidentCount: incidentCountBySession.get(session.sessionId) ?? 0,
