@@ -3,14 +3,17 @@
  * Entrypoint: `createPresentationArtifacts()` is used by the evaluator when writing output files.
  * Notes: These outputs are derived from canonical evaluator artifacts and are safe to regenerate at any time.
  */
+import {
+  buildSummaryArtifact,
+  buildSummaryInputsFromArtifacts,
+} from "./insights.js";
 import type {
   IncidentRecord,
-  LabelName,
   MetricsRecord,
+  RawTurnRecord,
   Severity,
   SummaryArtifact,
 } from "./schema.js";
-import { labelTaxonomy, severityValues } from "./schema.js";
 
 export interface PresentationArtifacts {
   summary: SummaryArtifact;
@@ -42,66 +45,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function getLabelCount(metrics: MetricsRecord, label: LabelName): number {
-  return metrics.labelCounts[label] ?? 0;
-}
-
-function rankIncidents(incidents: readonly IncidentRecord[]): IncidentRecord[] {
-  return [...incidents].sort(
-    (left, right) =>
-      right.turnIndices.length - left.turnIndices.length ||
-      left.summary.localeCompare(right.summary),
-  );
-}
-
-function buildSummary(
-  metrics: MetricsRecord,
-  incidents: readonly IncidentRecord[],
-): SummaryArtifact {
-  const labels = labelTaxonomy
-    .map((label) => ({
-      label,
-      count: getLabelCount(metrics, label),
-    }))
-    .filter((entry) => entry.count > 0)
-    .sort(
-      (left, right) =>
-        right.count - left.count || left.label.localeCompare(right.label),
-    );
-  const severityCounts = severityValues.map((severity) => ({
-    severity,
-    count: incidents.filter((incident) => incident.severity === severity)
-      .length,
-  }));
-
-  return {
-    evaluatorVersion: metrics.evaluatorVersion,
-    schemaVersion: metrics.schemaVersion,
-    generatedAt: metrics.generatedAt,
-    sessions: metrics.sessionCount,
-    turns: metrics.turnCount,
-    incidents: metrics.incidentCount,
-    labels,
-    severities: severityCounts,
-    compliance: metrics.complianceSummary,
-    topIncidents: rankIncidents(incidents)
-      .slice(0, 8)
-      .map((incident) => ({
-        incidentId: incident.incidentId,
-        sessionId: incident.sessionId,
-        summary: incident.summary,
-        severity: incident.severity,
-        confidence: incident.confidence,
-        evidencePreview: incident.evidencePreviews[0],
-      })),
-  };
-}
-
-function renderBarChart(
-  title: string,
-  data: readonly BarDatum[],
-  valueSuffix = "",
-): string {
+function renderBarChart(title: string, data: readonly BarDatum[]): string {
   const width = 920;
   const rowHeight = 34;
   const topPadding = 56;
@@ -118,7 +62,7 @@ function renderBarChart(
       return [
         `<text x="12" y="${y + 20}" font-size="14" fill="#17324D">${escapeHtml(entry.label)}</text>`,
         `<rect x="${leftPadding}" y="${y + 6}" width="${barWidth}" height="18" rx="6" fill="${entry.tone}" />`,
-        `<text x="${leftPadding + barWidth + 10}" y="${y + 20}" font-size="13" fill="#17324D">${entry.value}${escapeHtml(valueSuffix)}</text>`,
+        `<text x="${leftPadding + barWidth + 10}" y="${y + 20}" font-size="13" fill="#17324D">${entry.value}</text>`,
       ].join("");
     })
     .join("");
@@ -135,23 +79,39 @@ function renderBarChart(
 
 function renderSummaryCards(summary: SummaryArtifact): string {
   const cards = [
-    { label: "Sessions", value: summary.sessions },
-    { label: "Turns", value: summary.turns },
-    { label: "Incidents", value: summary.incidents },
     {
-      label: "Top Label Count",
-      value: summary.labels[0]?.count ?? 0,
-      detail: summary.labels[0]?.label ?? "none",
+      label: "Sessions",
+      value: `${summary.sessions}`,
+      detail: "Parsed transcript sessions",
+      tone: "neutral",
     },
+    {
+      label: "Incidents / 100 Turns",
+      value: `${summary.rates.incidentsPer100Turns}`,
+      detail: "Aggregate friction density",
+      tone: "neutral",
+    },
+    {
+      label: "Verified Write Rate",
+      value: `${summary.delivery.writeVerificationRate}%`,
+      detail: `${summary.delivery.verifiedWriteSessions}/${summary.delivery.sessionsWithWrites} write sessions`,
+      tone: summary.delivery.writeVerificationRate >= 100 ? "good" : "warn",
+    },
+    ...summary.insightCards.map((card) => ({
+      label: card.title,
+      value: card.value,
+      detail: card.detail,
+      tone: card.tone,
+    })),
   ];
 
   return cards
     .map(
       (card) => `
-      <article class="metric-card">
+      <article class="metric-card tone-${escapeHtml(card.tone ?? "neutral")}">
         <div class="metric-label">${escapeHtml(card.label)}</div>
-        <div class="metric-value">${card.value}</div>
-        <div class="metric-detail">${escapeHtml(card.detail ?? "")}</div>
+        <div class="metric-value">${escapeHtml(card.value)}</div>
+        <div class="metric-detail">${escapeHtml(card.detail)}</div>
       </article>`,
     )
     .join("");
@@ -178,6 +138,28 @@ function renderIncidentCards(summary: SummaryArtifact): string {
     .join("");
 }
 
+function renderSessionCards(summary: SummaryArtifact): string {
+  if (summary.topSessions.length === 0) {
+    return `<p class="empty-state">No session insights were available.</p>`;
+  }
+
+  return summary.topSessions
+    .map(
+      (session) => `
+      <article class="session-card">
+        <div class="incident-meta">
+          <span class="pill">${escapeHtml(session.archetype)}</span>
+          <span class="pill">friction ${session.frictionScore}</span>
+          <span class="pill">score ${session.complianceScore}</span>
+        </div>
+        <h3>${escapeHtml(session.sessionId)}</h3>
+        <p>${escapeHtml(session.note)}</p>
+        <p class="session-detail">Dominant labels: ${escapeHtml(session.dominantLabels.join(", ") || "none")}</p>
+      </article>`,
+    )
+    .join("");
+}
+
 function renderComplianceTable(summary: SummaryArtifact): string {
   return [
     `<table class="compliance-table">`,
@@ -190,6 +172,22 @@ function renderComplianceTable(summary: SummaryArtifact): string {
     "</tbody>",
     "</table>",
   ].join("");
+}
+
+function renderOpportunityList(summary: SummaryArtifact): string {
+  if (summary.opportunities.length === 0) {
+    return `<p class="empty-state">No deterministic improvement opportunities were identified.</p>`;
+  }
+
+  return summary.opportunities
+    .map(
+      (opportunity) => `
+      <li>
+        <strong>${escapeHtml(opportunity.title)}</strong>
+        <span>${escapeHtml(opportunity.rationale)}</span>
+      </li>`,
+    )
+    .join("");
 }
 
 function renderInventoryList(metrics: MetricsRecord): string {
@@ -227,6 +225,7 @@ function renderHtmlReport(
         --accent: #0f766e;
         --warn: #f4a259;
         --danger: #d64545;
+        --good: #2e9e6f;
       }
       * { box-sizing: border-box; }
       body {
@@ -237,13 +236,13 @@ function renderHtmlReport(
           linear-gradient(180deg, #faf6ee 0%, var(--bg) 100%);
         color: var(--ink);
       }
-      main { max-width: 1180px; margin: 0 auto; padding: 48px 24px 72px; }
+      main { max-width: 1220px; margin: 0 auto; padding: 48px 24px 72px; }
       header { margin-bottom: 32px; }
       h1, h2, h3 { margin: 0; }
       h1 { font-size: 3rem; line-height: 1; letter-spacing: -0.04em; margin-bottom: 12px; }
       h2 { font-size: 1.5rem; margin-bottom: 16px; }
-      p, li, td, th { line-height: 1.5; }
-      .lede { max-width: 720px; color: var(--muted); font-size: 1.05rem; }
+      p, li, td, th, span { line-height: 1.5; }
+      .lede { max-width: 760px; color: var(--muted); font-size: 1.05rem; }
       .meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
       .pill {
         display: inline-flex;
@@ -262,39 +261,42 @@ function renderHtmlReport(
         grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
         gap: 16px;
       }
-      .metric-card, .panel, .incident-card {
+      .metric-card, .panel, .incident-card, .session-card {
         background: var(--panel);
         border: 1px solid rgba(16,38,59,0.08);
         border-radius: 20px;
         box-shadow: 0 16px 40px rgba(16,38,59,0.08);
       }
-      .metric-card { padding: 20px; min-height: 144px; }
+      .metric-card { padding: 20px; min-height: 144px; border-top: 6px solid rgba(16,38,59,0.06); }
+      .tone-good { border-top-color: var(--good); }
+      .tone-warn { border-top-color: var(--warn); }
+      .tone-danger { border-top-color: var(--danger); }
       .metric-label { color: var(--muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.08em; }
-      .metric-value { font-size: 2.6rem; margin-top: 14px; }
+      .metric-value { font-size: 2.4rem; margin-top: 14px; }
       .metric-detail { color: var(--muted); margin-top: 8px; }
       .panel { padding: 18px; overflow-x: auto; }
-      .charts-grid {
+      .charts-grid, .sessions-grid, .incident-grid {
         display: grid;
         grid-template-columns: 1fr;
         gap: 18px;
       }
-      .incident-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 16px;
-      }
-      .incident-card { padding: 18px; border-top: 6px solid var(--accent); }
+      .incident-card, .session-card { padding: 18px; }
+      .incident-card { border-top: 6px solid var(--accent); }
       .incident-card.severity-high { border-top-color: var(--danger); }
       .incident-card.severity-medium { border-top-color: var(--warn); }
       .incident-card.severity-low, .incident-card.severity-info { border-top-color: var(--accent); }
       .incident-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; color: var(--muted); }
       .session-ref { font-size: 0.82rem; }
-      .incident-card h3 { font-size: 1.1rem; margin-bottom: 10px; }
-      .incident-card p { margin: 0; color: var(--muted); }
+      .incident-card h3, .session-card h3 { font-size: 1.1rem; margin-bottom: 10px; }
+      .incident-card p, .session-card p { margin: 0; color: var(--muted); }
+      .session-detail { margin-top: 8px !important; font-size: 0.92rem; }
       .compliance-table { width: 100%; border-collapse: collapse; }
       .compliance-table th, .compliance-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); }
-      .inventory-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
-      .inventory-list li { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.7); }
+      .inventory-list, .opportunity-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+      .inventory-list li, .opportunity-list li { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.7); }
+      .rates-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+      .rate-item { padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.7); }
+      .rate-value { font-size: 1.6rem; margin-top: 6px; }
       code {
         font-family: "SFMono-Regular", "SF Mono", "Menlo", monospace;
         font-size: 0.86rem;
@@ -305,6 +307,7 @@ function renderHtmlReport(
       @media (min-width: 980px) {
         .charts-grid { grid-template-columns: 1fr 1fr; }
         .charts-grid .wide { grid-column: 1 / -1; }
+        .sessions-grid, .incident-grid { grid-template-columns: repeat(2, 1fr); }
       }
     </style>`,
     "</head>",
@@ -312,7 +315,7 @@ function renderHtmlReport(
     "<main>",
     "<header>",
     "<h1>Codex Evaluator Report</h1>",
-    `<p class="lede">A deterministic, transcript-first evaluation summary for Codex session artifacts. Canonical JSONL and JSON outputs remain the source of truth; this HTML layer exists to make results easier to review, share, and embed in public writeups.</p>`,
+    `<p class="lede">A deterministic, transcript-first evaluation summary for Codex session artifacts. The canonical JSONL and JSON outputs remain the source of truth, while this layer turns them into operator-facing insights: where friction clustered, what got verified, and which sessions deserve attention first.</p>`,
     `<div class="meta-row">
       <span class="pill">evaluator ${escapeHtml(summary.evaluatorVersion)}</span>
       <span class="pill">schema ${escapeHtml(summary.schemaVersion)}</span>
@@ -320,15 +323,25 @@ function renderHtmlReport(
     </div>`,
     "</header>",
     `<section><div class="metric-grid">${renderSummaryCards(summary)}</div></section>`,
+    `<section><h2>Operational Rates</h2><div class="rates-grid">
+      <div class="rate-item"><strong>Incidents / 100 turns</strong><div class="rate-value">${summary.rates.incidentsPer100Turns}</div></div>
+      <div class="rate-item"><strong>Writes / 100 turns</strong><div class="rate-value">${summary.rates.writesPer100Turns}</div></div>
+      <div class="rate-item"><strong>Verification requests / 100 turns</strong><div class="rate-value">${summary.rates.verificationRequestsPer100Turns}</div></div>
+      <div class="rate-item"><strong>Interruptions / 100 turns</strong><div class="rate-value">${summary.rates.interruptionsPer100Turns}</div></div>
+      <div class="rate-item"><strong>Reinjections / 100 turns</strong><div class="rate-value">${summary.rates.reinjectionsPer100Turns}</div></div>
+      <div class="rate-item"><strong>Praise / 100 turns</strong><div class="rate-value">${summary.rates.praisePer100Turns}</div></div>
+    </div></section>`,
     `<section><h2>Charts</h2><div class="charts-grid">
       <div class="panel wide"><img alt="Label counts chart" src="label-counts.svg" /></div>
       <div class="panel"><img alt="Incident severity chart" src="severity-breakdown.svg" /></div>
       <div class="panel"><img alt="Compliance rule chart" src="compliance-summary.svg" /></div>
     </div></section>`,
+    `<section><h2>Sessions To Review First</h2><div class="sessions-grid">${renderSessionCards(summary)}</div></section>`,
     `<section><h2>Top Incidents</h2><div class="incident-grid">${renderIncidentCards(summary)}</div></section>`,
+    `<section><h2>Deterministic Opportunities</h2><ul class="opportunity-list">${renderOpportunityList(summary)}</ul></section>`,
     `<section><h2>Compliance Breakdown</h2><div class="panel">${renderComplianceTable(summary)}</div></section>`,
     `<section><h2>Inventory</h2><ul class="inventory-list">${renderInventoryList(metrics)}</ul></section>`,
-    `<p class="footer-note">Incident evidence is redacted and truncated for compact, public-safe reporting. Generated artifacts are derived outputs and can be regenerated from the canonical transcript-first pipeline.</p>`,
+    `<p class="footer-note">Incident evidence is redacted and truncated for compact, public-safe reporting. Derived outputs can be regenerated at any time from the canonical transcript-first artifacts.</p>`,
     "</main>",
     "</body>",
     "</html>",
@@ -338,39 +351,75 @@ function renderHtmlReport(
 export function createPresentationArtifacts(
   metrics: MetricsRecord,
   incidents: readonly IncidentRecord[],
+  rawTurns: readonly RawTurnRecord[],
 ): PresentationArtifacts {
-  const summary = buildSummary(metrics, incidents);
-  const labelChartSvg = renderBarChart(
-    "Label Counts",
-    summary.labels.map((entry, index) => ({
-      label: entry.label,
-      value: entry.count,
-      tone:
-        ["#0F766E", "#1D8A7A", "#329F8A", "#49B39A"][index % 4] ?? "#0F766E",
-    })),
-  );
-  const severityChartSvg = renderBarChart(
-    "Incident Severity",
-    summary.severities.map((entry) => ({
-      label: entry.severity,
-      value: entry.count,
-      tone: severityTones[entry.severity],
-    })),
-  );
-  const complianceChartSvg = renderBarChart(
-    "Compliance Pass Counts",
-    summary.compliance.map((entry) => ({
-      label: entry.rule,
-      value: entry.passCount,
-      tone: "#335C81",
-    })),
+  const summary = buildSummaryArtifact(
+    metrics,
+    buildSummaryInputsFromArtifacts(rawTurns, incidents),
   );
 
   return {
     summary,
     reportHtml: renderHtmlReport(summary, metrics),
-    labelChartSvg,
-    complianceChartSvg,
-    severityChartSvg,
+    labelChartSvg: renderBarChart(
+      "Label Counts",
+      summary.labels.map((entry, index) => ({
+        label: entry.label,
+        value: entry.count,
+        tone:
+          ["#0F766E", "#1D8A7A", "#329F8A", "#49B39A"][index % 4] ?? "#0F766E",
+      })),
+    ),
+    complianceChartSvg: renderBarChart(
+      "Compliance Pass Counts",
+      summary.compliance.map((entry) => ({
+        label: entry.rule,
+        value: entry.passCount,
+        tone: "#335C81",
+      })),
+    ),
+    severityChartSvg: renderBarChart(
+      "Incident Severity",
+      summary.severities.map((entry) => ({
+        label: entry.severity,
+        value: entry.count,
+        tone: severityTones[entry.severity],
+      })),
+    ),
+  };
+}
+
+export function createPresentationArtifactsFromSummary(
+  metrics: MetricsRecord,
+  summary: SummaryArtifact,
+): PresentationArtifacts {
+  return {
+    summary,
+    reportHtml: renderHtmlReport(summary, metrics),
+    labelChartSvg: renderBarChart(
+      "Label Counts",
+      summary.labels.map((entry, index) => ({
+        label: entry.label,
+        value: entry.count,
+        tone:
+          ["#0F766E", "#1D8A7A", "#329F8A", "#49B39A"][index % 4] ?? "#0F766E",
+      })),
+    ),
+    complianceChartSvg: renderBarChart(
+      "Compliance Pass Counts",
+      summary.compliance.map((entry) => ({
+        label: entry.rule,
+        value: entry.passCount,
+        tone: "#335C81",
+      })),
+    ),
+    severityChartSvg: renderBarChart(
+      "Incident Severity",
+      summary.severities.map((entry) => ({
+        label: entry.severity,
+        value: entry.count,
+        tone: severityTones[entry.severity],
+      })),
+    ),
   };
 }

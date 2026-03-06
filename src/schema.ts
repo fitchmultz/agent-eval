@@ -18,6 +18,13 @@ export const labelTaxonomy = [
 
 export const severityValues = ["info", "low", "medium", "high"] as const;
 export const confidenceValues = ["low", "medium", "high"] as const;
+export const sessionArchetypeValues = [
+  "verified_delivery",
+  "unverified_delivery",
+  "high_friction_recovery",
+  "interrupted_non_write",
+  "analysis_only",
+] as const;
 export const sourceKindValues = [
   "session_jsonl",
   "state_sqlite",
@@ -52,6 +59,7 @@ export const complianceStatusValues = [
 export type LabelName = (typeof labelTaxonomy)[number];
 export type Severity = (typeof severityValues)[number];
 export type Confidence = (typeof confidenceValues)[number];
+export type SessionArchetype = (typeof sessionArchetypeValues)[number];
 export type SourceKind = (typeof sourceKindValues)[number];
 export type ToolCategory = (typeof toolCategoryValues)[number];
 export type ComplianceRuleName = (typeof complianceRuleValues)[number];
@@ -195,6 +203,47 @@ export const summaryArtifactSchema = z.object({
     }),
   ),
   compliance: z.array(complianceAggregateSchema),
+  rates: z.object({
+    incidentsPer100Turns: z.number().nonnegative(),
+    writesPer100Turns: z.number().nonnegative(),
+    verificationRequestsPer100Turns: z.number().nonnegative(),
+    interruptionsPer100Turns: z.number().nonnegative(),
+    reinjectionsPer100Turns: z.number().nonnegative(),
+    praisePer100Turns: z.number().nonnegative(),
+  }),
+  delivery: z.object({
+    sessionsWithWrites: z.int().nonnegative(),
+    verifiedWriteSessions: z.int().nonnegative(),
+    writeVerificationRate: z.number().nonnegative(),
+  }),
+  insightCards: z.array(
+    z.object({
+      title: z.string().min(1),
+      value: z.string().min(1),
+      detail: z.string().min(1),
+      tone: z.enum(["neutral", "good", "warn", "danger"]),
+    }),
+  ),
+  topSessions: z.array(
+    z.object({
+      sessionId: z.string().min(1),
+      archetype: z.enum(sessionArchetypeValues),
+      frictionScore: z.number().nonnegative(),
+      complianceScore: z.int().min(0).max(100),
+      incidentCount: z.int().nonnegative(),
+      labeledTurnCount: z.int().nonnegative(),
+      writeCount: z.int().nonnegative(),
+      verificationPassedCount: z.int().nonnegative(),
+      dominantLabels: z.array(z.enum(labelTaxonomy)),
+      note: z.string().min(1),
+    }),
+  ),
+  opportunities: z.array(
+    z.object({
+      title: z.string().min(1),
+      rationale: z.string().min(1),
+    }),
+  ),
   topIncidents: z.array(
     z.object({
       incidentId: z.string().min(1),
@@ -202,6 +251,7 @@ export const summaryArtifactSchema = z.object({
       summary: z.string().min(1),
       severity: z.enum(severityValues),
       confidence: z.enum(confidenceValues),
+      turnSpan: z.int().positive(),
       evidencePreview: z.string().min(1).optional(),
     }),
   ),

@@ -19,6 +19,7 @@ pnpm inspect -- --codex-home ~/.codex
 pnpm parse -- --codex-home ~/.codex --output-dir artifacts
 pnpm eval -- --codex-home ~/.codex --output-dir artifacts
 pnpm report -- --codex-home ~/.codex --output-dir artifacts
+pnpm exec tsx src/cli.ts --codex-home ~/.codex --output-dir artifacts --summary-only eval
 pnpm exec tsx src/cli.ts --codex-home ~/.codex --output-dir artifacts --session-limit 25 eval
 ```
 
@@ -50,6 +51,7 @@ open artifacts/report.html
 
 Every machine-readable output includes `evaluatorVersion` and `schemaVersion`.
 Generated turn and incident artifacts contain redacted, truncated message previews rather than full transcript bodies so the default outputs stay compact and public-safe.
+`summary.json` is the best compact handoff artifact for downstream analysis because it includes rates, write-verification coverage, ranked sessions, deterministic opportunities, and top incidents in one place.
 
 ## Usage Guide
 
@@ -61,15 +63,32 @@ Use `eval` for the full deterministic pipeline. It writes the canonical artifact
 
 Use `report` when you want the markdown report on stdout while still writing the same artifacts into the output directory.
 
+Use `--summary-only` when you want a large-corpus run that stays fast and bounded. This mode skips `raw-turns.jsonl` and `incidents.jsonl` emission and focuses on `metrics.json`, `summary.json`, `report.md`, `report.html`, and the SVG charts.
+
+### What The Pretty Outputs Are For
+
+- `summary.json` is the machine-friendly “insight layer” built from canonical artifacts.
+- `report.md` is best for PRs, blog drafts, and versioned text snapshots.
+- `report.html` is best for local review and sharing a single portable file.
+- The SVG charts are meant to be easy to embed into docs or blog posts without needing screenshots.
+
 ### Suggested Workflow
 
 ```bash
 pnpm inspect -- --codex-home ~/.codex
 pnpm eval -- --codex-home ~/.codex --output-dir artifacts
+pnpm exec tsx src/cli.ts --codex-home ~/.codex --output-dir artifacts --session-limit 1000 --summary-only eval
 open artifacts/report.html
 cat artifacts/report.md
 jq '.labels' artifacts/summary.json
+jq '.topSessions' artifacts/summary.json
 ```
+
+### Session Selection
+
+- When `--session-limit N` is set, the evaluator uses the most recent `N` discovered session transcripts.
+- This applies to both full-output runs and `--summary-only` runs.
+- Use `inspect` first if you want to understand the size of the local corpus before choosing a limit.
 
 ### Public Repo Notes
 
@@ -77,6 +96,7 @@ jq '.labels' artifacts/summary.json
 - Generated previews redact home-directory paths and email addresses, but they are still summaries of real local transcripts.
 - `artifacts/` stays untracked so local evaluation output does not accidentally end up in git history.
 - The HTML and SVG files are derived outputs. If they ever disagree with the JSON artifacts, treat the JSON artifacts as canonical and regenerate the presentation layer.
+- `summary.json` is still deterministic and reproducible. It is an interpretation layer, but not an LLM-generated one.
 
 ## Local Verification
 
@@ -93,3 +113,4 @@ make ci
 - Full-history local corpora can be large; use `--session-limit` for bounded exploratory runs while throughput and streaming improve.
 - Artifact previews redact home-directory paths and email addresses, but they are not a full secret-scanning system.
 - The HTML report is intentionally static and dependency-free; it is meant for portability, not as a replacement for a richer dashboard.
+- Session archetypes, friction scores, and opportunities are deterministic heuristics. They are meant to prioritize human attention, not serve as absolute truth.

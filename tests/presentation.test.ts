@@ -6,7 +6,12 @@
 import { describe, expect, it } from "vitest";
 
 import { createPresentationArtifacts } from "../src/presentation.js";
-import type { IncidentRecord, MetricsRecord } from "../src/schema.js";
+import { renderReport } from "../src/report.js";
+import type {
+  IncidentRecord,
+  MetricsRecord,
+  RawTurnRecord,
+} from "../src/schema.js";
 
 const metrics: MetricsRecord = {
   evaluatorVersion: "0.1.0",
@@ -138,16 +143,85 @@ const incidents: IncidentRecord[] = [
   },
 ];
 
+const rawTurns: RawTurnRecord[] = [
+  {
+    evaluatorVersion: "0.1.0",
+    schemaVersion: "1",
+    sessionId: "session-1",
+    turnId: "turn-1",
+    turnIndex: 0,
+    userMessageCount: 1,
+    assistantMessageCount: 1,
+    userMessagePreviews: ["Please verify after the patch."],
+    assistantMessagePreviews: ["I will verify the code after writing."],
+    toolCalls: [],
+    labels: [
+      {
+        label: "verification_request",
+        severity: "medium",
+        confidence: "high",
+        rationale: "request",
+      },
+    ],
+    sourceRefs: [{ kind: "session_jsonl", path: "~/.codex/sessions/a.jsonl" }],
+  },
+  {
+    evaluatorVersion: "0.1.0",
+    schemaVersion: "1",
+    sessionId: "session-2",
+    turnId: "turn-2",
+    turnIndex: 1,
+    userMessageCount: 1,
+    assistantMessageCount: 0,
+    userMessagePreviews: ["Goals: keep the parser deterministic."],
+    assistantMessagePreviews: [],
+    toolCalls: [],
+    labels: [
+      {
+        label: "context_reinjection",
+        severity: "low",
+        confidence: "high",
+        rationale: "re-anchor",
+      },
+    ],
+    sourceRefs: [{ kind: "session_jsonl", path: "~/.codex/sessions/b.jsonl" }],
+  },
+];
+
 describe("createPresentationArtifacts", () => {
   it("builds summary json, html, and svg artifacts from canonical metrics", () => {
-    const presentation = createPresentationArtifacts(metrics, incidents);
+    const presentation = createPresentationArtifacts(
+      metrics,
+      incidents,
+      rawTurns,
+    );
 
     expect(presentation.summary.incidents).toBe(2);
     expect(presentation.summary.labels[0]?.label).toBe("verification_request");
+    expect(presentation.summary.topSessions[0]?.archetype).toBe(
+      "verified_delivery",
+    );
+    expect(presentation.summary.rates.verificationRequestsPer100Turns).toBe(
+      37.5,
+    );
+    expect(presentation.summary.opportunities[0]?.title).toContain(
+      "verification",
+    );
+    expect(presentation.summary.topIncidents[0]?.turnSpan).toBe(2);
     expect(presentation.reportHtml).toContain("Codex Evaluator Report");
     expect(presentation.reportHtml).toContain("label-counts.svg");
+    expect(presentation.reportHtml).toContain("Sessions To Review First");
     expect(presentation.labelChartSvg).toContain("<svg");
     expect(presentation.complianceChartSvg).toContain("Compliance Pass Counts");
     expect(presentation.severityChartSvg).toContain("Incident Severity");
+  });
+
+  it("keeps the markdown report aligned with the deterministic summary model", () => {
+    const markdown = renderReport(metrics, incidents, rawTurns);
+
+    expect(markdown).toContain("## Headline Insights");
+    expect(markdown).toContain("## Sessions To Review First");
+    expect(markdown).toContain("## Deterministic Opportunities");
+    expect(markdown).toContain("verified_delivery");
   });
 });

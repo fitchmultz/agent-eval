@@ -8,13 +8,19 @@
 import { Command } from "commander";
 
 import { discoverArtifacts } from "./discovery.js";
-import { evaluateArtifacts, writeEvaluationArtifacts } from "./evaluator.js";
+import {
+  evaluateArtifacts,
+  evaluateArtifactsSummaryOnly,
+  writeEvaluationArtifacts,
+  writeSummaryArtifacts,
+} from "./evaluator.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
 
 interface GlobalOptions {
   codexHome: string;
   outputDir: string;
   sessionLimit?: number;
+  summaryOnly?: boolean;
 }
 
 async function runInspectCommand(options: GlobalOptions): Promise<void> {
@@ -63,6 +69,26 @@ async function runParseCommand(options: GlobalOptions): Promise<void> {
 }
 
 async function runEvalCommand(options: GlobalOptions): Promise<void> {
+  if (options.summaryOnly) {
+    const result = await evaluateArtifactsSummaryOnly(options);
+    await writeSummaryArtifacts(result, options.outputDir);
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          evaluatorVersion: EVALUATOR_VERSION,
+          schemaVersion: SCHEMA_VERSION,
+          outputDir: options.outputDir,
+          sessionCount: result.metrics.sessionCount,
+          incidentCount: result.metrics.incidentCount,
+          summaryOnly: true,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return;
+  }
+
   const result = await evaluateArtifacts(options);
   await writeEvaluationArtifacts(result, options.outputDir);
   process.stdout.write(
@@ -81,6 +107,13 @@ async function runEvalCommand(options: GlobalOptions): Promise<void> {
 }
 
 async function runReportCommand(options: GlobalOptions): Promise<void> {
+  if (options.summaryOnly) {
+    const result = await evaluateArtifactsSummaryOnly(options);
+    await writeSummaryArtifacts(result, options.outputDir);
+    process.stdout.write(result.report);
+    return;
+  }
+
   const result = await evaluateArtifacts(options);
   await writeEvaluationArtifacts(result, options.outputDir);
   process.stdout.write(result.report);
@@ -110,6 +143,11 @@ export async function main(argv: string[]): Promise<number> {
       "Limit transcript files processed during this run",
       (value) => Number.parseInt(value, 10),
     )
+    .option(
+      "--summary-only",
+      "Skip raw-turn and incident JSONL emission and compute only summary/report artifacts",
+      false,
+    )
     .addHelpText(
       "after",
       [
@@ -120,6 +158,7 @@ export async function main(argv: string[]): Promise<number> {
         "  codex-eval eval --codex-home ~/.codex --output-dir artifacts",
         "  codex-eval report --codex-home ~/.codex --output-dir artifacts",
         "  codex-eval eval --codex-home ~/.codex --output-dir artifacts --session-limit 25",
+        "  codex-eval eval --codex-home ~/.codex --output-dir artifacts --summary-only",
         "",
         "Exit codes:",
         "  0 success",

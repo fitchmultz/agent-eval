@@ -3,8 +3,9 @@
  * Entrypoint: `parseTranscriptFile()` is used by the evaluator for canonical session reconstruction.
  * Notes: Supports both modern function-call events and older custom-tool-call events.
  */
-import { readFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import { basename } from "node:path";
+import * as readline from "node:readline";
 
 import type { SourceRef } from "./schema.js";
 
@@ -133,12 +134,6 @@ function createTurn(turnIndex: number): ParsedTurn {
 export async function parseTranscriptFile(
   path: string,
 ): Promise<ParsedSession> {
-  const content = await readFile(path, "utf8");
-  const lines = content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
   const pendingToolCalls = new Map<string, ParsedToolCall>();
   const turns: ParsedTurn[] = [];
   let currentTurn = createTurn(0);
@@ -147,8 +142,20 @@ export async function parseTranscriptFile(
   let parentSessionId: string | undefined;
   let sessionStartedAt: string | undefined;
   let sessionCwd: string | undefined;
+  let lineNumber = 0;
+  const stream = createReadStream(path, { encoding: "utf8" });
+  const reader = readline.createInterface({
+    input: stream,
+    crlfDelay: Number.POSITIVE_INFINITY,
+  });
 
-  for (const [lineIndex, line] of lines.entries()) {
+  for await (const rawLine of reader) {
+    const line = rawLine.trim();
+    if (line.length === 0) {
+      continue;
+    }
+
+    lineNumber += 1;
     const parsedUnknown: unknown = JSON.parse(line);
     const eventRecord = asRecord(parsedUnknown);
     const event: JsonlEventRecord = {};
@@ -171,7 +178,7 @@ export async function parseTranscriptFile(
       event.payload = eventPayload;
     }
     const payload = event.payload;
-    const sourceRef = createSourceRef(path, lineIndex + 1);
+    const sourceRef = createSourceRef(path, lineNumber);
 
     if (!payload) {
       continue;
@@ -341,6 +348,9 @@ export async function parseTranscriptFile(
   ) {
     turns.push(currentTurn);
   }
+
+  reader.close();
+  stream.close();
 
   const parsedSession: ParsedSession = {
     sessionId,

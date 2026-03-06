@@ -26,3 +26,5 @@ Notes:
 - Favor deterministic parsing, labeling, clustering, and scoring as the canonical methodology.
 - Generated evaluator artifacts should prefer redacted, truncated previews over full transcript bodies.
 - Incident evidence selection should prefer non-boilerplate user text over AGENTS or instruction dumps when possible.
+- For large corpus runs, prefer the summary-only path that skips giant raw-turn/incidents artifacts.
+- When `sessionLimit` is set, it must mean the most recent discovered sessions, not an arbitrary subset.
