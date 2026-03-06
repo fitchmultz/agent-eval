@@ -22,3 +22,5 @@ Notes:
 - Exploration outputs live under `notes/`.
 - Canonical methodology should treat `~/.codex/sessions/**/*.jsonl` as required input.
 - Treat SQLite/log/history/shell snapshot stores as optional enrichment only.
+- Keep generated evaluator outputs under `artifacts/` untracked for this public repo.
+- Favor deterministic parsing, labeling, clustering, and scoring as the canonical methodology.

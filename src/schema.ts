@@ -1,7 +1,7 @@
 /**
- * Purpose: Defines the strict typed schema shared by parsing, clustering, scoring, and output writers.
- * Entrypoint: Exported types and Zod schemas are consumed by runtime modules and tests.
- * Notes: The transcript JSONL is canonical; all optional enrichment attaches via source references.
+ * Purpose: Defines the strict typed schema shared by discovery, parsing, clustering, scoring, and artifact output.
+ * Entrypoint: Exported Zod schemas and inferred types are consumed by runtime modules and tests.
+ * Notes: Transcript JSONL is canonical input; all non-transcript sources are optional enrichment only.
  */
 import { z } from "zod";
 
@@ -26,18 +26,43 @@ export const sourceKindValues = [
   "codex_dev_db",
   "shell_snapshot",
 ] as const;
+export const toolCategoryValues = [
+  "read",
+  "write",
+  "verification",
+  "search",
+  "planning",
+  "delegation",
+  "other",
+] as const;
+export const complianceRuleValues = [
+  "scope_confirmed_before_major_write",
+  "cwd_or_repo_echoed_before_write",
+  "short_plan_before_large_change",
+  "verification_after_code_changes",
+  "no_unverified_ending",
+] as const;
+export const complianceStatusValues = [
+  "pass",
+  "fail",
+  "not_applicable",
+  "unknown",
+] as const;
 
 export type LabelName = (typeof labelTaxonomy)[number];
 export type Severity = (typeof severityValues)[number];
 export type Confidence = (typeof confidenceValues)[number];
 export type SourceKind = (typeof sourceKindValues)[number];
+export type ToolCategory = (typeof toolCategoryValues)[number];
+export type ComplianceRuleName = (typeof complianceRuleValues)[number];
+export type ComplianceStatus = (typeof complianceStatusValues)[number];
 
 export const sourceRefSchema = z.object({
   kind: z.enum(sourceKindValues),
   path: z.string().min(1),
   line: z.int().positive().optional(),
   table: z.string().min(1).optional(),
-  rowId: z.union([z.string().min(1), z.int()]).optional(),
+  rowId: z.union([z.string().min(1), z.int().positive()]).optional(),
 });
 
 export const labelRecordSchema = z.object({
@@ -45,6 +70,74 @@ export const labelRecordSchema = z.object({
   severity: z.enum(severityValues),
   confidence: z.enum(confidenceValues),
   rationale: z.string().min(1),
+});
+
+export const toolCallSummarySchema = z.object({
+  toolName: z.string().min(1),
+  category: z.enum(toolCategoryValues),
+  commandText: z.string().optional(),
+  writeLike: z.boolean(),
+  verificationLike: z.boolean(),
+  status: z.enum(["completed", "errored", "unknown"]),
+});
+
+export const rawTurnSchema = z.object({
+  evaluatorVersion: z.string().min(1),
+  schemaVersion: z.string().min(1),
+  sessionId: z.string().min(1),
+  parentSessionId: z.string().min(1).optional(),
+  turnId: z.string().min(1).optional(),
+  turnIndex: z.int().nonnegative(),
+  startedAt: z.string().min(1).optional(),
+  cwd: z.string().min(1).optional(),
+  userMessages: z.array(z.string()),
+  assistantMessages: z.array(z.string()),
+  toolCalls: z.array(toolCallSummarySchema),
+  labels: z.array(labelRecordSchema),
+  sourceRefs: z.array(sourceRefSchema).min(1),
+});
+
+export const incidentSchema = z.object({
+  evaluatorVersion: z.string().min(1),
+  schemaVersion: z.string().min(1),
+  incidentId: z.string().min(1),
+  sessionId: z.string().min(1),
+  turnIds: z.array(z.string().min(1)),
+  turnIndices: z.array(z.int().nonnegative()),
+  labels: z.array(labelRecordSchema).min(1),
+  summary: z.string().min(1),
+  severity: z.enum(severityValues),
+  confidence: z.enum(confidenceValues),
+  firstSeenAt: z.string().min(1).optional(),
+  lastSeenAt: z.string().min(1).optional(),
+  sourceRefs: z.array(sourceRefSchema).min(1),
+});
+
+export const complianceRuleResultSchema = z.object({
+  rule: z.enum(complianceRuleValues),
+  status: z.enum(complianceStatusValues),
+  rationale: z.string().min(1),
+});
+
+export const sessionMetricsSchema = z.object({
+  sessionId: z.string().min(1),
+  turnCount: z.int().nonnegative(),
+  labeledTurnCount: z.int().nonnegative(),
+  incidentCount: z.int().nonnegative(),
+  writeCount: z.int().nonnegative(),
+  verificationCount: z.int().nonnegative(),
+  verificationPassedCount: z.int().nonnegative(),
+  verificationFailedCount: z.int().nonnegative(),
+  complianceScore: z.int().min(0).max(100),
+  complianceRules: z.array(complianceRuleResultSchema),
+});
+
+export const inventoryRecordSchema = z.object({
+  kind: z.enum(sourceKindValues),
+  path: z.string().min(1),
+  discovered: z.boolean(),
+  required: z.boolean(),
+  optional: z.boolean(),
 });
 
 export const labelCountSchema = z.object({
@@ -58,43 +151,25 @@ export const labelCountSchema = z.object({
   stalled_or_guessing: z.int().nonnegative().optional(),
 });
 
-export const rawTurnSchema = z.object({
-  evaluatorVersion: z.string().min(1),
-  schemaVersion: z.string().min(1),
-  sessionId: z.string().min(1),
-  turnId: z.string().min(1).optional(),
-  startedAt: z.string().min(1).optional(),
-  cwd: z.string().min(1).optional(),
-  role: z.enum(["user", "assistant", "system", "unknown"]),
-  text: z.string(),
-  labels: z.array(labelRecordSchema),
-  sourceRefs: z.array(sourceRefSchema).min(1),
-});
-
-export const incidentSchema = z.object({
-  evaluatorVersion: z.string().min(1),
-  schemaVersion: z.string().min(1),
-  incidentId: z.string().min(1),
-  sessionId: z.string().min(1),
-  turnIds: z.array(z.string().min(1)),
-  labels: z.array(labelRecordSchema).min(1),
-  summary: z.string().min(1),
-  sourceRefs: z.array(sourceRefSchema).min(1),
-});
-
 export const metricsSchema = z.object({
   evaluatorVersion: z.string().min(1),
   schemaVersion: z.string().min(1),
+  generatedAt: z.string().min(1),
   sessionCount: z.int().nonnegative(),
   turnCount: z.int().nonnegative(),
   incidentCount: z.int().nonnegative(),
   labelCounts: labelCountSchema,
-  generatedAt: z.string().min(1),
+  sessions: z.array(sessionMetricsSchema),
+  inventory: z.array(inventoryRecordSchema),
 });
 
 export type SourceRef = z.infer<typeof sourceRefSchema>;
 export type LabelRecord = z.infer<typeof labelRecordSchema>;
-export type LabelCountRecord = z.infer<typeof labelCountSchema>;
+export type ToolCallSummary = z.infer<typeof toolCallSummarySchema>;
 export type RawTurnRecord = z.infer<typeof rawTurnSchema>;
 export type IncidentRecord = z.infer<typeof incidentSchema>;
+export type ComplianceRuleResult = z.infer<typeof complianceRuleResultSchema>;
+export type SessionMetrics = z.infer<typeof sessionMetricsSchema>;
+export type InventoryRecord = z.infer<typeof inventoryRecordSchema>;
+export type LabelCountRecord = z.infer<typeof labelCountSchema>;
 export type MetricsRecord = z.infer<typeof metricsSchema>;

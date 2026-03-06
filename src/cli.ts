@@ -1,50 +1,96 @@
 #!/usr/bin/env node
 /**
- * Purpose: Implements the `codex-eval` CLI entrypoint and top-level subcommand help.
- * Entrypoint: `main()` is invoked when the file is run directly or via the package bin.
- * Notes: Subcommands are scaffolded first so each implementation checkpoint remains runnable.
+ * Purpose: Implements the `codex-eval` CLI entrypoint and dispatches inventory, parse, eval, and report workflows.
+ * Entrypoint: `main()` is invoked when the file is run directly or through the package bin.
+ * Notes: All commands emit machine-readable data to stdout and write artifacts only when requested by the command.
  */
-import { Command, InvalidArgumentError } from "commander";
 
+import { Command } from "commander";
+
+import { discoverArtifacts } from "./discovery.js";
+import { evaluateArtifacts, writeEvaluationArtifacts } from "./evaluator.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
-
-const commandNames = ["inspect", "parse", "eval", "report"] as const;
-type CommandName = (typeof commandNames)[number];
 
 interface GlobalOptions {
   codexHome: string;
   outputDir: string;
+  sessionLimit?: number;
 }
 
-function parseCommandName(value: string): CommandName {
-  if (commandNames.includes(value as CommandName)) {
-    return value as CommandName;
-  }
-
-  throw new InvalidArgumentError(`Unsupported command: ${value}`);
+async function runInspectCommand(options: GlobalOptions): Promise<void> {
+  const inventory = await discoverArtifacts(options.codexHome);
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        evaluatorVersion: EVALUATOR_VERSION,
+        schemaVersion: SCHEMA_VERSION,
+        codexHome: options.codexHome,
+        sessionFileCount: inventory.sessionFiles.length,
+        inventory: inventory.inventory,
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
-async function runScaffoldCommand(
-  name: CommandName,
-  options: GlobalOptions,
-): Promise<void> {
-  const payload = {
-    command: name,
-    codexHome: options.codexHome,
-    outputDir: options.outputDir,
-    evaluatorVersion: EVALUATOR_VERSION,
-    schemaVersion: SCHEMA_VERSION,
-    status: "scaffold_ready",
-  };
+async function runParseCommand(options: GlobalOptions): Promise<void> {
+  const result = await evaluateArtifacts(options);
+  await writeEvaluationArtifacts(
+    {
+      ...result,
+      incidents: [],
+      metrics: {
+        ...result.metrics,
+        incidentCount: 0,
+      },
+      report: "# Parse Only\n",
+    },
+    options.outputDir,
+  );
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        evaluatorVersion: EVALUATOR_VERSION,
+        schemaVersion: SCHEMA_VERSION,
+        outputDir: options.outputDir,
+        rawTurnCount: result.rawTurns.length,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
 
-  process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+async function runEvalCommand(options: GlobalOptions): Promise<void> {
+  const result = await evaluateArtifacts(options);
+  await writeEvaluationArtifacts(result, options.outputDir);
+  process.stdout.write(
+    `${JSON.stringify(
+      {
+        evaluatorVersion: EVALUATOR_VERSION,
+        schemaVersion: SCHEMA_VERSION,
+        outputDir: options.outputDir,
+        sessionCount: result.metrics.sessionCount,
+        incidentCount: result.metrics.incidentCount,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+async function runReportCommand(options: GlobalOptions): Promise<void> {
+  const result = await evaluateArtifacts(options);
+  await writeEvaluationArtifacts(result, options.outputDir);
+  process.stdout.write(result.report);
 }
 
 export async function main(argv: string[]): Promise<number> {
-  const program = new Command();
   const homeEnvironmentKey = "HOME";
   const homeDirectory = process.env[homeEnvironmentKey];
   const defaultCodexHome = homeDirectory ? `${homeDirectory}/.codex` : ".codex";
+  const program = new Command();
 
   program
     .name("codex-eval")
@@ -59,6 +105,11 @@ export async function main(argv: string[]): Promise<number> {
       "Directory for generated evaluator artifacts",
       "artifacts",
     )
+    .option(
+      "--session-limit <count>",
+      "Limit transcript files processed during this run",
+      (value) => Number.parseInt(value, 10),
+    )
     .addHelpText(
       "after",
       [
@@ -68,6 +119,7 @@ export async function main(argv: string[]): Promise<number> {
         "  codex-eval parse --codex-home ~/.codex --output-dir artifacts",
         "  codex-eval eval --codex-home ~/.codex --output-dir artifacts",
         "  codex-eval report --codex-home ~/.codex --output-dir artifacts",
+        "  codex-eval eval --codex-home ~/.codex --output-dir artifacts --session-limit 25",
         "",
         "Exit codes:",
         "  0 success",
@@ -76,15 +128,37 @@ export async function main(argv: string[]): Promise<number> {
       ].join("\n"),
     );
 
-  for (const commandName of commandNames) {
-    program
-      .command(commandName)
-      .description(`Scaffolded ${commandName} command`)
-      .action(async () => {
-        const options = program.opts<GlobalOptions>();
-        await runScaffoldCommand(parseCommandName(commandName), options);
-      });
-  }
+  program
+    .command("inspect")
+    .description("Discover canonical and optional local Codex artifact stores.")
+    .action(async () => {
+      await runInspectCommand(program.opts<GlobalOptions>());
+    });
+
+  program
+    .command("parse")
+    .description("Parse transcript files and emit raw turn artifacts.")
+    .action(async () => {
+      await runParseCommand(program.opts<GlobalOptions>());
+    });
+
+  program
+    .command("eval")
+    .description(
+      "Run parsing, labeling, clustering, scoring, and artifact emission.",
+    )
+    .action(async () => {
+      await runEvalCommand(program.opts<GlobalOptions>());
+    });
+
+  program
+    .command("report")
+    .description(
+      "Generate the markdown evaluator report and write all artifacts.",
+    )
+    .action(async () => {
+      await runReportCommand(program.opts<GlobalOptions>());
+    });
 
   try {
     await program.parseAsync(argv);
