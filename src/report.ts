@@ -58,6 +58,21 @@ function renderSessionLines(
     .join("\n");
 }
 
+function renderVictoryLapLines(
+  summary: ReturnType<typeof buildSummaryArtifact>,
+): string {
+  if (summary.victoryLaps.length === 0) {
+    return "- No clean verified delivery sessions were available in this slice.";
+  }
+
+  return summary.victoryLaps
+    .map(
+      (session) =>
+        `- ${session.sessionId}: ${session.archetypeLabel}, score ${session.complianceScore}, verifications ${session.verificationPassedCount}, incidents ${session.incidentCount}`,
+    )
+    .join("\n");
+}
+
 function renderOpportunityLines(
   summary: ReturnType<typeof buildSummaryArtifact>,
 ): string {
@@ -134,6 +149,12 @@ export function renderSummaryReport(
       (card) => `- ${card.title}: ${card.value} (${card.detail})`,
     ),
     "",
+    "## Shareable Scoreboard",
+    "",
+    ...summary.scoreCards.map(
+      (card) => `- ${card.title}: ${card.score}/100 (${card.detail})`,
+    ),
+    "",
     "## Badges",
     "",
     summary.achievementBadges.length > 0
@@ -151,6 +172,10 @@ export function renderSummaryReport(
     "## Sessions To Review First",
     "",
     renderSessionLines(summary),
+    "",
+    "## Victory Lap Sessions",
+    "",
+    renderVictoryLapLines(summary),
     "",
     "## Deterministic Opportunities",
     "",

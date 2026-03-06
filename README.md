@@ -72,7 +72,7 @@ It is the recommended mode for whole-history or multi-thousand-session analysis.
 - `report.md` is best for PRs, blog drafts, and versioned text snapshots.
 - `report.html` is best for local review and sharing a single portable file.
 - The SVG charts are meant to be easy to embed into docs or blog posts without needing screenshots.
-- The pretty layer now includes friendlier archetype names, show-off stats, and deterministic badges so the results are easier to read outside an engineering context.
+- The pretty layer now includes friendlier archetype names, show-off stats, a shareable scoreboard, victory-lap sessions, and deterministic badges so the results are easier to read outside an engineering context.
 
 ### Suggested Workflow
 
@@ -85,6 +85,7 @@ open artifacts/report.html
 cat artifacts/report.md
 jq '.labels' artifacts/summary.json
 jq '.topSessions' artifacts/summary.json
+jq '.victoryLaps, .scoreCards' artifacts/summary.json
 jq '.bragCards, .achievementBadges' artifacts/summary.json
 ```
 
@@ -102,6 +103,7 @@ jq '.bragCards, .achievementBadges' artifacts/summary.json
 - The HTML and SVG files are derived outputs. If they ever disagree with the JSON artifacts, treat the JSON artifacts as canonical and regenerate the presentation layer.
 - `summary.json` is still deterministic and reproducible. It is an interpretation layer, but not an LLM-generated one.
 - `--summary-only` is optimized for scale. It uses the same deterministic methodology, but skips giant JSONL exports so all-history runs stay practical.
+- Incident previews now try to prefer human-authored complaint/request text over AGENTS dumps, orchestration wrappers, and other low-signal harness messages.
 
 ## Local Verification
 
@@ -119,4 +121,4 @@ make ci
 - Artifact previews redact home-directory paths and email addresses, but they are not a full secret-scanning system.
 - The HTML report is intentionally static and dependency-free; it is meant for portability, not as a replacement for a richer dashboard.
 - Session archetypes, friction scores, and opportunities are deterministic heuristics. They are meant to prioritize human attention, not serve as absolute truth.
-- Friendly labels like `Recovery Run` or badges like `Battle-Tested Corpus` are presentation helpers layered on top of the canonical deterministic metrics.
+- Friendly labels like `Recovery Run`, scorecards like `Proof Score`, and badges like `Battle-Tested Corpus` are presentation helpers layered on top of the canonical deterministic metrics.

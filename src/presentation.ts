@@ -130,6 +130,19 @@ function renderBragCards(summary: SummaryArtifact): string {
     .join("");
 }
 
+function renderScoreCards(summary: SummaryArtifact): string {
+  return summary.scoreCards
+    .map(
+      (card) => `
+      <article class="metric-card tone-${escapeHtml(card.tone)} score-card">
+        <div class="metric-label">${escapeHtml(card.title)}</div>
+        <div class="metric-value">${card.score}<span class="metric-suffix">/100</span></div>
+        <div class="metric-detail">${escapeHtml(card.detail)}</div>
+      </article>`,
+    )
+    .join("");
+}
+
 function renderBadges(summary: SummaryArtifact): string {
   if (summary.achievementBadges.length === 0) {
     return `<p class="empty-state">No badges earned for this slice yet.</p>`;
@@ -180,6 +193,28 @@ function renderSessionCards(summary: SummaryArtifact): string {
         <h3>${escapeHtml(session.sessionId)}</h3>
         <p>${escapeHtml(session.note)}</p>
         <p class="session-detail">Dominant labels: ${escapeHtml(session.dominantLabels.join(", ") || "none")}</p>
+      </article>`,
+    )
+    .join("");
+}
+
+function renderVictoryLapCards(summary: SummaryArtifact): string {
+  if (summary.victoryLaps.length === 0) {
+    return `<p class="empty-state">No clean verified delivery sessions were available in this slice.</p>`;
+  }
+
+  return summary.victoryLaps
+    .map(
+      (session) => `
+      <article class="session-card victory-lap">
+        <div class="incident-meta">
+          <span class="pill">${escapeHtml(session.archetypeLabel)}</span>
+          <span class="pill">score ${session.complianceScore}</span>
+          <span class="pill">${session.verificationPassedCount} verifications</span>
+          <span class="pill">${session.incidentCount} incidents</span>
+        </div>
+        <h3>${escapeHtml(session.sessionId)}</h3>
+        <p>${escapeHtml(session.note)}</p>
       </article>`,
     )
     .join("");
@@ -294,6 +329,8 @@ function renderHtmlReport(
       }
       .metric-card { padding: 20px; min-height: 144px; border-top: 6px solid rgba(16,38,59,0.06); }
       .brag-card .metric-value { font-size: 1.95rem; }
+      .score-card .metric-value { display: flex; align-items: baseline; gap: 6px; }
+      .metric-suffix { font-size: 1rem; color: var(--muted); }
       .tone-good { border-top-color: var(--good); }
       .tone-warn { border-top-color: var(--warn); }
       .tone-danger { border-top-color: var(--danger); }
@@ -361,6 +398,7 @@ function renderHtmlReport(
     "</header>",
     `<section><div class="metric-grid">${renderSummaryCards(summary)}</div></section>`,
     `<section><h2>Show-Off Stats</h2><div class="metric-grid">${renderBragCards(summary)}</div></section>`,
+    `<section><h2>Shareable Scoreboard</h2><div class="metric-grid">${renderScoreCards(summary)}</div></section>`,
     `<section><h2>Badges</h2><div class="badge-row">${renderBadges(summary)}</div></section>`,
     `<section><h2>Operational Rates</h2><div class="rates-grid">
       <div class="rate-item"><strong>Incidents / 100 turns</strong><div class="rate-value">${summary.rates.incidentsPer100Turns}</div></div>
@@ -376,6 +414,7 @@ function renderHtmlReport(
       <div class="panel"><img alt="Compliance rule chart" src="compliance-summary.svg" /></div>
     </div></section>`,
     `<section><h2>Sessions To Review First</h2><div class="sessions-grid">${renderSessionCards(summary)}</div></section>`,
+    `<section><h2>Victory Lap Sessions</h2><div class="sessions-grid">${renderVictoryLapCards(summary)}</div></section>`,
     `<section><h2>Top Incidents</h2><div class="incident-grid">${renderIncidentCards(summary)}</div></section>`,
     `<section><h2>Deterministic Opportunities</h2><ul class="opportunity-list">${renderOpportunityList(summary)}</ul></section>`,
     `<section><h2>Compliance Breakdown</h2><div class="panel">${renderComplianceTable(summary)}</div></section>`,

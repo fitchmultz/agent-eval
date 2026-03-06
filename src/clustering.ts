@@ -5,6 +5,7 @@
  */
 
 import type { EvaluatedTurn } from "./evaluator.js";
+import { isLowSignalPreview } from "./sanitization.js";
 import type {
   Confidence,
   IncidentRecord,
@@ -68,17 +69,9 @@ function sharesAnyLabel(
   return right.some((label) => leftLabels.has(label.label));
 }
 
-function isBoilerplatePreview(preview: string): boolean {
-  return /AGENTS\.md instructions|^# AGENTS|<INSTRUCTIONS>|GLOBAL AGENTS GUIDANCE|<codex reminder>|<environment_context>|<turn_aborted>|^# Builder Mode Task/i.test(
-    preview,
-  );
-}
-
 function buildEvidencePreviews(turns: readonly EvaluatedTurn[]): string[] {
   const previews = turns.flatMap((turn) => turn.userMessagePreviews);
-  const preferred = previews.filter(
-    (preview) => !isBoilerplatePreview(preview),
-  );
+  const preferred = previews.filter((preview) => !isLowSignalPreview(preview));
   const selected = preferred.length > 0 ? preferred : previews;
   return selected.slice(0, 3);
 }

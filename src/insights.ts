@@ -3,6 +3,8 @@
  * Entrypoint: `buildSummaryArtifact()` is used by the presentation and reporting layers to create compact, decision-useful summaries.
  * Notes: The insight model is intentionally rule-based so results remain reproducible and auditable.
  */
+
+import { isLowSignalPreview } from "./sanitization.js";
 import type {
   IncidentRecord,
   LabelName,
@@ -34,6 +36,8 @@ interface SessionInsightRow {
   dominantLabels: LabelName[];
   note: string;
 }
+
+type ScoreCard = SummaryArtifact["scoreCards"][number];
 
 const labelWeights: Record<LabelName, number> = {
   context_drift: 4,
@@ -231,6 +235,112 @@ function buildTopSessions(
     );
 }
 
+function buildVictoryLaps(
+  topSessions: readonly SessionInsightRow[],
+): SessionInsightRow[] {
+  return topSessions
+    .filter((session) => session.archetype === "verified_delivery")
+    .sort(
+      (left, right) =>
+        right.complianceScore - left.complianceScore ||
+        right.verificationPassedCount - left.verificationPassedCount ||
+        left.incidentCount - right.incidentCount ||
+        left.frictionScore - right.frictionScore ||
+        left.sessionId.localeCompare(right.sessionId),
+    )
+    .slice(0, 6);
+}
+
+function findComplianceRule(
+  metrics: MetricsRecord,
+  ruleName: SummaryArtifact["compliance"][number]["rule"],
+): SummaryArtifact["compliance"][number] | undefined {
+  return metrics.complianceSummary.find((rule) => rule.rule === ruleName);
+}
+
+function applicablePassRate(
+  metrics: MetricsRecord,
+  ruleName: SummaryArtifact["compliance"][number]["rule"],
+): number {
+  const rule = findComplianceRule(metrics, ruleName);
+  if (!rule) {
+    return 0;
+  }
+
+  return safeRate(rule.passCount, rule.passCount + rule.failCount);
+}
+
+function toneForScore(score: number): ScoreCard["tone"] {
+  if (score >= 90) {
+    return "good";
+  }
+  if (score >= 70) {
+    return "neutral";
+  }
+  if (score >= 40) {
+    return "warn";
+  }
+  return "danger";
+}
+
+function buildScoreCards(
+  metrics: MetricsRecord,
+): SummaryArtifact["scoreCards"] {
+  const proofScore = Math.round(
+    safeRate(
+      metrics.sessions
+        .filter((session) => session.writeCount > 0)
+        .filter((session) => session.verificationPassedCount > 0).length,
+      metrics.sessions.filter((session) => session.writeCount > 0).length,
+    ),
+  );
+  const flowPenalty =
+    safeRate(countLabel(metrics.labelCounts, "interrupt"), metrics.turnCount) *
+      8 +
+    safeRate(
+      countLabel(metrics.labelCounts, "context_reinjection"),
+      metrics.turnCount,
+    ) *
+      20 +
+    safeRate(
+      countLabel(metrics.labelCounts, "context_drift"),
+      metrics.turnCount,
+    ) *
+      40;
+  const flowScore = Math.max(0, Math.round(100 - flowPenalty));
+  const disciplineScore = Math.round(
+    (applicablePassRate(metrics, "scope_confirmed_before_major_write") +
+      applicablePassRate(metrics, "cwd_or_repo_echoed_before_write") +
+      applicablePassRate(metrics, "short_plan_before_large_change") +
+      applicablePassRate(metrics, "verification_after_code_changes")) /
+      4,
+  );
+
+  return [
+    {
+      title: "Proof Score",
+      score: proofScore,
+      detail:
+        "How often write sessions ended with a passing verification signal.",
+      tone: toneForScore(proofScore),
+    },
+    {
+      title: "Flow Score",
+      score: flowScore,
+      detail:
+        "Higher is calmer. This penalizes interrupts, context reinjection, and explicit drift complaints.",
+      tone: toneForScore(flowScore),
+    },
+    {
+      title: "Discipline Score",
+      score: disciplineScore,
+      detail:
+        "Average pass rate across scope, cwd/repo echo, short planning, and post-write verification rules.",
+      tone: toneForScore(disciplineScore),
+    },
+  ];
+}
+
 function buildInsightCards(
   metrics: MetricsRecord,
   topSessions: readonly SessionInsightRow[],
@@ -283,18 +393,15 @@ function buildInsightCards(
   ];
 }
 
-function buildBragCards(
-  metrics: MetricsRecord,
-  topSessions: readonly SessionInsightRow[],
-): SummaryArtifact["bragCards"] {
+function buildBragCards(metrics: MetricsRecord): SummaryArtifact["bragCards"] {
   const sessionsWithWrites = metrics.sessions.filter(
     (session) => session.writeCount > 0,
   );
   const verifiedWriteSessions = sessionsWithWrites.filter(
     (session) => session.verificationPassedCount > 0,
   );
-  const bestRecovery = topSessions.find(
-    (session) => session.archetype === "high_friction_recovery",
+  const quietSessions = metrics.sessions.filter(
+    (session) => session.incidentCount === 0,
   );
 
   return [
@@ -306,18 +413,19 @@ function buildBragCards(
       tone: verifiedWriteSessions.length > 0 ? "good" : "neutral",
     },
     {
+      title: "Quiet Runs",
+      value: `${quietSessions.length}`,
+      detail:
+        quietSessions.length > 0
+          ? `${safeRate(quietSessions.length, metrics.sessionCount)}% of sessions finished without a labeled incident.`
+          : "No fully incident-free sessions were detected in this slice.",
+      tone: quietSessions.length > 0 ? "good" : "neutral",
+    },
+    {
       title: "Battle-Tested Runs",
       value: `${metrics.sessionCount}`,
       detail: "Sessions included in this deterministic corpus slice.",
       tone: metrics.sessionCount >= 1000 ? "good" : "neutral",
-    },
-    {
-      title: "Hero Recovery",
-      value: bestRecovery ? bestRecovery.sessionId : "none",
-      detail: bestRecovery
-        ? `${bestRecovery.archetypeLabel} with friction ${bestRecovery.frictionScore}.`
-        : "No recovery-style write sessions were detected.",
-      tone: bestRecovery ? "warn" : "neutral",
     },
   ];
 }
@@ -422,9 +530,17 @@ function compareTopIncidents(
   left: SummaryArtifact["topIncidents"][number],
   right: SummaryArtifact["topIncidents"][number],
 ): number {
+  const leftLowSignal = left.evidencePreview
+    ? isLowSignalPreview(left.evidencePreview)
+    : true;
+  const rightLowSignal = right.evidencePreview
+    ? isLowSignalPreview(right.evidencePreview)
+    : true;
+
   return (
     (severityOrder.get(right.severity) ?? 0) -
       (severityOrder.get(left.severity) ?? 0) ||
+    Number(leftLowSignal) - Number(rightLowSignal) ||
     right.turnSpan - left.turnSpan ||
     left.summary.localeCompare(right.summary)
   );
@@ -481,6 +597,7 @@ export function buildSummaryArtifact(
     (session) => session.verificationPassedCount > 0,
   );
   const topSessions = buildTopSessions(metrics, inputs.sessionLabelCounts);
+  const victoryLaps = buildVictoryLaps(topSessions);
 
   return {
     evaluatorVersion: metrics.evaluatorVersion,
@@ -532,10 +649,12 @@ export function buildSummaryArtifact(
         sessionsWithWrites.length,
       ),
     },
-    bragCards: buildBragCards(metrics, topSessions),
+    scoreCards: buildScoreCards(metrics),
+    bragCards: buildBragCards(metrics),
     achievementBadges: buildAchievementBadges(metrics, topSessions),
     insightCards: buildInsightCards(metrics, topSessions),
     topSessions: topSessions.slice(0, 8),
+    victoryLaps,
     opportunities: buildOpportunities(metrics, topSessions),
     topIncidents: inputs.topIncidents,
   };
