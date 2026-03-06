@@ -24,6 +24,7 @@ export interface SummaryInputs {
 interface SessionInsightRow {
   sessionId: string;
   archetype: SessionArchetype;
+  archetypeLabel: string;
   frictionScore: number;
   complianceScore: number;
   incidentCount: number;
@@ -48,6 +49,21 @@ const labelWeights: Record<LabelName, number> = {
 const severityOrder = new Map<Severity, number>(
   severityValues.map((value, index) => [value, index]),
 );
+
+function archetypeLabel(archetype: SessionArchetype): string {
+  switch (archetype) {
+    case "verified_delivery":
+      return "Clean Ship";
+    case "unverified_delivery":
+      return "Needs Proof";
+    case "high_friction_recovery":
+      return "Recovery Run";
+    case "interrupted_non_write":
+      return "Interrupted Pass";
+    case "analysis_only":
+      return "Recon Only";
+  }
+}
 
 export function countLabel(
   labels: MetricsRecord["labelCounts"],
@@ -196,6 +212,7 @@ function buildTopSessions(
       return {
         sessionId: session.sessionId,
         archetype,
+        archetypeLabel: archetypeLabel(archetype),
         frictionScore,
         complianceScore: session.complianceScore,
         incidentCount: session.incidentCount,
@@ -264,6 +281,89 @@ function buildInsightCards(
           : "neutral",
     },
   ];
+}
+
+function buildBragCards(
+  metrics: MetricsRecord,
+  topSessions: readonly SessionInsightRow[],
+): SummaryArtifact["bragCards"] {
+  const sessionsWithWrites = metrics.sessions.filter(
+    (session) => session.writeCount > 0,
+  );
+  const verifiedWriteSessions = sessionsWithWrites.filter(
+    (session) => session.verificationPassedCount > 0,
+  );
+  const bestRecovery = topSessions.find(
+    (session) => session.archetype === "high_friction_recovery",
+  );
+
+  return [
+    {
+      title: "Proof-Backed Ships",
+      value: `${verifiedWriteSessions.length}`,
+      detail:
+        "Sessions that ended with both code changes and a passing verification signal.",
+      tone: verifiedWriteSessions.length > 0 ? "good" : "neutral",
+    },
+    {
+      title: "Battle-Tested Runs",
+      value: `${metrics.sessionCount}`,
+      detail: "Sessions included in this deterministic corpus slice.",
+      tone: metrics.sessionCount >= 1000 ? "good" : "neutral",
+    },
+    {
+      title: "Hero Recovery",
+      value: bestRecovery ? bestRecovery.sessionId : "none",
+      detail: bestRecovery
+        ? `${bestRecovery.archetypeLabel} with friction ${bestRecovery.frictionScore}.`
+        : "No recovery-style write sessions were detected.",
+      tone: bestRecovery ? "warn" : "neutral",
+    },
+  ];
+}
+
+function buildAchievementBadges(
+  metrics: MetricsRecord,
+  topSessions: readonly SessionInsightRow[],
+): string[] {
+  const badges: string[] = [];
+  const sessionsWithWrites = metrics.sessions.filter(
+    (session) => session.writeCount > 0,
+  );
+  const verifiedWriteSessions = sessionsWithWrites.filter(
+    (session) => session.verificationPassedCount > 0,
+  );
+  const verificationRate = safeRate(
+    verifiedWriteSessions.length,
+    sessionsWithWrites.length,
+  );
+  const interruptionRate = safeRate(
+    countLabel(metrics.labelCounts, "interrupt"),
+    metrics.turnCount,
+  );
+  const driftSignals = countLabel(metrics.labelCounts, "context_drift");
+
+  if (metrics.sessionCount >= 1000) {
+    badges.push("Battle-Tested Corpus");
+  }
+  if (verificationRate >= 90) {
+    badges.push("Proof-Backed Builder");
+  }
+  if (interruptionRate <= 2) {
+    badges.push("Low-Drama Operator");
+  }
+  if (driftSignals === 0) {
+    badges.push("Zero Drift Complaints");
+  }
+  if (
+    topSessions.some(
+      (session) => session.archetype === "high_friction_recovery",
+    )
+  ) {
+    badges.push("Recovery Specialist");
+  }
+
+  return badges;
 }
 
 function buildOpportunities(
@@ -432,6 +532,8 @@ export function buildSummaryArtifact(
         sessionsWithWrites.length,
       ),
     },
+    bragCards: buildBragCards(metrics, topSessions),
+    achievementBadges: buildAchievementBadges(metrics, topSessions),
     insightCards: buildInsightCards(metrics, topSessions),
     topSessions: topSessions.slice(0, 8),
     opportunities: buildOpportunities(metrics, topSessions),

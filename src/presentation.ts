@@ -117,6 +117,29 @@ function renderSummaryCards(summary: SummaryArtifact): string {
     .join("");
 }
 
+function renderBragCards(summary: SummaryArtifact): string {
+  return summary.bragCards
+    .map(
+      (card) => `
+      <article class="metric-card tone-${escapeHtml(card.tone)} brag-card">
+        <div class="metric-label">${escapeHtml(card.title)}</div>
+        <div class="metric-value">${escapeHtml(card.value)}</div>
+        <div class="metric-detail">${escapeHtml(card.detail)}</div>
+      </article>`,
+    )
+    .join("");
+}
+
+function renderBadges(summary: SummaryArtifact): string {
+  if (summary.achievementBadges.length === 0) {
+    return `<p class="empty-state">No badges earned for this slice yet.</p>`;
+  }
+
+  return summary.achievementBadges
+    .map((badge) => `<span class="badge">${escapeHtml(badge)}</span>`)
+    .join("");
+}
+
 function renderIncidentCards(summary: SummaryArtifact): string {
   if (summary.topIncidents.length === 0) {
     return `<p class="empty-state">No labeled incidents were detected.</p>`;
@@ -129,6 +152,7 @@ function renderIncidentCards(summary: SummaryArtifact): string {
         <div class="incident-meta">
           <span class="pill severity">${escapeHtml(incident.severity)}</span>
           <span class="pill confidence">${escapeHtml(incident.confidence)}</span>
+          <span class="pill">span ${incident.turnSpan}</span>
           <span class="session-ref">${escapeHtml(incident.sessionId)}</span>
         </div>
         <h3>${escapeHtml(incident.summary)}</h3>
@@ -149,6 +173,7 @@ function renderSessionCards(summary: SummaryArtifact): string {
       <article class="session-card">
         <div class="incident-meta">
           <span class="pill">${escapeHtml(session.archetype)}</span>
+          <span class="pill">${escapeHtml(session.archetypeLabel)}</span>
           <span class="pill">friction ${session.frictionScore}</span>
           <span class="pill">score ${session.complianceScore}</span>
         </div>
@@ -268,6 +293,7 @@ function renderHtmlReport(
         box-shadow: 0 16px 40px rgba(16,38,59,0.08);
       }
       .metric-card { padding: 20px; min-height: 144px; border-top: 6px solid rgba(16,38,59,0.06); }
+      .brag-card .metric-value { font-size: 1.95rem; }
       .tone-good { border-top-color: var(--good); }
       .tone-warn { border-top-color: var(--warn); }
       .tone-danger { border-top-color: var(--danger); }
@@ -297,6 +323,17 @@ function renderHtmlReport(
       .rates-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
       .rate-item { padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.7); }
       .rate-value { font-size: 1.6rem; margin-top: 6px; }
+      .badge-row { display: flex; flex-wrap: wrap; gap: 10px; }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 8px 14px;
+        background: linear-gradient(135deg, rgba(15,118,110,0.14), rgba(244,162,89,0.18));
+        border: 1px solid rgba(16,38,59,0.1);
+        font-size: 0.92rem;
+        box-shadow: 0 10px 24px rgba(16,38,59,0.08);
+      }
       code {
         font-family: "SFMono-Regular", "SF Mono", "Menlo", monospace;
         font-size: 0.86rem;
@@ -323,6 +360,8 @@ function renderHtmlReport(
     </div>`,
     "</header>",
     `<section><div class="metric-grid">${renderSummaryCards(summary)}</div></section>`,
+    `<section><h2>Show-Off Stats</h2><div class="metric-grid">${renderBragCards(summary)}</div></section>`,
+    `<section><h2>Badges</h2><div class="badge-row">${renderBadges(summary)}</div></section>`,
     `<section><h2>Operational Rates</h2><div class="rates-grid">
       <div class="rate-item"><strong>Incidents / 100 turns</strong><div class="rate-value">${summary.rates.incidentsPer100Turns}</div></div>
       <div class="rate-item"><strong>Writes / 100 turns</strong><div class="rate-value">${summary.rates.writesPer100Turns}</div></div>

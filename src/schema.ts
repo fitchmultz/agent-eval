@@ -216,6 +216,15 @@ export const summaryArtifactSchema = z.object({
     verifiedWriteSessions: z.int().nonnegative(),
     writeVerificationRate: z.number().nonnegative(),
   }),
+  bragCards: z.array(
+    z.object({
+      title: z.string().min(1),
+      value: z.string().min(1),
+      detail: z.string().min(1),
+      tone: z.enum(["neutral", "good", "warn", "danger"]),
+    }),
+  ),
+  achievementBadges: z.array(z.string().min(1)),
   insightCards: z.array(
     z.object({
       title: z.string().min(1),
@@ -228,6 +237,7 @@ export const summaryArtifactSchema = z.object({
     z.object({
       sessionId: z.string().min(1),
       archetype: z.enum(sessionArchetypeValues),
+      archetypeLabel: z.string().min(1),
       frictionScore: z.number().nonnegative(),
       complianceScore: z.int().min(0).max(100),
       incidentCount: z.int().nonnegative(),

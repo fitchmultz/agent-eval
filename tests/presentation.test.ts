@@ -201,8 +201,15 @@ describe("createPresentationArtifacts", () => {
     expect(presentation.summary.topSessions[0]?.archetype).toBe(
       "verified_delivery",
     );
+    expect(presentation.summary.topSessions[0]?.archetypeLabel).toBe(
+      "Clean Ship",
+    );
     expect(presentation.summary.rates.verificationRequestsPer100Turns).toBe(
       37.5,
+    );
+    expect(presentation.summary.bragCards[0]?.title).toBe("Proof-Backed Ships");
+    expect(presentation.summary.achievementBadges).toContain(
+      "Low-Drama Operator",
     );
     expect(presentation.summary.opportunities[0]?.title).toContain(
       "verification",
@@ -220,8 +227,10 @@ describe("createPresentationArtifacts", () => {
     const markdown = renderReport(metrics, incidents, rawTurns);
 
     expect(markdown).toContain("## Headline Insights");
+    expect(markdown).toContain("## Show-Off Stats");
+    expect(markdown).toContain("## Badges");
     expect(markdown).toContain("## Sessions To Review First");
     expect(markdown).toContain("## Deterministic Opportunities");
-    expect(markdown).toContain("verified_delivery");
+    expect(markdown).toContain("Clean Ship");
   });
 });

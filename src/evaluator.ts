@@ -34,7 +34,7 @@ import type {
   SummaryArtifact,
   ToolCallSummary,
 } from "./schema.js";
-import { complianceRuleValues } from "./schema.js";
+import { complianceRuleValues, labelTaxonomy } from "./schema.js";
 import { parseTranscriptFile } from "./transcript.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
 
@@ -57,6 +57,15 @@ export interface SummaryOnlyEvaluationResult {
   metrics: MetricsRecord;
   summary: SummaryArtifact;
   report: string;
+}
+
+interface SessionSummaryComputation {
+  sessionId: string;
+  sessionMetrics: SessionMetrics;
+  localLabelCounts: ReturnType<typeof createEmptySessionLabelMap>;
+  localIncidents: IncidentRecord[];
+  turnCount: number;
+  writeTurnCount: number;
 }
 
 function summarizeToolCall(
@@ -141,6 +150,122 @@ function incrementComplianceSummary(
 
     return { ...entry, unknownCount: entry.unknownCount + 1 };
   });
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  async function runWorker(): Promise<void> {
+    while (true) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      const item = items[currentIndex];
+      if (item === undefined) {
+        return;
+      }
+
+      results[currentIndex] = await worker(item, currentIndex);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () =>
+      runWorker(),
+    ),
+  );
+
+  return results;
+}
+
+async function summarizeSessionForSummaryOnly(
+  sessionPath: string,
+  homeDirectory: string | undefined,
+): Promise<SessionSummaryComputation> {
+  const session = await parseTranscriptFile(sessionPath);
+  const compliance = scoreCompliance(session);
+  let labeledTurnCount = 0;
+  let writeTurnCount = 0;
+  const localLabelCounts = createEmptySessionLabelMap();
+  const localTurns: RawTurnRecord[] = [];
+
+  for (const turn of session.turns) {
+    const labels = labelTurn(turn);
+    if (labels.length > 0) {
+      labeledTurnCount += 1;
+      for (const label of labels) {
+        localLabelCounts[label.label] += 1;
+      }
+    }
+
+    const toolCalls = turn.toolCalls.map((toolCall) => ({
+      ...summarizeToolCall(toolCall.toolName, toolCall.argumentsText),
+      status: toolCall.status,
+    }));
+    if (toolCalls.some((toolCall) => toolCall.writeLike)) {
+      writeTurnCount += 1;
+    }
+
+    localTurns.push({
+      evaluatorVersion: EVALUATOR_VERSION,
+      schemaVersion: SCHEMA_VERSION,
+      sessionId: session.sessionId,
+      parentSessionId: session.parentSessionId,
+      turnId: turn.turnId,
+      turnIndex: turn.turnIndex,
+      startedAt: turn.startedAt,
+      cwd: turn.cwd ? redactPath(turn.cwd) : undefined,
+      userMessageCount: turn.userMessages.length,
+      assistantMessageCount: turn.assistantMessages.length,
+      userMessagePreviews: createMessagePreviews(turn.userMessages, {
+        homeDirectory,
+        maxItems: 2,
+        maxLength: 220,
+      }),
+      assistantMessagePreviews: createMessagePreviews(turn.assistantMessages, {
+        homeDirectory,
+        maxItems: 2,
+        maxLength: 220,
+      }),
+      toolCalls,
+      labels,
+      sourceRefs: turn.sourceRefs.map((sourceRef) => ({
+        ...sourceRef,
+        path: redactPath(sourceRef.path),
+      })),
+    });
+  }
+
+  const localIncidents = clusterIncidents(
+    localTurns.filter((turn) => turn.labels.length > 0),
+    { maxTurnGap: 2 },
+    EVALUATOR_VERSION,
+    SCHEMA_VERSION,
+  );
+
+  return {
+    sessionId: session.sessionId,
+    sessionMetrics: {
+      sessionId: session.sessionId,
+      turnCount: session.turns.length,
+      labeledTurnCount,
+      incidentCount: localIncidents.length,
+      writeCount: compliance.writeCount,
+      verificationCount: compliance.verificationCount,
+      verificationPassedCount: compliance.verificationPassedCount,
+      verificationFailedCount: compliance.verificationFailedCount,
+      complianceScore: compliance.score,
+      complianceRules: compliance.rules,
+    },
+    localLabelCounts,
+    localIncidents,
+    turnCount: session.turns.length,
+    writeTurnCount,
+  };
 }
 
 export async function evaluateArtifacts(
@@ -284,7 +409,6 @@ export async function evaluateArtifactsSummaryOnly(
     typeof options.sessionLimit === "number"
       ? discoveredArtifacts.sessionFiles.slice(-options.sessionLimit)
       : discoveredArtifacts.sessionFiles;
-  const sessionMetrics: SessionMetrics[] = [];
   let labelCounts = createEmptyLabelCounts();
   let complianceSummary = createEmptyComplianceSummary();
   const sessionLabelCounts = new Map<
@@ -297,11 +421,21 @@ export async function evaluateArtifactsSummaryOnly(
   let totalIncidentCount = 0;
   let writeTurnCount = 0;
   const homeDirectory = getHomeDirectory();
+  const sessionSummaries = await mapWithConcurrency(
+    sessionPaths,
+    8,
+    async (sessionPath) =>
+      summarizeSessionForSummaryOnly(sessionPath, homeDirectory),
+  );
+  const sessionMetrics = sessionSummaries.map((entry) => entry.sessionMetrics);
 
-  for (const sessionPath of sessionPaths) {
-    const session = await parseTranscriptFile(sessionPath);
-    const compliance = scoreCompliance(session);
-    for (const rule of compliance.rules) {
+  for (const entry of sessionSummaries) {
+    sessionLabelCounts.set(entry.sessionId, entry.localLabelCounts);
+    totalTurnCount += entry.turnCount;
+    totalIncidentCount += entry.localIncidents.length;
+    writeTurnCount += entry.writeTurnCount;
+
+    for (const rule of entry.sessionMetrics.complianceRules) {
       complianceSummary = incrementComplianceSummary(
         complianceSummary,
         rule.rule,
@@ -309,72 +443,19 @@ export async function evaluateArtifactsSummaryOnly(
       );
     }
 
-    let labeledTurnCount = 0;
-    const localLabelCounts = createEmptySessionLabelMap();
-    const localTurns: RawTurnRecord[] = [];
-
-    for (const turn of session.turns) {
-      const labels = labelTurn(turn);
-      if (labels.length > 0) {
-        labeledTurnCount += 1;
-        for (const label of labels) {
-          localLabelCounts[label.label] += 1;
-          labelCounts = incrementLabelCount(labelCounts, label.label);
-        }
+    for (const label of labelTaxonomy) {
+      const count = entry.localLabelCounts[label];
+      if (count <= 0) {
+        continue;
       }
 
-      const toolCalls = turn.toolCalls.map((toolCall) => ({
-        ...summarizeToolCall(toolCall.toolName, toolCall.argumentsText),
-        status: toolCall.status,
-      }));
-      if (toolCalls.some((toolCall) => toolCall.writeLike)) {
-        writeTurnCount += 1;
-      }
-
-      localTurns.push({
-        evaluatorVersion: EVALUATOR_VERSION,
-        schemaVersion: SCHEMA_VERSION,
-        sessionId: session.sessionId,
-        parentSessionId: session.parentSessionId,
-        turnId: turn.turnId,
-        turnIndex: turn.turnIndex,
-        startedAt: turn.startedAt,
-        cwd: turn.cwd ? redactPath(turn.cwd) : undefined,
-        userMessageCount: turn.userMessages.length,
-        assistantMessageCount: turn.assistantMessages.length,
-        userMessagePreviews: createMessagePreviews(turn.userMessages, {
-          homeDirectory,
-          maxItems: 2,
-          maxLength: 220,
-        }),
-        assistantMessagePreviews: createMessagePreviews(
-          turn.assistantMessages,
-          {
-            homeDirectory,
-            maxItems: 2,
-            maxLength: 220,
-          },
-        ),
-        toolCalls,
-        labels,
-        sourceRefs: turn.sourceRefs.map((sourceRef) => ({
-          ...sourceRef,
-          path: redactPath(sourceRef.path),
-        })),
-      });
+      labelCounts = {
+        ...labelCounts,
+        [label]: (labelCounts[label] ?? 0) + count,
+      };
     }
 
-    sessionLabelCounts.set(session.sessionId, localLabelCounts);
-    totalTurnCount += session.turns.length;
-    const localIncidents = clusterIncidents(
-      localTurns.filter((turn) => turn.labels.length > 0),
-      { maxTurnGap: 2 },
-      EVALUATOR_VERSION,
-      SCHEMA_VERSION,
-    );
-    totalIncidentCount += localIncidents.length;
-
-    for (const incident of localIncidents) {
+    for (const incident of entry.localIncidents) {
       severityCounts[incident.severity] += 1;
       topIncidents = insertTopIncident(
         topIncidents,
@@ -390,19 +471,6 @@ export async function evaluateArtifactsSummaryOnly(
         8,
       );
     }
-
-    sessionMetrics.push({
-      sessionId: session.sessionId,
-      turnCount: session.turns.length,
-      labeledTurnCount,
-      incidentCount: localIncidents.length,
-      writeCount: compliance.writeCount,
-      verificationCount: compliance.verificationCount,
-      verificationPassedCount: compliance.verificationPassedCount,
-      verificationFailedCount: compliance.verificationFailedCount,
-      complianceScore: compliance.score,
-      complianceRules: compliance.rules,
-    });
   }
 
   const metrics: MetricsRecord = {

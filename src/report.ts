@@ -53,7 +53,7 @@ function renderSessionLines(
   return summary.topSessions
     .map(
       (session) =>
-        `- ${session.sessionId}: archetype ${session.archetype}, friction ${session.frictionScore}, score ${session.complianceScore}, dominant labels ${session.dominantLabels.join(", ") || "none"}`,
+        `- ${session.sessionId}: ${session.archetypeLabel} (${session.archetype}), friction ${session.frictionScore}, score ${session.complianceScore}, dominant labels ${session.dominantLabels.join(", ") || "none"}`,
     )
     .join("\n");
 }
@@ -82,7 +82,7 @@ function renderIncidentLines(
       const suffix = incident.evidencePreview
         ? ` | evidence: "${incident.evidencePreview}"`
         : "";
-      return `- \`${incident.severity}\` / \`${incident.confidence}\` ${incident.summary} (${incident.sessionId})${suffix}`;
+      return `- \`${incident.severity}\` / \`${incident.confidence}\` ${incident.summary} (${incident.sessionId}, span ${incident.turnSpan})${suffix}`;
     })
     .join("\n");
 }
@@ -127,6 +127,18 @@ export function renderSummaryReport(
     ...summary.insightCards.map(
       (card) => `- ${card.title}: ${card.value} (${card.detail})`,
     ),
+    "",
+    "## Show-Off Stats",
+    "",
+    ...summary.bragCards.map(
+      (card) => `- ${card.title}: ${card.value} (${card.detail})`,
+    ),
+    "",
+    "## Badges",
+    "",
+    summary.achievementBadges.length > 0
+      ? summary.achievementBadges.map((badge) => `- ${badge}`).join("\n")
+      : "- No badges earned for this slice yet.",
     "",
     "## Operational Rates",
     "",
