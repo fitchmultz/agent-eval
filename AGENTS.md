@@ -30,3 +30,4 @@ Notes:
 - For large corpus runs, prefer the summary-only path that skips giant raw-turn/incidents artifacts.
 - When `sessionLimit` is set, it must mean the most recent discovered sessions, not an arbitrary subset.
 - Keep the public-facing layer useful for non-experts: maintain shareable scorecards, brag stats, and clean-session spotlight sections as deterministic derivatives.
+- Keep trend reporting deterministic too: comparative slices should come from aggregated session metrics, and headline momentum should prefer a stable recent window over a twitchy tiny slice when possible.

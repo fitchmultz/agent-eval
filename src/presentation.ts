@@ -143,6 +143,23 @@ function renderScoreCards(summary: SummaryArtifact): string {
     .join("");
 }
 
+function renderMomentumCards(summary: SummaryArtifact): string {
+  if (summary.momentumCards.length === 0) {
+    return `<p class="empty-state">Not enough sessions in this slice for recent-vs-corpus momentum comparisons yet.</p>`;
+  }
+
+  return summary.momentumCards
+    .map(
+      (card) => `
+      <article class="metric-card tone-${escapeHtml(card.tone)} score-card">
+        <div class="metric-label">${escapeHtml(card.title)}</div>
+        <div class="metric-value">${escapeHtml(card.value)}</div>
+        <div class="metric-detail">${escapeHtml(card.detail)}</div>
+      </article>`,
+    )
+    .join("");
+}
+
 function renderBadges(summary: SummaryArtifact): string {
   if (summary.achievementBadges.length === 0) {
     return `<p class="empty-state">No badges earned for this slice yet.</p>`;
@@ -228,6 +245,20 @@ function renderComplianceTable(summary: SummaryArtifact): string {
     ...summary.compliance.map(
       (rule) =>
         `<tr><td>${escapeHtml(rule.rule)}</td><td>${rule.passCount}</td><td>${rule.failCount}</td><td>${rule.notApplicableCount}</td><td>${rule.unknownCount}</td></tr>`,
+    ),
+    "</tbody>",
+    "</table>",
+  ].join("");
+}
+
+function renderComparativeSliceTable(summary: SummaryArtifact): string {
+  return [
+    `<table class="compliance-table">`,
+    `<thead><tr><th>Slice</th><th>Sessions</th><th>Proof</th><th>Flow</th><th>Discipline</th><th>Write Verification</th><th>Incidents / 100 Turns</th></tr></thead>`,
+    "<tbody>",
+    ...summary.comparativeSlices.map(
+      (slice) =>
+        `<tr><td>${escapeHtml(slice.label)}</td><td>${slice.sessionCount}</td><td>${slice.proofScore}</td><td>${slice.flowScore}</td><td>${slice.disciplineScore}</td><td>${slice.writeVerificationRate}%</td><td>${slice.incidentsPer100Turns}</td></tr>`,
     ),
     "</tbody>",
     "</table>",
@@ -399,6 +430,7 @@ function renderHtmlReport(
     `<section><div class="metric-grid">${renderSummaryCards(summary)}</div></section>`,
     `<section><h2>Show-Off Stats</h2><div class="metric-grid">${renderBragCards(summary)}</div></section>`,
     `<section><h2>Shareable Scoreboard</h2><div class="metric-grid">${renderScoreCards(summary)}</div></section>`,
+    `<section><h2>Recent Momentum</h2><div class="metric-grid">${renderMomentumCards(summary)}</div></section>`,
     `<section><h2>Badges</h2><div class="badge-row">${renderBadges(summary)}</div></section>`,
     `<section><h2>Operational Rates</h2><div class="rates-grid">
       <div class="rate-item"><strong>Incidents / 100 turns</strong><div class="rate-value">${summary.rates.incidentsPer100Turns}</div></div>
@@ -408,6 +440,7 @@ function renderHtmlReport(
       <div class="rate-item"><strong>Reinjections / 100 turns</strong><div class="rate-value">${summary.rates.reinjectionsPer100Turns}</div></div>
       <div class="rate-item"><strong>Praise / 100 turns</strong><div class="rate-value">${summary.rates.praisePer100Turns}</div></div>
     </div></section>`,
+    `<section><h2>Comparative Slices</h2><div class="panel">${renderComparativeSliceTable(summary)}</div></section>`,
     `<section><h2>Charts</h2><div class="charts-grid">
       <div class="panel wide"><img alt="Label counts chart" src="label-counts.svg" /></div>
       <div class="panel"><img alt="Incident severity chart" src="severity-breakdown.svg" /></div>

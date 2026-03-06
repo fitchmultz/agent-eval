@@ -14,7 +14,11 @@ import type {
   Severity,
   SummaryArtifact,
 } from "./schema.js";
-import { labelTaxonomy, severityValues } from "./schema.js";
+import {
+  complianceRuleValues,
+  labelTaxonomy,
+  severityValues,
+} from "./schema.js";
 
 export interface SummaryInputs {
   sessionLabelCounts: Map<string, Record<LabelName, number>>;
@@ -38,6 +42,8 @@ interface SessionInsightRow {
 }
 
 type ScoreCard = SummaryArtifact["scoreCards"][number];
+type ComparativeSlice = SummaryArtifact["comparativeSlices"][number];
+type MomentumCard = SummaryArtifact["momentumCards"][number];
 
 const labelWeights: Record<LabelName, number> = {
   context_drift: 4,
@@ -270,6 +276,14 @@ function applicablePassRate(
   return safeRate(rule.passCount, rule.passCount + rule.failCount);
 }
 
+interface ScoreSnapshot {
+  proofScore: number;
+  flowScore: number;
+  disciplineScore: number;
+  writeVerificationRate: number;
+  incidentsPer100Turns: number;
+}
+
 function toneForScore(score: number): ScoreCard["tone"] {
   if (score >= 90) {
     return "good";
@@ -283,17 +297,18 @@ function toneForScore(score: number): ScoreCard["tone"] {
   return "danger";
 }
 
-function buildScoreCards(
-  metrics: MetricsRecord,
-): SummaryArtifact["scoreCards"] {
-  const proofScore = Math.round(
-    safeRate(
-      metrics.sessions
-        .filter((session) => session.writeCount > 0)
-        .filter((session) => session.verificationPassedCount > 0).length,
-      metrics.sessions.filter((session) => session.writeCount > 0).length,
-    ),
+function buildScoreSnapshot(metrics: MetricsRecord): ScoreSnapshot {
+  const sessionsWithWrites = metrics.sessions.filter(
+    (session) => session.writeCount > 0,
   );
+  const verifiedWriteSessions = sessionsWithWrites.filter(
+    (session) => session.verificationPassedCount > 0,
+  );
+  const writeVerificationRate = safeRate(
+    verifiedWriteSessions.length,
+    sessionsWithWrites.length,
+  );
+  const proofScore = Math.round(writeVerificationRate);
   const flowPenalty =
     safeRate(countLabel(metrics.labelCounts, "interrupt"), metrics.turnCount) *
       8 +
@@ -316,27 +331,232 @@ function buildScoreCards(
       4,
   );
 
+  return {
+    proofScore,
+    flowScore,
+    disciplineScore,
+    writeVerificationRate,
+    incidentsPer100Turns: safeRate(metrics.incidentCount, metrics.turnCount),
+  };
+}
+
+function buildScoreCards(
+  metrics: MetricsRecord,
+): SummaryArtifact["scoreCards"] {
+  const snapshot = buildScoreSnapshot(metrics);
+
   return [
     {
       title: "Proof Score",
-      score: proofScore,
+      score: snapshot.proofScore,
       detail:
         "How often write sessions ended with a passing verification signal.",
-      tone: toneForScore(proofScore),
+      tone: toneForScore(snapshot.proofScore),
     },
     {
       title: "Flow Score",
-      score: flowScore,
+      score: snapshot.flowScore,
       detail:
         "Higher is calmer. This penalizes interrupts, context reinjection, and explicit drift complaints.",
-      tone: toneForScore(flowScore),
+      tone: toneForScore(snapshot.flowScore),
     },
     {
       title: "Discipline Score",
-      score: disciplineScore,
+      score: snapshot.disciplineScore,
       detail:
         "Average pass rate across scope, cwd/repo echo, short planning, and post-write verification rules.",
-      tone: toneForScore(disciplineScore),
+      tone: toneForScore(snapshot.disciplineScore),
+    },
+  ];
+}
+
+function aggregateComplianceSummary(
+  sessions: readonly MetricsRecord["sessions"][number][],
+): SummaryArtifact["compliance"] {
+  const summary = complianceRuleValues.map((rule) => ({
+    rule,
+    passCount: 0,
+    failCount: 0,
+    notApplicableCount: 0,
+    unknownCount: 0,
+  }));
+
+  for (const session of sessions) {
+    for (const rule of session.complianceRules) {
+      const entry = summary.find((candidate) => candidate.rule === rule.rule);
+      if (!entry) {
+        continue;
+      }
+
+      if (rule.status === "pass") {
+        entry.passCount += 1;
+      } else if (rule.status === "fail") {
+        entry.failCount += 1;
+      } else if (rule.status === "not_applicable") {
+        entry.notApplicableCount += 1;
+      } else {
+        entry.unknownCount += 1;
+      }
+    }
+  }
+
+  return summary;
+}
+
+function aggregateLabelCounts(
+  sessions: readonly MetricsRecord["sessions"][number][],
+  sessionLabelCounts: Map<string, Record<LabelName, number>>,
+): MetricsRecord["labelCounts"] {
+  const counts: MetricsRecord["labelCounts"] = {};
+
+  for (const session of sessions) {
+    const labels =
+      sessionLabelCounts.get(session.sessionId) ?? createEmptySessionLabelMap();
+    for (const label of labelTaxonomy) {
+      if (labels[label] <= 0) {
+        continue;
+      }
+
+      counts[label] = (counts[label] ?? 0) + labels[label];
+    }
+  }
+
+  return counts;
+}
+
+function createSubsetMetrics(
+  metrics: MetricsRecord,
+  sessions: readonly MetricsRecord["sessions"][number][],
+  sessionLabelCounts: Map<string, Record<LabelName, number>>,
+): MetricsRecord {
+  const turnCount = sessions.reduce(
+    (total, session) => total + session.turnCount,
+    0,
+  );
+  const incidentCount = sessions.reduce(
+    (total, session) => total + session.incidentCount,
+    0,
+  );
+
+  return {
+    evaluatorVersion: metrics.evaluatorVersion,
+    schemaVersion: metrics.schemaVersion,
+    generatedAt: metrics.generatedAt,
+    sessionCount: sessions.length,
+    turnCount,
+    incidentCount,
+    labelCounts: aggregateLabelCounts(sessions, sessionLabelCounts),
+    complianceSummary: aggregateComplianceSummary(sessions),
+    sessions: [...sessions],
+    inventory: metrics.inventory,
+  };
+}
+
+function buildComparativeSlices(
+  metrics: MetricsRecord,
+  sessionLabelCounts: Map<string, Record<LabelName, number>>,
+): SummaryArtifact["comparativeSlices"] {
+  const candidateSizes = [100, 500, 1000];
+  const slices: ComparativeSlice[] = [];
+  const selectedSnapshot = buildScoreSnapshot(metrics);
+
+  slices.push({
+    key: "selected_corpus",
+    label: "Selected Corpus",
+    sessionCount: metrics.sessionCount,
+    turnCount: metrics.turnCount,
+    incidentCount: metrics.incidentCount,
+    proofScore: selectedSnapshot.proofScore,
+    flowScore: selectedSnapshot.flowScore,
+    disciplineScore: selectedSnapshot.disciplineScore,
+    writeVerificationRate: selectedSnapshot.writeVerificationRate,
+    incidentsPer100Turns: selectedSnapshot.incidentsPer100Turns,
+  });
+
+  for (const size of candidateSizes) {
+    if (metrics.sessions.length <= size) {
+      continue;
+    }
+
+    const sessions = metrics.sessions.slice(-size);
+    const subsetMetrics = createSubsetMetrics(
+      metrics,
+      sessions,
+      sessionLabelCounts,
+    );
+    const snapshot = buildScoreSnapshot(subsetMetrics);
+
+    slices.push({
+      key: `recent_${size}`,
+      label: `Recent ${size}`,
+      sessionCount: subsetMetrics.sessionCount,
+      turnCount: subsetMetrics.turnCount,
+      incidentCount: subsetMetrics.incidentCount,
+      proofScore: snapshot.proofScore,
+      flowScore: snapshot.flowScore,
+      disciplineScore: snapshot.disciplineScore,
+      writeVerificationRate: snapshot.writeVerificationRate,
+      incidentsPer100Turns: snapshot.incidentsPer100Turns,
+    });
+  }
+
+  return slices;
+}
+
+function toneForDelta(delta: number): MomentumCard["tone"] {
+  if (delta >= 5) {
+    return "good";
+  }
+  if (delta <= -10) {
+    return "danger";
+  }
+  if (delta <= -5) {
+    return "warn";
+  }
+  return "neutral";
+}
+
+function formatSignedDelta(delta: number): string {
+  return `${delta >= 0 ? "+" : ""}${delta}`;
+}
+
+function buildMomentumCards(
+  comparativeSlices: readonly ComparativeSlice[],
+): SummaryArtifact["momentumCards"] {
+  const corpus = comparativeSlices.find(
+    (slice) => slice.key === "selected_corpus",
+  );
+  const recent =
+    comparativeSlices.find((slice) => slice.key === "recent_500") ??
+    comparativeSlices.find((slice) => slice.key === "recent_100") ??
+    comparativeSlices.find((slice) => slice.key === "recent_1000") ??
+    comparativeSlices.find((slice) => slice.key !== "selected_corpus");
+  if (!corpus || !recent) {
+    return [];
+  }
+
+  const proofDelta = recent.proofScore - corpus.proofScore;
+  const flowDelta = recent.flowScore - corpus.flowScore;
+  const disciplineDelta = recent.disciplineScore - corpus.disciplineScore;
+
+  return [
+    {
+      title: "Proof Momentum",
+      value: `${formatSignedDelta(proofDelta)} pts`,
+      detail: `${recent.label} vs selected corpus on proof-backed delivery.`,
+      tone: toneForDelta(proofDelta),
+    },
+    {
+      title: "Flow Momentum",
+      value: `${formatSignedDelta(flowDelta)} pts`,
+      detail: `${recent.label} vs selected corpus on calmer sessions.`,
+      tone: toneForDelta(flowDelta),
+    },
+    {
+      title: "Discipline Momentum",
+      value: `${formatSignedDelta(disciplineDelta)} pts`,
+      detail: `${recent.label} vs selected corpus on operating-rule compliance.`,
+      tone: toneForDelta(disciplineDelta),
     },
   ];
 }
@@ -546,12 +766,32 @@ function compareTopIncidents(
   );
 }
 
+function topIncidentDedupKey(
+  incident: SummaryArtifact["topIncidents"][number],
+): string {
+  const normalizedSummary = incident.summary.replace(
+    /\s+across\s+\d+\s+turn\(s\)$/i,
+    "",
+  );
+  return `${incident.sessionId}::${normalizedSummary}`;
+}
+
 export function insertTopIncident(
   topIncidents: SummaryArtifact["topIncidents"],
   incident: SummaryArtifact["topIncidents"][number],
   limit: number,
 ): SummaryArtifact["topIncidents"] {
-  return [...topIncidents, incident].sort(compareTopIncidents).slice(0, limit);
+  const deduped = new Map<string, SummaryArtifact["topIncidents"][number]>();
+
+  for (const candidate of [...topIncidents, incident]) {
+    const key = topIncidentDedupKey(candidate);
+    const existing = deduped.get(key);
+    if (!existing || compareTopIncidents(candidate, existing) < 0) {
+      deduped.set(key, candidate);
+    }
+  }
+
+  return [...deduped.values()].sort(compareTopIncidents).slice(0, limit);
 }
 
 export function buildSummaryInputsFromArtifacts(
@@ -598,6 +838,10 @@ export function buildSummaryArtifact(
   );
   const topSessions = buildTopSessions(metrics, inputs.sessionLabelCounts);
   const victoryLaps = buildVictoryLaps(topSessions);
+  const comparativeSlices = buildComparativeSlices(
+    metrics,
+    inputs.sessionLabelCounts,
+  );
 
   return {
     evaluatorVersion: metrics.evaluatorVersion,
@@ -649,6 +893,8 @@ export function buildSummaryArtifact(
         sessionsWithWrites.length,
       ),
     },
+    comparativeSlices,
+    momentumCards: buildMomentumCards(comparativeSlices),
     scoreCards: buildScoreCards(metrics),
     bragCards: buildBragCards(metrics),
     achievementBadges: buildAchievementBadges(metrics, topSessions),

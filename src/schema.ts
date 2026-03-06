@@ -216,6 +216,28 @@ export const summaryArtifactSchema = z.object({
     verifiedWriteSessions: z.int().nonnegative(),
     writeVerificationRate: z.number().nonnegative(),
   }),
+  comparativeSlices: z.array(
+    z.object({
+      key: z.string().min(1),
+      label: z.string().min(1),
+      sessionCount: z.int().nonnegative(),
+      turnCount: z.int().nonnegative(),
+      incidentCount: z.int().nonnegative(),
+      proofScore: z.int().min(0).max(100),
+      flowScore: z.int().min(0).max(100),
+      disciplineScore: z.int().min(0).max(100),
+      writeVerificationRate: z.number().nonnegative(),
+      incidentsPer100Turns: z.number().nonnegative(),
+    }),
+  ),
+  momentumCards: z.array(
+    z.object({
+      title: z.string().min(1),
+      value: z.string().min(1),
+      detail: z.string().min(1),
+      tone: z.enum(["neutral", "good", "warn", "danger"]),
+    }),
+  ),
   scoreCards: z.array(
     z.object({
       title: z.string().min(1),

@@ -208,6 +208,10 @@ describe("createPresentationArtifacts", () => {
       37.5,
     );
     expect(presentation.summary.bragCards[0]?.title).toBe("Proof-Backed Ships");
+    expect(presentation.summary.comparativeSlices[0]?.label).toBe(
+      "Selected Corpus",
+    );
+    expect(presentation.summary.momentumCards).toHaveLength(0);
     expect(presentation.summary.scoreCards[0]?.title).toBe("Proof Score");
     expect(presentation.summary.scoreCards[0]?.score).toBe(100);
     expect(presentation.summary.achievementBadges).toContain(
@@ -222,6 +226,8 @@ describe("createPresentationArtifacts", () => {
     expect(presentation.reportHtml).toContain("label-counts.svg");
     expect(presentation.reportHtml).toContain("Sessions To Review First");
     expect(presentation.reportHtml).toContain("Shareable Scoreboard");
+    expect(presentation.reportHtml).toContain("Recent Momentum");
+    expect(presentation.reportHtml).toContain("Comparative Slices");
     expect(presentation.reportHtml).toContain("Victory Lap Sessions");
     expect(presentation.labelChartSvg).toContain("<svg");
     expect(presentation.complianceChartSvg).toContain("Compliance Pass Counts");
@@ -234,7 +240,9 @@ describe("createPresentationArtifacts", () => {
     expect(markdown).toContain("## Headline Insights");
     expect(markdown).toContain("## Show-Off Stats");
     expect(markdown).toContain("## Shareable Scoreboard");
+    expect(markdown).toContain("## Recent Momentum");
     expect(markdown).toContain("## Badges");
+    expect(markdown).toContain("## Comparative Slices");
     expect(markdown).toContain("## Sessions To Review First");
     expect(markdown).toContain("## Victory Lap Sessions");
     expect(markdown).toContain("## Deterministic Opportunities");

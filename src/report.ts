@@ -73,6 +73,29 @@ function renderVictoryLapLines(
     .join("\n");
 }
 
+function renderMomentumLines(
+  summary: ReturnType<typeof buildSummaryArtifact>,
+): string {
+  if (summary.momentumCards.length === 0) {
+    return "- Not enough sessions in this slice for recent-vs-corpus momentum comparisons yet.";
+  }
+
+  return summary.momentumCards
+    .map((card) => `- ${card.title}: ${card.value} (${card.detail})`)
+    .join("\n");
+}
+
+function renderComparativeSliceLines(
+  summary: ReturnType<typeof buildSummaryArtifact>,
+): string {
+  return summary.comparativeSlices
+    .map(
+      (slice) =>
+        `- ${slice.label}: sessions ${slice.sessionCount}, proof ${slice.proofScore}, flow ${slice.flowScore}, discipline ${slice.disciplineScore}, write verification ${slice.writeVerificationRate}%, incidents/100 turns ${slice.incidentsPer100Turns}`,
+    )
+    .join("\n");
+}
+
 function renderOpportunityLines(
   summary: ReturnType<typeof buildSummaryArtifact>,
 ): string {
@@ -155,6 +178,10 @@ export function renderSummaryReport(
       (card) => `- ${card.title}: ${card.score}/100 (${card.detail})`,
     ),
     "",
+    "## Recent Momentum",
+    "",
+    renderMomentumLines(summary),
+    "",
     "## Badges",
     "",
     summary.achievementBadges.length > 0
@@ -164,6 +191,10 @@ export function renderSummaryReport(
     "## Operational Rates",
     "",
     renderRateLines(summary),
+    "",
+    "## Comparative Slices",
+    "",
+    renderComparativeSliceLines(summary),
     "",
     "## Label Counts",
     "",
