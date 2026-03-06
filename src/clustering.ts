@@ -69,7 +69,7 @@ function sharesAnyLabel(
 }
 
 function isBoilerplatePreview(preview: string): boolean {
-  return /AGENTS\.md instructions|<INSTRUCTIONS>|GLOBAL AGENTS GUIDANCE|<codex reminder>/i.test(
+  return /AGENTS\.md instructions|<INSTRUCTIONS>|GLOBAL AGENTS GUIDANCE|<codex reminder>|<environment_context>|<turn_aborted>/i.test(
     preview,
   );
 }

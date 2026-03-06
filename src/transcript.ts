@@ -156,7 +156,12 @@ export async function parseTranscriptFile(
     }
 
     lineNumber += 1;
-    const parsedUnknown: unknown = JSON.parse(line);
+    let parsedUnknown: unknown;
+    try {
+      parsedUnknown = JSON.parse(line);
+    } catch {
+      continue;
+    }
     const eventRecord = asRecord(parsedUnknown);
     const event: JsonlEventRecord = {};
     const timestamp = eventRecord

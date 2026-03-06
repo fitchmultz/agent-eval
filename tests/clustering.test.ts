@@ -21,6 +21,7 @@ describe("clusterIncidents", () => {
           assistantMessageCount: 0,
           userMessagePreviews: [
             "# AGENTS.md instructions for /tmp/demo <INSTRUCTIONS>",
+            "<environment_context> <cwd>/tmp/demo</cwd> </environment_context>",
             "Tests still fail",
           ],
           assistantMessagePreviews: [],
