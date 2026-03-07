@@ -211,7 +211,6 @@ describe("createPresentationArtifacts", () => {
     expect(presentation.summary.comparativeSlices[0]?.label).toBe(
       "Selected Corpus",
     );
-    expect(presentation.summary.momentumCards).toHaveLength(0);
     expect(presentation.summary.scoreCards[0]?.title).toBe("Proof Score");
     expect(presentation.summary.scoreCards[0]?.score).toBe(100);
     expect(presentation.summary.achievementBadges).toContain(

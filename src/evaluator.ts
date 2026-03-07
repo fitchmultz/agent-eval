@@ -64,9 +64,32 @@ interface SessionSummaryComputation {
   sessionMetrics: SessionMetrics;
   localLabelCounts: ReturnType<typeof createEmptySessionLabelMap>;
   localIncidents: IncidentRecord[];
+  rawTurns: RawTurnRecord[];
   turnCount: number;
   writeTurnCount: number;
 }
+
+interface SharedEvaluationAggregate {
+  discoveredInventory: MetricsRecord["inventory"];
+  sessionSummaries: SessionSummaryComputation[];
+  labelCounts: LabelCountRecord;
+  complianceSummary: ComplianceAggregate[];
+  sessionLabelCounts: Map<
+    string,
+    ReturnType<typeof createEmptySessionLabelMap>
+  >;
+  severityCounts: Record<
+    SummaryArtifact["severities"][number]["severity"],
+    number
+  >;
+  topIncidents: SummaryArtifact["topIncidents"];
+  turnCount: number;
+  incidentCount: number;
+  writeTurnCount: number;
+}
+
+const FULL_EVALUATION_CONCURRENCY = 4;
+const SUMMARY_EVALUATION_CONCURRENCY = 8;
 
 function summarizeToolCall(
   toolName: string,
@@ -91,16 +114,6 @@ function summarizeToolCall(
     writeLike,
     verificationLike,
     status: "unknown",
-  };
-}
-
-function incrementLabelCount(
-  counts: LabelCountRecord,
-  label: keyof LabelCountRecord,
-): LabelCountRecord {
-  return {
-    ...counts,
-    [label]: (counts[label] ?? 0) + 1,
   };
 }
 
@@ -182,7 +195,7 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-async function summarizeSessionForSummaryOnly(
+async function summarizeSession(
   sessionPath: string,
   homeDirectory: string | undefined,
 ): Promise<SessionSummaryComputation> {
@@ -263,152 +276,33 @@ async function summarizeSessionForSummaryOnly(
     },
     localLabelCounts,
     localIncidents,
+    rawTurns: localTurns,
     turnCount: session.turns.length,
     writeTurnCount,
   };
 }
 
-export async function evaluateArtifacts(
-  options: EvaluateOptions,
-): Promise<EvaluationResult> {
-  const discoveredArtifacts = await discoverArtifacts(options.codexHome);
-  const sessionPaths =
-    typeof options.sessionLimit === "number"
-      ? discoveredArtifacts.sessionFiles.slice(-options.sessionLimit)
-      : discoveredArtifacts.sessionFiles;
-  const parsedSessions = [];
-  for (const sessionPath of sessionPaths) {
-    parsedSessions.push(await parseTranscriptFile(sessionPath));
-  }
-
-  const rawTurns: RawTurnRecord[] = [];
-  const sessionMetrics: SessionMetrics[] = [];
-  let labelCounts = createEmptyLabelCounts();
-  let complianceSummary = createEmptyComplianceSummary();
-  const homeDirectory = getHomeDirectory();
-
-  for (const session of parsedSessions) {
-    const compliance = scoreCompliance(session);
-    for (const rule of compliance.rules) {
-      complianceSummary = incrementComplianceSummary(
-        complianceSummary,
-        rule.rule,
-        rule.status,
-      );
-    }
-    let labeledTurnCount = 0;
-
-    for (const turn of session.turns) {
-      const labels = labelTurn(turn);
-      if (labels.length > 0) {
-        labeledTurnCount += 1;
-        for (const label of labels) {
-          labelCounts = incrementLabelCount(labelCounts, label.label);
-        }
-      }
-
-      rawTurns.push({
-        evaluatorVersion: EVALUATOR_VERSION,
-        schemaVersion: SCHEMA_VERSION,
-        sessionId: session.sessionId,
-        parentSessionId: session.parentSessionId,
-        turnId: turn.turnId,
-        turnIndex: turn.turnIndex,
-        startedAt: turn.startedAt,
-        cwd: turn.cwd ? redactPath(turn.cwd) : undefined,
-        userMessageCount: turn.userMessages.length,
-        assistantMessageCount: turn.assistantMessages.length,
-        userMessagePreviews: createMessagePreviews(turn.userMessages, {
-          homeDirectory,
-          maxItems: 2,
-          maxLength: 220,
-        }),
-        assistantMessagePreviews: createMessagePreviews(
-          turn.assistantMessages,
-          {
-            homeDirectory,
-            maxItems: 2,
-            maxLength: 220,
-          },
-        ),
-        toolCalls: turn.toolCalls.map((toolCall) => ({
-          ...summarizeToolCall(toolCall.toolName, toolCall.argumentsText),
-          status: toolCall.status,
-        })),
-        labels,
-        sourceRefs: turn.sourceRefs.map((sourceRef) => ({
-          ...sourceRef,
-          path: redactPath(sourceRef.path),
-        })),
-      });
-    }
-
-    sessionMetrics.push({
-      sessionId: session.sessionId,
-      turnCount: session.turns.length,
-      labeledTurnCount,
-      incidentCount: 0,
-      writeCount: compliance.writeCount,
-      verificationCount: compliance.verificationCount,
-      verificationPassedCount: compliance.verificationPassedCount,
-      verificationFailedCount: compliance.verificationFailedCount,
-      complianceScore: compliance.score,
-      complianceRules: compliance.rules,
-    });
-  }
-
-  const evaluatedTurns = rawTurns.filter((turn) => turn.labels.length > 0);
-  const incidents = clusterIncidents(
-    evaluatedTurns,
-    { maxTurnGap: 2 },
-    EVALUATOR_VERSION,
-    SCHEMA_VERSION,
-  );
-
-  const incidentCountBySession = new Map<string, number>();
-  for (const incident of incidents) {
-    incidentCountBySession.set(
-      incident.sessionId,
-      (incidentCountBySession.get(incident.sessionId) ?? 0) + 1,
-    );
-  }
-
-  const metrics: MetricsRecord = {
-    evaluatorVersion: EVALUATOR_VERSION,
-    schemaVersion: SCHEMA_VERSION,
-    generatedAt: new Date().toISOString(),
-    sessionCount: parsedSessions.length,
-    turnCount: rawTurns.length,
-    incidentCount: incidents.length,
-    labelCounts,
-    complianceSummary,
-    sessions: sessionMetrics.map((session) => ({
-      ...session,
-      incidentCount: incidentCountBySession.get(session.sessionId) ?? 0,
-    })),
-    inventory: discoveredArtifacts.inventory.map((record) => ({
-      ...record,
-      path: redactPath(record.path),
-    })),
-  };
-
-  const report = renderReport(metrics, incidents, rawTurns);
-  return {
-    rawTurns,
-    incidents,
-    metrics,
-    report,
-  };
+function selectSessionPaths(
+  sessionFiles: readonly string[],
+  sessionLimit?: number,
+): readonly string[] {
+  return typeof sessionLimit === "number"
+    ? sessionFiles.slice(-sessionLimit)
+    : sessionFiles;
 }
 
-export async function evaluateArtifactsSummaryOnly(
-  options: EvaluateOptions,
-): Promise<SummaryOnlyEvaluationResult> {
-  const discoveredArtifacts = await discoverArtifacts(options.codexHome);
-  const sessionPaths =
-    typeof options.sessionLimit === "number"
-      ? discoveredArtifacts.sessionFiles.slice(-options.sessionLimit)
-      : discoveredArtifacts.sessionFiles;
+function redactInventory(
+  inventory: MetricsRecord["inventory"],
+): MetricsRecord["inventory"] {
+  return inventory.map((record) => ({
+    ...record,
+    path: redactPath(record.path),
+  }));
+}
+
+function accumulateSharedEvaluation(
+  sessionSummaries: readonly SessionSummaryComputation[],
+): Omit<SharedEvaluationAggregate, "discoveredInventory"> {
   let labelCounts = createEmptyLabelCounts();
   let complianceSummary = createEmptyComplianceSummary();
   const sessionLabelCounts = new Map<
@@ -417,22 +311,14 @@ export async function evaluateArtifactsSummaryOnly(
   >();
   const severityCounts = createEmptySeverityCounts();
   let topIncidents: SummaryArtifact["topIncidents"] = [];
-  let totalTurnCount = 0;
-  let totalIncidentCount = 0;
+  let turnCount = 0;
+  let incidentCount = 0;
   let writeTurnCount = 0;
-  const homeDirectory = getHomeDirectory();
-  const sessionSummaries = await mapWithConcurrency(
-    sessionPaths,
-    8,
-    async (sessionPath) =>
-      summarizeSessionForSummaryOnly(sessionPath, homeDirectory),
-  );
-  const sessionMetrics = sessionSummaries.map((entry) => entry.sessionMetrics);
 
   for (const entry of sessionSummaries) {
     sessionLabelCounts.set(entry.sessionId, entry.localLabelCounts);
-    totalTurnCount += entry.turnCount;
-    totalIncidentCount += entry.localIncidents.length;
+    turnCount += entry.turnCount;
+    incidentCount += entry.localIncidents.length;
     writeTurnCount += entry.writeTurnCount;
 
     for (const rule of entry.sessionMetrics.complianceRules) {
@@ -473,26 +359,128 @@ export async function evaluateArtifactsSummaryOnly(
     }
   }
 
-  const metrics: MetricsRecord = {
+  return {
+    sessionSummaries: [...sessionSummaries],
+    labelCounts,
+    complianceSummary,
+    sessionLabelCounts,
+    severityCounts,
+    topIncidents,
+    turnCount,
+    incidentCount,
+    writeTurnCount,
+  };
+}
+
+async function buildSharedEvaluationAggregate(
+  options: EvaluateOptions,
+  concurrency: number,
+): Promise<SharedEvaluationAggregate> {
+  const discoveredArtifacts = await discoverArtifacts(options.codexHome);
+  const sessionPaths = selectSessionPaths(
+    discoveredArtifacts.sessionFiles,
+    options.sessionLimit,
+  );
+  const homeDirectory = getHomeDirectory();
+  const sessionSummaries = await mapWithConcurrency(
+    sessionPaths,
+    concurrency,
+    async (sessionPath) => summarizeSession(sessionPath, homeDirectory),
+  );
+
+  return {
+    discoveredInventory: redactInventory(discoveredArtifacts.inventory),
+    ...accumulateSharedEvaluation(sessionSummaries),
+  };
+}
+
+function buildMetricsRecord(
+  aggregate: SharedEvaluationAggregate,
+  sessionCount: number,
+  sessionMetrics: readonly SessionMetrics[],
+  incidentCount: number,
+  turnCount: number,
+): MetricsRecord {
+  return {
     evaluatorVersion: EVALUATOR_VERSION,
     schemaVersion: SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
-    sessionCount: sessionPaths.length,
-    turnCount: totalTurnCount,
-    incidentCount: totalIncidentCount,
-    labelCounts,
-    complianceSummary,
-    sessions: sessionMetrics,
-    inventory: discoveredArtifacts.inventory.map((record) => ({
-      ...record,
-      path: redactPath(record.path),
-    })),
+    sessionCount,
+    turnCount,
+    incidentCount,
+    labelCounts: aggregate.labelCounts,
+    complianceSummary: aggregate.complianceSummary,
+    sessions: [...sessionMetrics],
+    inventory: aggregate.discoveredInventory,
   };
+}
+
+export async function evaluateArtifacts(
+  options: EvaluateOptions,
+): Promise<EvaluationResult> {
+  const aggregate = await buildSharedEvaluationAggregate(
+    options,
+    FULL_EVALUATION_CONCURRENCY,
+  );
+  const rawTurns = aggregate.sessionSummaries.flatMap(
+    (entry) => entry.rawTurns,
+  );
+  const evaluatedTurns = rawTurns.filter((turn) => turn.labels.length > 0);
+  const incidents = clusterIncidents(
+    evaluatedTurns,
+    { maxTurnGap: 2 },
+    EVALUATOR_VERSION,
+    SCHEMA_VERSION,
+  );
+
+  const incidentCountBySession = new Map<string, number>();
+  for (const incident of incidents) {
+    incidentCountBySession.set(
+      incident.sessionId,
+      (incidentCountBySession.get(incident.sessionId) ?? 0) + 1,
+    );
+  }
+
+  const metrics = buildMetricsRecord(
+    aggregate,
+    aggregate.sessionSummaries.length,
+    aggregate.sessionSummaries.map((entry) => ({
+      ...entry.sessionMetrics,
+      incidentCount:
+        incidentCountBySession.get(entry.sessionMetrics.sessionId) ?? 0,
+    })),
+    incidents.length,
+    rawTurns.length,
+  );
+
+  const report = renderReport(metrics, incidents, rawTurns);
+  return {
+    rawTurns,
+    incidents,
+    metrics,
+    report,
+  };
+}
+
+export async function evaluateArtifactsSummaryOnly(
+  options: EvaluateOptions,
+): Promise<SummaryOnlyEvaluationResult> {
+  const aggregate = await buildSharedEvaluationAggregate(
+    options,
+    SUMMARY_EVALUATION_CONCURRENCY,
+  );
+  const metrics = buildMetricsRecord(
+    aggregate,
+    aggregate.sessionSummaries.length,
+    aggregate.sessionSummaries.map((entry) => entry.sessionMetrics),
+    aggregate.incidentCount,
+    aggregate.turnCount,
+  );
   const summaryInputs: SummaryInputs = {
-    sessionLabelCounts,
-    topIncidents,
-    severityCounts,
-    writeTurnCount,
+    sessionLabelCounts: aggregate.sessionLabelCounts,
+    topIncidents: aggregate.topIncidents,
+    severityCounts: aggregate.severityCounts,
+    writeTurnCount: aggregate.writeTurnCount,
   };
   const summary = buildSummaryArtifact(metrics, summaryInputs);
   const report = renderSummaryReport(metrics, summary);
@@ -504,46 +492,14 @@ export async function evaluateArtifactsSummaryOnly(
   };
 }
 
-export async function writeEvaluationArtifacts(
-  result: EvaluationResult,
-  outputDir: string,
-): Promise<void> {
-  await writeJsonLinesFile(join(outputDir, "raw-turns.jsonl"), result.rawTurns);
-  await writeJsonLinesFile(
-    join(outputDir, "incidents.jsonl"),
-    result.incidents,
-  );
-  await writeTextFile(
-    join(outputDir, "metrics.json"),
-    `${JSON.stringify(result.metrics, null, 2)}\n`,
-  );
-  await writeTextFile(join(outputDir, "report.md"), result.report);
-  const presentation = createPresentationArtifacts(
-    result.metrics,
-    result.incidents,
-    result.rawTurns,
-  );
-  await writeTextFile(
-    join(outputDir, "summary.json"),
-    `${JSON.stringify(presentation.summary, null, 2)}\n`,
-  );
-  await writeTextFile(join(outputDir, "report.html"), presentation.reportHtml);
-  await writeTextFile(
-    join(outputDir, "label-counts.svg"),
-    presentation.labelChartSvg,
-  );
-  await writeTextFile(
-    join(outputDir, "compliance-summary.svg"),
-    presentation.complianceChartSvg,
-  );
-  await writeTextFile(
-    join(outputDir, "severity-breakdown.svg"),
-    presentation.severityChartSvg,
-  );
+interface SharedArtifactWriteResult {
+  metrics: MetricsRecord;
+  report: string;
+  summary: SummaryArtifact;
 }
 
-export async function writeSummaryArtifacts(
-  result: SummaryOnlyEvaluationResult,
+async function writeSharedArtifacts(
+  result: SharedArtifactWriteResult,
   outputDir: string,
 ): Promise<void> {
   await writeTextFile(
@@ -571,5 +527,43 @@ export async function writeSummaryArtifacts(
   await writeTextFile(
     join(outputDir, "severity-breakdown.svg"),
     presentation.severityChartSvg,
+  );
+}
+
+export async function writeEvaluationArtifacts(
+  result: EvaluationResult,
+  outputDir: string,
+): Promise<void> {
+  await writeJsonLinesFile(join(outputDir, "raw-turns.jsonl"), result.rawTurns);
+  await writeJsonLinesFile(
+    join(outputDir, "incidents.jsonl"),
+    result.incidents,
+  );
+  const presentation = createPresentationArtifacts(
+    result.metrics,
+    result.incidents,
+    result.rawTurns,
+  );
+  await writeSharedArtifacts(
+    {
+      metrics: result.metrics,
+      report: result.report,
+      summary: presentation.summary,
+    },
+    outputDir,
+  );
+}
+
+export async function writeSummaryArtifacts(
+  result: SummaryOnlyEvaluationResult,
+  outputDir: string,
+): Promise<void> {
+  await writeSharedArtifacts(
+    {
+      metrics: result.metrics,
+      report: result.report,
+      summary: result.summary,
+    },
+    outputDir,
   );
 }

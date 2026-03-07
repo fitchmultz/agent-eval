@@ -14,6 +14,7 @@ import type {
   Severity,
   SummaryArtifact,
 } from "./schema.js";
+import { buildSummarySections } from "./summary-sections.js";
 
 export interface PresentationArtifacts {
   summary: SummaryArtifact;
@@ -79,6 +80,7 @@ function renderBarChart(title: string, data: readonly BarDatum[]): string {
 }
 
 function renderSummaryCards(summary: SummaryArtifact): string {
+  const sections = buildSummarySections(summary);
   const cards = [
     {
       label: "Sessions",
@@ -98,7 +100,7 @@ function renderSummaryCards(summary: SummaryArtifact): string {
       detail: `${summary.delivery.verifiedWriteSessions}/${summary.delivery.sessionsWithWrites} write sessions`,
       tone: summary.delivery.writeVerificationRate >= 100 ? "good" : "warn",
     },
-    ...summary.insightCards.map((card) => ({
+    ...sections.headlineInsights.map((card) => ({
       label: card.title,
       value: card.value,
       detail: card.detail,
@@ -145,11 +147,12 @@ function renderScoreCards(summary: SummaryArtifact): string {
 }
 
 function renderMomentumCards(summary: SummaryArtifact): string {
-  if (summary.momentumCards.length === 0) {
+  const sections = buildSummarySections(summary);
+  if (sections.recentMomentum.length === 0) {
     return `<p class="empty-state">Not enough sessions in this slice for recent-vs-corpus momentum comparisons yet.</p>`;
   }
 
-  return summary.momentumCards
+  return sections.recentMomentum
     .map(
       (card) => `
       <article class="metric-card tone-${escapeHtml(card.tone)} score-card">

@@ -1,216 +1,138 @@
 # Implementation Plan
 
-This is an exploration-only plan. Do not implement the evaluator until this plan is accepted.
+This plan now tracks the implemented architecture and the next strictly logical expansions.
 
-## Recommended Architecture
+## Implemented Architecture
 
-Build the evaluator as a pipeline with four layers:
+The evaluator currently has four stable layers:
 
 1. Discovery
-   - find local artifact roots dynamically
+   - dynamically finds transcript JSONL and optional local enrichment stores
 2. Ingestion
-   - parse canonical transcript JSONL
-   - optionally ingest enrichment stores
-3. Normalization
-   - convert all observed shapes into the typed core schema
-4. Evaluation
-   - derive labels, incidents, compliance scores, metrics, and markdown/JSON outputs
-
-This architecture keeps the portable methodology centered on transcript truth while letting local-only stores improve coverage without becoming mandatory.
+   - parses canonical transcript JSONL into reconstructed sessions and turns
+3. Evaluation
+   - labels user-facing friction signals
+   - clusters incidents
+   - scores AGENTS-style compliance
+   - aggregates corpus/session metrics
+4. Reporting
+   - emits machine-readable artifacts
+   - emits deterministic markdown/html/svg derivatives
 
 ## Canonical Inputs
 
 - `~/.codex/sessions/**/*.jsonl`
 
-Why:
-
-- Most portable observed source
-- Already ordered
-- Contains session metadata, turn context, messages, tool calls, tool outputs, and outcome signals
-- Supports subagent linkage
+These remain the only required inputs for deterministic v1 evaluation.
 
 ## Optional Enrichment Inputs
 
 - `~/.codex/state_5.sqlite`
-  - thread metadata
-  - fast session lookup
-  - local log correlation
-- `~/.codex/log/codex-tui.log`
-  - extra tool-call evidence
-  - operational troubleshooting
 - `~/.codex/history.jsonl`
-  - prompt history fallback
+- `~/.codex/log/codex-tui.log`
 - `~/.codex/sqlite/codex-dev.db`
-  - automation and inbox context
 - `~/.codex/shell_snapshots/*.sh`
-  - environment context only
 
-## Data Model Entities
+These are still inventoried, but not required and not deeply joined into scoring.
 
-- `EvalCorpus`
-- `EvalSession`
-- `EvalTurn`
-- `EvalMessage`
-- `ToolInvocation`
-- `ToolEffect`
-- `ReasoningRecord`
-- `AuxiliaryEvent`
-- `VerificationCommand`
-- `EvalIncident`
+## Implemented Data Model Entities
+
+- `RawTurnRecord`
+- `IncidentRecord`
+- `MetricsRecord`
+- `SummaryArtifact`
 - `InventoryRecord`
 
-## Label Taxonomy
+## Implemented Label Taxonomy
 
-Use a deliberately small v1 taxonomy:
+- `context_drift`
+- `test_build_lint_failure_complaint`
+- `interrupt`
+- `regression_report`
+- `praise`
+- `context_reinjection`
+- `verification_request`
+- `stalled_or_guessing`
 
-- `missing_verification`
-  - writes happened but no convincing verification followed
-- `failed_verification`
-  - explicit failed test/lint/build/CI signal
-- `unverified_write`
-  - high-confidence file write with no pass signal later in the session
-- `repeated_failed_attempt`
-  - same or similar verification appears to fail multiple times
-- `policy_mismatch`
-  - turn context or instructions conflict with actions taken
-- `incomplete_outcome`
-  - session ends without clear resolution after substantive work
-- `secret_exposure_risk`
-  - raw command/output/log contains likely secret material
-- `schema_drift`
-  - unrecognized transcript or enrichment shape encountered
-- `orphan_subagent`
-  - subagent session exists but parent linkage or merge context is missing
+## Implemented Compliance Rules
 
-## Incident Clustering Rules
+- `scope_confirmed_before_major_write`
+- `cwd_or_repo_echoed_before_write`
+- `short_plan_before_large_change`
+- `verification_after_code_changes`
+- `no_unverified_ending`
 
-- Cluster by `sessionId` first.
-- Within a session, cluster by `turnId` when available.
-- Merge adjacent write-related incidents if they refer to the same tool call or same target file/path.
-- Merge repeated failed verification commands when normalized command text matches after trimming dynamic tokens.
-- Keep failures from separate subagents separate unless explicitly rolled into the parent by linkage metadata.
-- Do not merge across sessions unless the only goal is cross-session aggregate metrics.
+## Implemented Metrics
 
-## Compliance Scoring Rules
+Per corpus:
 
-Start with a transparent rule-based score from `0` to `100`.
-
-Suggested v1 formula:
-
-- start at `100`
-- subtract `30` for each `failed_verification`
-- subtract `20` for each `unverified_write`
-- subtract `15` for each `missing_verification`
-- subtract `10` for each `policy_mismatch`
-- subtract `10` for each `incomplete_outcome`
-- subtract `5` for each `schema_drift`
-- subtract `5` for each `orphan_subagent`
-- clamp to `[0, 100]`
-
-Also emit component scores:
-
-- `verification_score`
-- `change_safety_score`
-- `instruction_compliance_score`
-- `reconstruction_confidence_score`
-
-## Metrics To Compute
+- session count
+- turn count
+- incident count
+- label counts
+- compliance rollups
+- delivery coverage
+- comparative slices
 
 Per session:
 
 - turn count
-- assistant/user message counts
-- tool call count
-- tool call count by category
-- file-write count
-- verification command count
-- passed verification count
-- failed verification count
-- subagent count
-- first timestamp
-- last timestamp
-- elapsed wall time
-- token usage when available
+- labeled-turn count
+- incident count
+- write count
+- verification counts
+- compliance score
 
-Across a corpus:
+## Implemented CLI Surface
 
-- sessions processed
-- sessions with writes
-- sessions with verification
-- sessions with failed verification
-- sessions with subagents
-- average compliance score
-- label frequency distribution
-- tool frequency distribution
-- schema drift rate
+- `inspect`
+- `parse`
+- `eval`
+- `report`
 
-## Tests To Write
+Important options:
 
-### Discovery Tests
+- `--codex-home`
+- `--output-dir`
+- `--session-limit`
+- `--summary-only`
 
-- finds transcript JSONL under dynamically discovered roots
-- handles missing optional stores gracefully
-- ignores shell snapshots as canonical input
+## Outputs
 
-### Parser Tests
+Canonical:
 
-- parses `session_meta`, `turn_context`, `response_item`, and `event_msg`
-- normalizes `function_call` and `custom_tool_call`
-- pairs tool call outputs by `call_id`
-- handles encrypted reasoning without failure
-- handles unknown event types as `schema_drift`
+- `artifacts/raw-turns.jsonl`
+- `artifacts/incidents.jsonl`
+- `artifacts/metrics.json`
+- `artifacts/summary.json`
 
-### Evaluation Tests
+Derived:
 
-- identifies high-confidence file writes
-- identifies verification commands and verdicts
-- flags unverified writes
-- links subagents to parents
-- computes stable compliance scores
+- `artifacts/report.md`
+- `artifacts/report.html`
+- `artifacts/label-counts.svg`
+- `artifacts/compliance-summary.svg`
+- `artifacts/severity-breakdown.svg`
 
-### Fixture Tests
+## Completed Refactor Passes
 
-- use redacted real-world transcript snippets from this machine as golden fixtures
-- include at least one older transcript using `custom_tool_call`
-- include at least one modern transcript using `function_call`
+- evaluator full vs summary-only aggregation paths were consolidated
+- duplicated artifact-writing logic was consolidated
+- the oversized insight layer was split into focused modules
+- report and presentation now share section-level derived data
+- planning docs were aligned with the implemented model
 
-## CLI Commands To Support
+## Next Logical Expansions
 
-Prefer a small CLI surface:
+Only expand beyond the current implementation if one of these becomes worth the added complexity:
 
-- `codex-eval inventory`
-  - discover and report available local stores
-- `codex-eval inspect <session-jsonl>`
-  - dump normalized structure for one session
-- `codex-eval eval <path-or-root>`
-  - evaluate one session file or a corpus root
-- `codex-eval report <path-or-root>`
-  - emit markdown summary and machine-readable JSON
-- `codex-eval schema`
-  - print the normalized data model or JSON Schema
+1. join optional enrichment stores into deterministic scoring
+2. add new labels or compliance rules with strong user value
+3. add export/dashboard formats beyond the current markdown/html/svg bundle
+4. add a clearly optional second-pass LLM layer on top of deterministic artifacts
 
-Helpful options:
+## Anti-Goals For Now
 
-- `--codex-home <path>`
-- `--include-enrichment`
-- `--format json|markdown|text`
-- `--redact`
-- `--session-id <id>`
-
-## Implementation Order
-
-1. Build dynamic artifact discovery.
-2. Build transcript JSONL parser only.
-3. Normalize old and new tool-call shapes.
-4. Derive file-write and verification signals.
-5. Emit JSON and markdown reports.
-6. Add optional SQLite enrichment.
-7. Add optional TUI log enrichment.
-8. Add scoring and incident clustering.
-
-## Why This Plan
-
-- It keeps v1 precise instead of over-reaching.
-- It works even on machines that only have transcript files.
-- It isolates local-only enrichment so portability stays intact.
-- It creates a stable typed core before any scoring or incident logic is added.
+- no mandatory SQLite dependence
+- no opaque model-based scoring in the core path
+- no richer normalized event model unless it clearly reduces net complexity

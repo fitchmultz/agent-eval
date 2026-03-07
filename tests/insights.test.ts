@@ -12,6 +12,7 @@ import {
   insertTopIncident,
 } from "../src/insights.js";
 import type { MetricsRecord, SummaryArtifact } from "../src/schema.js";
+import { buildSummarySections } from "../src/summary-sections.js";
 
 function createPassingRules() {
   return [
@@ -150,9 +151,10 @@ describe("buildSummaryArtifact", () => {
     ]);
     expect(summary.comparativeSlices[0]?.proofScore).toBe(99);
     expect(summary.comparativeSlices[1]?.proofScore).toBe(100);
-    expect(summary.momentumCards[0]?.title).toBe("Proof Momentum");
-    expect(summary.momentumCards[0]?.value).toBe("+1 pts");
-    expect(summary.momentumCards[0]?.tone).toBe("neutral");
+    const sections = buildSummarySections(summary);
+    expect(sections.recentMomentum[0]?.title).toBe("Proof Momentum");
+    expect(sections.recentMomentum[0]?.value).toBe("+1 pts");
+    expect(sections.recentMomentum[0]?.tone).toBe("neutral");
   });
 
   it("deduplicates top incidents that would otherwise burn multiple slots on the same session summary", () => {

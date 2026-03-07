@@ -8,6 +8,7 @@ import {
   buildSummaryInputsFromArtifacts,
 } from "./insights.js";
 import type { IncidentRecord, MetricsRecord, RawTurnRecord } from "./schema.js";
+import { buildSummarySections } from "./summary-sections.js";
 
 function renderLines<T>(
   items: readonly T[],
@@ -75,16 +76,6 @@ function renderVictoryLapLines(
   );
 }
 
-function renderMomentumLines(
-  summary: ReturnType<typeof buildSummaryArtifact>,
-): string {
-  return renderLines(
-    summary.momentumCards,
-    "- Not enough sessions in this slice for recent-vs-corpus momentum comparisons yet.",
-    (card) => `- ${card.title}: ${card.value} (${card.detail})`,
-  );
-}
-
 function renderComparativeSliceLines(
   summary: ReturnType<typeof buildSummaryArtifact>,
 ): string {
@@ -146,6 +137,8 @@ export function renderSummaryReport(
   metrics: MetricsRecord,
   summary: ReturnType<typeof buildSummaryArtifact>,
 ): string {
+  const sections = buildSummarySections(summary);
+
   return [
     "# Codex Evaluator Report",
     "",
@@ -158,7 +151,7 @@ export function renderSummaryReport(
     "",
     "## Headline Insights",
     "",
-    ...summary.insightCards.map(
+    ...sections.headlineInsights.map(
       (card) => `- ${card.title}: ${card.value} (${card.detail})`,
     ),
     "",
@@ -176,7 +169,11 @@ export function renderSummaryReport(
     "",
     "## Recent Momentum",
     "",
-    renderMomentumLines(summary),
+    renderLines(
+      sections.recentMomentum,
+      "- Not enough sessions in this slice for recent-vs-corpus momentum comparisons yet.",
+      (card) => `- ${card.title}: ${card.value} (${card.detail})`,
+    ),
     "",
     "## Badges",
     "",

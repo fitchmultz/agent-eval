@@ -206,7 +206,7 @@ const sessionHighlightSchema = z.object({
   note: z.string().min(1),
 });
 
-export const summaryArtifactSchema = z.object({
+const summaryCoreSchema = z.object({
   evaluatorVersion: z.string().min(1),
   schemaVersion: z.string().min(1),
   generatedAt: z.string().min(1),
@@ -253,26 +253,7 @@ export const summaryArtifactSchema = z.object({
       incidentsPer100Turns: z.number().nonnegative(),
     }),
   ),
-  momentumCards: z.array(valueCardSchema),
-  scoreCards: z.array(
-    z.object({
-      title: z.string().min(1),
-      score: z.int().min(0).max(100),
-      detail: z.string().min(1),
-      tone: summaryCardToneSchema,
-    }),
-  ),
-  bragCards: z.array(valueCardSchema),
-  achievementBadges: z.array(z.string().min(1)),
-  insightCards: z.array(valueCardSchema),
   topSessions: z.array(sessionHighlightSchema),
-  victoryLaps: z.array(sessionHighlightSchema),
-  opportunities: z.array(
-    z.object({
-      title: z.string().min(1),
-      rationale: z.string().min(1),
-    }),
-  ),
   topIncidents: z.array(
     z.object({
       incidentId: z.string().min(1),
@@ -285,6 +266,30 @@ export const summaryArtifactSchema = z.object({
     }),
   ),
 });
+
+const summaryPresentationSchema = z.object({
+  scoreCards: z.array(
+    z.object({
+      title: z.string().min(1),
+      score: z.int().min(0).max(100),
+      detail: z.string().min(1),
+      tone: summaryCardToneSchema,
+    }),
+  ),
+  bragCards: z.array(valueCardSchema),
+  achievementBadges: z.array(z.string().min(1)),
+  victoryLaps: z.array(sessionHighlightSchema),
+  opportunities: z.array(
+    z.object({
+      title: z.string().min(1),
+      rationale: z.string().min(1),
+    }),
+  ),
+});
+
+export const summaryArtifactSchema = summaryCoreSchema.merge(
+  summaryPresentationSchema,
+);
 
 export type SourceRef = z.infer<typeof sourceRefSchema>;
 export type LabelRecord = z.infer<typeof labelRecordSchema>;
