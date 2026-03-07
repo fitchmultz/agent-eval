@@ -35,6 +35,7 @@ const severityTones: Record<Severity, string> = {
   medium: "#F4A259",
   high: "#D64545",
 };
+const labelChartPalette = ["#0F766E", "#1D8A7A", "#329F8A", "#49B39A"] as const;
 
 function escapeHtml(value: string): string {
   return value
@@ -469,6 +470,13 @@ export function createPresentationArtifacts(
     buildSummaryInputsFromArtifacts(rawTurns, incidents),
   );
 
+  return buildPresentationArtifacts(metrics, summary);
+}
+
+function buildPresentationArtifacts(
+  metrics: MetricsRecord,
+  summary: SummaryArtifact,
+): PresentationArtifacts {
   return {
     summary,
     reportHtml: renderHtmlReport(summary, metrics),
@@ -477,8 +485,7 @@ export function createPresentationArtifacts(
       summary.labels.map((entry, index) => ({
         label: entry.label,
         value: entry.count,
-        tone:
-          ["#0F766E", "#1D8A7A", "#329F8A", "#49B39A"][index % 4] ?? "#0F766E",
+        tone: labelChartPalette[index % labelChartPalette.length] ?? "#0F766E",
       })),
     ),
     complianceChartSvg: renderBarChart(
@@ -504,33 +511,5 @@ export function createPresentationArtifactsFromSummary(
   metrics: MetricsRecord,
   summary: SummaryArtifact,
 ): PresentationArtifacts {
-  return {
-    summary,
-    reportHtml: renderHtmlReport(summary, metrics),
-    labelChartSvg: renderBarChart(
-      "Label Counts",
-      summary.labels.map((entry, index) => ({
-        label: entry.label,
-        value: entry.count,
-        tone:
-          ["#0F766E", "#1D8A7A", "#329F8A", "#49B39A"][index % 4] ?? "#0F766E",
-      })),
-    ),
-    complianceChartSvg: renderBarChart(
-      "Compliance Pass Counts",
-      summary.compliance.map((entry) => ({
-        label: entry.rule,
-        value: entry.passCount,
-        tone: "#335C81",
-      })),
-    ),
-    severityChartSvg: renderBarChart(
-      "Incident Severity",
-      summary.severities.map((entry) => ({
-        label: entry.severity,
-        value: entry.count,
-        tone: severityTones[entry.severity],
-      })),
-    ),
-  };
+  return buildPresentationArtifacts(metrics, summary);
 }

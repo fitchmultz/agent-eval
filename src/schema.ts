@@ -183,6 +183,29 @@ export const metricsSchema = z.object({
   inventory: z.array(inventoryRecordSchema),
 });
 
+const summaryCardToneSchema = z.enum(["neutral", "good", "warn", "danger"]);
+
+const valueCardSchema = z.object({
+  title: z.string().min(1),
+  value: z.string().min(1),
+  detail: z.string().min(1),
+  tone: summaryCardToneSchema,
+});
+
+const sessionHighlightSchema = z.object({
+  sessionId: z.string().min(1),
+  archetype: z.enum(sessionArchetypeValues),
+  archetypeLabel: z.string().min(1),
+  frictionScore: z.number().nonnegative(),
+  complianceScore: z.int().min(0).max(100),
+  incidentCount: z.int().nonnegative(),
+  labeledTurnCount: z.int().nonnegative(),
+  writeCount: z.int().nonnegative(),
+  verificationPassedCount: z.int().nonnegative(),
+  dominantLabels: z.array(z.enum(labelTaxonomy)),
+  note: z.string().min(1),
+});
+
 export const summaryArtifactSchema = z.object({
   evaluatorVersion: z.string().min(1),
   schemaVersion: z.string().min(1),
@@ -230,69 +253,20 @@ export const summaryArtifactSchema = z.object({
       incidentsPer100Turns: z.number().nonnegative(),
     }),
   ),
-  momentumCards: z.array(
-    z.object({
-      title: z.string().min(1),
-      value: z.string().min(1),
-      detail: z.string().min(1),
-      tone: z.enum(["neutral", "good", "warn", "danger"]),
-    }),
-  ),
+  momentumCards: z.array(valueCardSchema),
   scoreCards: z.array(
     z.object({
       title: z.string().min(1),
       score: z.int().min(0).max(100),
       detail: z.string().min(1),
-      tone: z.enum(["neutral", "good", "warn", "danger"]),
+      tone: summaryCardToneSchema,
     }),
   ),
-  bragCards: z.array(
-    z.object({
-      title: z.string().min(1),
-      value: z.string().min(1),
-      detail: z.string().min(1),
-      tone: z.enum(["neutral", "good", "warn", "danger"]),
-    }),
-  ),
+  bragCards: z.array(valueCardSchema),
   achievementBadges: z.array(z.string().min(1)),
-  insightCards: z.array(
-    z.object({
-      title: z.string().min(1),
-      value: z.string().min(1),
-      detail: z.string().min(1),
-      tone: z.enum(["neutral", "good", "warn", "danger"]),
-    }),
-  ),
-  topSessions: z.array(
-    z.object({
-      sessionId: z.string().min(1),
-      archetype: z.enum(sessionArchetypeValues),
-      archetypeLabel: z.string().min(1),
-      frictionScore: z.number().nonnegative(),
-      complianceScore: z.int().min(0).max(100),
-      incidentCount: z.int().nonnegative(),
-      labeledTurnCount: z.int().nonnegative(),
-      writeCount: z.int().nonnegative(),
-      verificationPassedCount: z.int().nonnegative(),
-      dominantLabels: z.array(z.enum(labelTaxonomy)),
-      note: z.string().min(1),
-    }),
-  ),
-  victoryLaps: z.array(
-    z.object({
-      sessionId: z.string().min(1),
-      archetype: z.enum(sessionArchetypeValues),
-      archetypeLabel: z.string().min(1),
-      frictionScore: z.number().nonnegative(),
-      complianceScore: z.int().min(0).max(100),
-      incidentCount: z.int().nonnegative(),
-      labeledTurnCount: z.int().nonnegative(),
-      writeCount: z.int().nonnegative(),
-      verificationPassedCount: z.int().nonnegative(),
-      dominantLabels: z.array(z.enum(labelTaxonomy)),
-      note: z.string().min(1),
-    }),
-  ),
+  insightCards: z.array(valueCardSchema),
+  topSessions: z.array(sessionHighlightSchema),
+  victoryLaps: z.array(sessionHighlightSchema),
   opportunities: z.array(
     z.object({
       title: z.string().min(1),

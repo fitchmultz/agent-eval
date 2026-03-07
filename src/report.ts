@@ -9,16 +9,26 @@ import {
 } from "./insights.js";
 import type { IncidentRecord, MetricsRecord, RawTurnRecord } from "./schema.js";
 
+function renderLines<T>(
+  items: readonly T[],
+  emptyMessage: string,
+  renderItem: (item: T) => string,
+): string {
+  if (items.length === 0) {
+    return emptyMessage;
+  }
+
+  return items.map(renderItem).join("\n");
+}
+
 function renderLabelLines(
   summary: ReturnType<typeof buildSummaryArtifact>,
 ): string {
-  if (summary.labels.length === 0) {
-    return "- No labels were detected.";
-  }
-
-  return summary.labels
-    .map((entry) => `- ${entry.label}: ${entry.count}`)
-    .join("\n");
+  return renderLines(
+    summary.labels,
+    "- No labels were detected.",
+    (entry) => `- ${entry.label}: ${entry.count}`,
+  );
 }
 
 function renderRateLines(
@@ -46,43 +56,33 @@ function renderComplianceLines(metrics: MetricsRecord): string {
 function renderSessionLines(
   summary: ReturnType<typeof buildSummaryArtifact>,
 ): string {
-  if (summary.topSessions.length === 0) {
-    return "- No session insights were available.";
-  }
-
-  return summary.topSessions
-    .map(
-      (session) =>
-        `- ${session.sessionId}: ${session.archetypeLabel} (${session.archetype}), friction ${session.frictionScore}, score ${session.complianceScore}, dominant labels ${session.dominantLabels.join(", ") || "none"}`,
-    )
-    .join("\n");
+  return renderLines(
+    summary.topSessions,
+    "- No session insights were available.",
+    (session) =>
+      `- ${session.sessionId}: ${session.archetypeLabel} (${session.archetype}), friction ${session.frictionScore}, score ${session.complianceScore}, dominant labels ${session.dominantLabels.join(", ") || "none"}`,
+  );
 }
 
 function renderVictoryLapLines(
   summary: ReturnType<typeof buildSummaryArtifact>,
 ): string {
-  if (summary.victoryLaps.length === 0) {
-    return "- No clean verified delivery sessions were available in this slice.";
-  }
-
-  return summary.victoryLaps
-    .map(
-      (session) =>
-        `- ${session.sessionId}: ${session.archetypeLabel}, score ${session.complianceScore}, verifications ${session.verificationPassedCount}, incidents ${session.incidentCount}`,
-    )
-    .join("\n");
+  return renderLines(
+    summary.victoryLaps,
+    "- No clean verified delivery sessions were available in this slice.",
+    (session) =>
+      `- ${session.sessionId}: ${session.archetypeLabel}, score ${session.complianceScore}, verifications ${session.verificationPassedCount}, incidents ${session.incidentCount}`,
+  );
 }
 
 function renderMomentumLines(
   summary: ReturnType<typeof buildSummaryArtifact>,
 ): string {
-  if (summary.momentumCards.length === 0) {
-    return "- Not enough sessions in this slice for recent-vs-corpus momentum comparisons yet.";
-  }
-
-  return summary.momentumCards
-    .map((card) => `- ${card.title}: ${card.value} (${card.detail})`)
-    .join("\n");
+  return renderLines(
+    summary.momentumCards,
+    "- Not enough sessions in this slice for recent-vs-corpus momentum comparisons yet.",
+    (card) => `- ${card.title}: ${card.value} (${card.detail})`,
+  );
 }
 
 function renderComparativeSliceLines(
@@ -99,30 +99,26 @@ function renderComparativeSliceLines(
 function renderOpportunityLines(
   summary: ReturnType<typeof buildSummaryArtifact>,
 ): string {
-  if (summary.opportunities.length === 0) {
-    return "- No deterministic improvement opportunities were identified.";
-  }
-
-  return summary.opportunities
-    .map((opportunity) => `- ${opportunity.title}: ${opportunity.rationale}`)
-    .join("\n");
+  return renderLines(
+    summary.opportunities,
+    "- No deterministic improvement opportunities were identified.",
+    (opportunity) => `- ${opportunity.title}: ${opportunity.rationale}`,
+  );
 }
 
 function renderIncidentLines(
   summary: ReturnType<typeof buildSummaryArtifact>,
 ): string {
-  if (summary.topIncidents.length === 0) {
-    return "- No labeled incidents detected.";
-  }
-
-  return summary.topIncidents
-    .map((incident) => {
+  return renderLines(
+    summary.topIncidents,
+    "- No labeled incidents detected.",
+    (incident) => {
       const suffix = incident.evidencePreview
         ? ` | evidence: "${incident.evidencePreview}"`
         : "";
       return `- \`${incident.severity}\` / \`${incident.confidence}\` ${incident.summary} (${incident.sessionId}, span ${incident.turnSpan})${suffix}`;
-    })
-    .join("\n");
+    },
+  );
 }
 
 function renderInventoryLines(metrics: MetricsRecord): string {
