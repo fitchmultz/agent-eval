@@ -4,7 +4,7 @@
  * Notes: Handles label counts, session aggregation, and data collection.
  */
 
-import { getConfig } from "../config.js";
+import { getConfig } from "../config/index.js";
 import { insertTopIncident } from "../incident-selection.js";
 import type {
   IncidentRecord,

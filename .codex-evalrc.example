@@ -1,0 +1,20 @@
+{
+  "concurrency": {
+    "full": 4,
+    "summary": 8
+  },
+  "clustering": {
+    "maxTurnGap": 2
+  },
+  "previews": {
+    "maxMessageLength": 220,
+    "maxMessageItems": 2,
+    "maxIncidentEvidence": 3,
+    "maxTopIncidents": 8,
+    "maxVictoryLaps": 6,
+    "maxTopSessions": 8
+  },
+  "scoring": {
+    "frictionThreshold": 0.5
+  }
+}

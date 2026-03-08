@@ -2,7 +2,7 @@
  * Tests for the configuration system.
  */
 import { describe, expect, it } from "vitest";
-import { getConfig, resetConfig, setConfig } from "../src/config.js";
+import { getConfig, resetConfig, setConfig } from "../src/config/index.js";
 
 describe("config", () => {
   describe("getConfig", () => {

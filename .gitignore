@@ -1,2 +1,7 @@
 .scratchpad.md
 artifacts/
+
+# Configuration files (local only)
+.codex-evalrc
+.codex-evalrc.json
+codex-eval.config.json

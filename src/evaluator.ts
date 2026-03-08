@@ -10,7 +10,7 @@ import {
   writeSummaryArtifacts,
 } from "./artifact-writer.js";
 import { clusterIncidents } from "./clustering.js";
-import { getConfig } from "./config.js";
+import { getConfig } from "./config/index.js";
 import { type DiscoveryOptions, discoverArtifacts } from "./discovery.js";
 import { buildSummaryArtifact } from "./insights.js";
 import { aggregateMetrics, countWriteTurns } from "./metrics-aggregation.js";

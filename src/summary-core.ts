@@ -5,7 +5,7 @@
  */
 
 import { buildComparativeSlices } from "./comparative-slices.js";
-import { getConfig } from "./config.js";
+import { getConfig } from "./config/index.js";
 import type { LabelName, MetricsRecord } from "./schema.js";
 import {
   filterVerifiedWriteSessions,

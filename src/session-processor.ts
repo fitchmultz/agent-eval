@@ -4,7 +4,7 @@
  */
 import { clusterIncidents } from "./clustering.js";
 import { scoreCompliance } from "./compliance.js";
-import { getConfig } from "./config.js";
+import { getConfig } from "./config/index.js";
 import { labelTurn } from "./labels.js";
 import { createMessagePreviews } from "./sanitization.js";
 import type {

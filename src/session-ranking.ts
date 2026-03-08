@@ -4,7 +4,7 @@
  * Notes: Victory laps highlight the best verified delivery sessions.
  */
 
-import { getConfig } from "./config.js";
+import { getConfig } from "./config/index.js";
 import {
   calculateFrictionScore,
   dominantLabelsForSession,

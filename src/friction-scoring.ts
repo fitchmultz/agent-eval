@@ -5,7 +5,7 @@
  *        All weight lookups validate key existence and throw on invalid labels.
  */
 
-import { getConfig } from "./config.js";
+import { getConfig } from "./config/index.js";
 import { DOMINANT_LABELS, SCORING } from "./constants/index.js";
 import { ValidationError } from "./errors.js";
 import type { LabelName } from "./schema.js";

@@ -1,13 +1,21 @@
 #!/usr/bin/env node
 /**
- * Purpose: Implements the `codex-eval` CLI entrypoint and dispatches inventory, parse, eval, and report workflows.
+ * Purpose: Implements the `codex-eval` CLI entrypoint with file/env config support.
  * Entrypoint: `main()` is invoked when the file is run directly or through the package bin.
- * Notes: All commands emit machine-readable data to stdout and write artifacts only when requested by the command.
+ * Notes:
+ *   - Loads config from .codex-evalrc files and CODEX_EVAL_* environment variables
+ *   - All commands emit machine-readable data to stdout and write artifacts only when requested
+ *   - Configuration precedence: defaults → file → env vars → CLI flags
  */
 
 import { Command } from "commander";
 
-import { getConfig, setConfig } from "./config.js";
+import {
+  ENV_VARS,
+  getConfig,
+  initializeConfig,
+  setConfig,
+} from "./config/index.js";
 import { discoverArtifacts } from "./discovery.js";
 import {
   EvaluatorError,
@@ -119,6 +127,68 @@ async function runReportCommand(
   process.stdout.write(result.report);
 }
 
+/**
+ * Gets the default Codex home directory.
+ * Uses environment variable first, then falls back to HOME/.codex or .codex.
+ * @returns The default Codex home directory path
+ */
+function getDefaultCodexHome(): string {
+  const envHome = process.env[ENV_VARS.CODEX_HOME];
+  if (envHome) {
+    return envHome;
+  }
+
+  try {
+    const homeDirectory = getValidatedHomeDirectory();
+    return `${homeDirectory}/.codex`;
+  } catch {
+    return ".codex";
+  }
+}
+
+/**
+ * Gets the default output directory.
+ * Uses environment variable first, then falls back to "artifacts".
+ * @returns The default output directory path
+ */
+function getDefaultOutputDir(): string {
+  return process.env[ENV_VARS.OUTPUT_DIR] ?? "artifacts";
+}
+
+/**
+ * Builds CLI overrides from parsed options.
+ * Only includes options that were explicitly provided.
+ * @param options - Parsed CLI options
+ * @returns Partial config with CLI overrides
+ */
+function buildCliOverrides(
+  options: GlobalOptions,
+): Partial<import("./config/index.js").EvaluatorConfig> {
+  const overrides: Partial<import("./config/index.js").EvaluatorConfig> = {};
+
+  if (
+    typeof options.concurrency === "number" &&
+    !Number.isNaN(options.concurrency)
+  ) {
+    overrides.concurrency = {
+      ...getConfig().concurrency,
+      full: options.concurrency,
+    };
+  }
+
+  if (
+    typeof options.maxTurnGap === "number" &&
+    !Number.isNaN(options.maxTurnGap)
+  ) {
+    overrides.clustering = {
+      ...getConfig().clustering,
+      maxTurnGap: options.maxTurnGap,
+    };
+  }
+
+  return overrides;
+}
+
 export async function main(argv: string[]): Promise<number> {
   // Set up abort controller for graceful shutdown
   const abortController = new AbortController();
@@ -146,44 +216,8 @@ export async function main(argv: string[]): Promise<number> {
 }
 
 async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
-  // Validate and get home directory with cross-platform support
-  let defaultCodexHome: string;
-  try {
-    const homeDirectory = getValidatedHomeDirectory();
-    defaultCodexHome = `${homeDirectory}/.codex`;
-  } catch {
-    // Fallback to relative path if HOME is not set
-    defaultCodexHome = ".codex";
-  }
-
-  // Apply CLI-provided config overrides before any command runs
-  const applyConfigOverrides = (options: GlobalOptions): void => {
-    const configUpdates: Partial<Parameters<typeof setConfig>[0]> = {};
-
-    if (
-      typeof options.concurrency === "number" &&
-      !Number.isNaN(options.concurrency)
-    ) {
-      configUpdates.concurrency = {
-        ...getConfig().concurrency,
-        full: options.concurrency,
-      };
-    }
-
-    if (
-      typeof options.maxTurnGap === "number" &&
-      !Number.isNaN(options.maxTurnGap)
-    ) {
-      configUpdates.clustering = {
-        ...getConfig().clustering,
-        maxTurnGap: options.maxTurnGap,
-      };
-    }
-
-    if (Object.keys(configUpdates).length > 0) {
-      setConfig(configUpdates);
-    }
-  };
+  const defaultCodexHome = getDefaultCodexHome();
+  const defaultOutputDir = getDefaultOutputDir();
 
   const program = new Command();
 
@@ -194,11 +228,15 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
     )
     .version("0.1.0")
     .showHelpAfterError()
-    .option("--codex-home <path>", "Codex home to inspect", defaultCodexHome)
+    .option(
+      "--codex-home <path>",
+      "Codex home to inspect (env: CODEX_EVAL_CODEX_HOME)",
+      defaultCodexHome,
+    )
     .option(
       "--output-dir <path>",
-      "Directory for generated evaluator artifacts",
-      "artifacts",
+      "Directory for generated evaluator artifacts (env: CODEX_EVAL_OUTPUT_DIR)",
+      defaultOutputDir,
     )
     .option(
       "--session-limit <count>",
@@ -212,17 +250,30 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
     )
     .option(
       "--concurrency <n>",
-      "Number of concurrent sessions to process (full evaluation)",
+      "Number of concurrent sessions to process (env: CODEX_EVAL_CONCURRENCY_FULL)",
       (value) => Number.parseInt(value, 10),
     )
     .option(
       "--max-turn-gap <n>",
-      "Maximum turn gap for incident clustering",
+      "Maximum turn gap for incident clustering (env: CODEX_EVAL_MAX_TURN_GAP)",
       (value) => Number.parseInt(value, 10),
     )
     .addHelpText(
       "after",
       [
+        "",
+        "Configuration:",
+        "  Config files (in order of precedence):",
+        "    - .codex-evalrc",
+        "    - .codex-evalrc.json",
+        "    - codex-eval.config.json",
+        "",
+        "  Environment variables:",
+        "    CODEX_EVAL_CODEX_HOME          - Codex home directory",
+        "    CODEX_EVAL_OUTPUT_DIR          - Output directory for artifacts",
+        "    CODEX_EVAL_CONCURRENCY_FULL    - Concurrency for full evaluation",
+        "    CODEX_EVAL_CONCURRENCY_SUMMARY - Concurrency for summary evaluation",
+        "    CODEX_EVAL_MAX_TURN_GAP        - Max turn gap for clustering",
         "",
         "Examples:",
         "  codex-eval inspect --codex-home ~/.codex",
@@ -245,7 +296,15 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
     .action(async () => {
       throwIfAborted(signal);
       const options = program.opts<GlobalOptions>();
-      applyConfigOverrides(options);
+
+      // Initialize config with CLI overrides
+      await initializeConfig({
+        cliOverrides: buildCliOverrides(options),
+      });
+
+      // Apply any remaining runtime config updates
+      applyRuntimeConfigOverrides(options);
+
       await runInspectCommand(options, signal);
     });
 
@@ -255,7 +314,13 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
     .action(async () => {
       throwIfAborted(signal);
       const options = program.opts<GlobalOptions>();
-      applyConfigOverrides(options);
+
+      await initializeConfig({
+        cliOverrides: buildCliOverrides(options),
+      });
+
+      applyRuntimeConfigOverrides(options);
+
       await runParseCommand(options, signal);
     });
 
@@ -267,7 +332,13 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
     .action(async () => {
       throwIfAborted(signal);
       const options = program.opts<GlobalOptions>();
-      applyConfigOverrides(options);
+
+      await initializeConfig({
+        cliOverrides: buildCliOverrides(options),
+      });
+
+      applyRuntimeConfigOverrides(options);
+
       await runEvalCommand(options, signal);
     });
 
@@ -279,7 +350,13 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
     .action(async () => {
       throwIfAborted(signal);
       const options = program.opts<GlobalOptions>();
-      applyConfigOverrides(options);
+
+      await initializeConfig({
+        cliOverrides: buildCliOverrides(options),
+      });
+
+      applyRuntimeConfigOverrides(options);
+
       await runReportCommand(options, signal);
     });
 
@@ -308,6 +385,40 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
     const message = errorToMessage(error);
     process.stderr.write(`${message}\n`);
     return 1;
+  }
+}
+
+/**
+ * Applies runtime configuration overrides from CLI options.
+ * This is for options that need to update the shared config state
+ * after initialization.
+ * @param options - Parsed CLI options
+ */
+function applyRuntimeConfigOverrides(options: GlobalOptions): void {
+  const configUpdates: Partial<Parameters<typeof setConfig>[0]> = {};
+
+  if (
+    typeof options.concurrency === "number" &&
+    !Number.isNaN(options.concurrency)
+  ) {
+    configUpdates.concurrency = {
+      ...getConfig().concurrency,
+      full: options.concurrency,
+    };
+  }
+
+  if (
+    typeof options.maxTurnGap === "number" &&
+    !Number.isNaN(options.maxTurnGap)
+  ) {
+    configUpdates.clustering = {
+      ...getConfig().clustering,
+      maxTurnGap: options.maxTurnGap,
+    };
+  }
+
+  if (Object.keys(configUpdates).length > 0) {
+    setConfig(configUpdates);
   }
 }
 

@@ -4,7 +4,7 @@
  * Notes: Tests session selection, incident recalculation, and evaluation pipelines.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resetConfig } from "../src/config.js";
+import { resetConfig } from "../src/config/index.js";
 import type { IncidentRecord, RawTurnRecord } from "../src/schema.js";
 
 // Mock dependencies before importing the evaluator

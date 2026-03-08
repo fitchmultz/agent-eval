@@ -4,7 +4,7 @@
  * Notes: Clustering is intentionally conservative to preserve precision in evaluator v1.
  */
 
-import { getConfig } from "./config.js";
+import { getConfig } from "./config/index.js";
 import { chooseMaxConfidence, chooseMaxSeverity } from "./ranking.js";
 import { isLowSignalPreview } from "./sanitization.js";
 import type { IncidentRecord, LabelRecord, RawTurnRecord } from "./schema.js";
