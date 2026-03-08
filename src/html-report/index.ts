@@ -4,19 +4,29 @@
  * Notes: HTML is self-contained with inline CSS for portability.
  */
 
-export { renderHtmlReport } from "./render.js";
 export {
-  renderSummaryCards,
-  renderBragCards,
-  renderScoreCards,
-  renderMomentumCards,
   renderBadges,
+  renderBragCards,
   renderIncidentCards,
-  renderSessionCards,
-  renderVictoryLapCards,
-  renderOpportunityList,
   renderInventoryList,
+  renderMomentumCards,
+  renderOpportunityList,
+  renderScoreCards,
+  renderSessionCards,
+  renderSummaryCards,
+  renderVictoryLapCards,
 } from "./cards.js";
-export { renderComplianceTable, renderComparativeSliceTable } from "./tables.js";
-export { renderStyles, loadStyles } from "./styles.js";
-export { escapeHtml, createMetricCard, createScoreCard, createEmptyState, createSection, createMetricGrid } from "./templates.js";
+export { renderHtmlReport } from "./render.js";
+export { loadStyles, renderStyles } from "./styles.js";
+export {
+  renderComparativeSliceTable,
+  renderComplianceTable,
+} from "./tables.js";
+export {
+  createEmptyState,
+  createMetricCard,
+  createMetricGrid,
+  createScoreCard,
+  createSection,
+  escapeHtml,
+} from "./templates.js";

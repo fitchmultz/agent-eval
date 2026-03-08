@@ -4,7 +4,8 @@
  * Notes: v1 favors compact, public-safe previews and prioritizes human-authored signal over harness boilerplate.
  */
 
-import { SIGNAL_SCORING, SANITIZATION } from "./constants/index.js";
+import { SANITIZATION } from "./constants/index.js";
+import { redactPath } from "./utils/path-redaction.js";
 
 /**
  * Options for creating message previews.
@@ -41,14 +42,6 @@ const lowSignalPatterns = [
 
 function normalizeWhitespace(text: string): string {
   return text.replace(/\s+/g, " ").trim();
-}
-
-function redactHomeDirectory(text: string, homeDirectory?: string): string {
-  if (!homeDirectory || homeDirectory.length === 0) {
-    return text;
-  }
-
-  return text.split(homeDirectory).join("~");
 }
 
 function redactEmailAddresses(text: string): string {
@@ -151,13 +144,16 @@ export function sanitizeMessageText(
 ): string {
   const normalized = normalizeWhitespace(text);
   const redacted = redactEmailAddresses(
-    redactHomeDirectory(normalized, options.homeDirectory),
+    redactPath(normalized, options.homeDirectory),
   );
   if (redacted.length <= options.maxLength) {
     return redacted;
   }
 
-  const sliceLength = Math.max(0, options.maxLength - SANITIZATION.ELLIPSIS_LENGTH);
+  const sliceLength = Math.max(
+    0,
+    options.maxLength - SANITIZATION.ELLIPSIS_LENGTH,
+  );
   return `${redacted.slice(0, sliceLength).trimEnd()}...`;
 }
 

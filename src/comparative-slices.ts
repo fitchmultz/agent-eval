@@ -9,7 +9,7 @@ import {
   FLOW_PENALTY_MULTIPLIERS,
 } from "./constants/index.js";
 import type { LabelName, MetricsRecord, SummaryArtifact } from "./schema.js";
-import { complianceRuleValues, labelTaxonomy } from "./schema.js";
+import { labelTaxonomy } from "./schema.js";
 import {
   filterVerifiedWriteSessions,
   filterWriteSessions,
@@ -20,6 +20,7 @@ import {
   safeRate,
 } from "./summary/index.js";
 import type { ScoreSnapshot } from "./summary/types.js";
+import { aggregateComplianceSummary } from "./utils/compliance-aggregation.js";
 
 function applicablePassRate(
   metrics: MetricsRecord,
@@ -69,39 +70,6 @@ export function buildScoreSnapshot(metrics: MetricsRecord): ScoreSnapshot {
     writeVerificationRate,
     incidentsPer100Turns: safeRate(metrics.incidentCount, metrics.turnCount),
   };
-}
-
-function aggregateComplianceSummary(
-  sessions: readonly MetricsRecord["sessions"][number][],
-): SummaryArtifact["compliance"] {
-  const summary = complianceRuleValues.map((rule) => ({
-    rule,
-    passCount: 0,
-    failCount: 0,
-    notApplicableCount: 0,
-    unknownCount: 0,
-  }));
-
-  for (const session of sessions) {
-    for (const rule of session.complianceRules) {
-      const entry = summary.find((candidate) => candidate.rule === rule.rule);
-      if (!entry) {
-        continue;
-      }
-
-      if (rule.status === "pass") {
-        entry.passCount += 1;
-      } else if (rule.status === "fail") {
-        entry.failCount += 1;
-      } else if (rule.status === "not_applicable") {
-        entry.notApplicableCount += 1;
-      } else {
-        entry.unknownCount += 1;
-      }
-    }
-  }
-
-  return summary;
 }
 
 function aggregateLabelCounts(

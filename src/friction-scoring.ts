@@ -4,8 +4,8 @@
  * Notes: Higher friction scores indicate more operator burden and session disruption.
  */
 
-import { DOMINANT_LABELS, SCORING } from "./constants/index.js";
 import { getConfig } from "./config.js";
+import { DOMINANT_LABELS, SCORING } from "./constants/index.js";
 import type { LabelName } from "./schema.js";
 import { labelTaxonomy } from "./schema.js";
 

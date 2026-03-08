@@ -93,9 +93,11 @@ describe("buildTopSessions", () => {
 
     const result = buildTopSessions(metrics, sessionLabelCounts);
     expect(result).toHaveLength(2);
-    expect(result[0]!.sessionId).toBe("high-friction");
-    expect(result[1]!.sessionId).toBe("low-friction");
-    expect(result[0]!.frictionScore).toBeGreaterThan(result[1]!.frictionScore);
+    expect(result[0]?.sessionId).toBe("high-friction");
+    expect(result[1]?.sessionId).toBe("low-friction");
+    expect(result[0]?.frictionScore ?? 0).toBeGreaterThan(
+      result[1]?.frictionScore ?? 0,
+    );
   });
 
   it("includes archetype and archetypeLabel in results", () => {
@@ -123,8 +125,8 @@ describe("buildTopSessions", () => {
     sessionLabelCounts.set("verified", createEmptySessionLabelMap());
 
     const result = buildTopSessions(metrics, sessionLabelCounts);
-    expect(result[0]!.archetype).toBe("verified_delivery");
-    expect(result[0]!.archetypeLabel).toBe("Clean Ship");
+    expect(result[0]?.archetype).toBe("verified_delivery");
+    expect(result[0]?.archetypeLabel).toBe("Clean Ship");
   });
 
   it("includes dominant labels in results", () => {
@@ -149,8 +151,8 @@ describe("buildTopSessions", () => {
     });
 
     const result = buildTopSessions(metrics, sessionLabelCounts);
-    expect(result[0]!.dominantLabels).toContain("context_drift");
-    expect(result[0]!.dominantLabels).toContain("interrupt");
+    expect(result[0]?.dominantLabels).toContain("context_drift");
+    expect(result[0]?.dominantLabels).toContain("interrupt");
   });
 
   it("breaks ties by incident count descending", () => {
@@ -183,8 +185,8 @@ describe("buildTopSessions", () => {
 
     const result = buildTopSessions(metrics, sessionLabelCounts);
     // Same friction score, so sorted by incident count
-    expect(result[0]!.sessionId).toBe("more-incidents");
-    expect(result[1]!.sessionId).toBe("fewer-incidents");
+    expect(result[0]?.sessionId).toBe("more-incidents");
+    expect(result[1]?.sessionId).toBe("fewer-incidents");
   });
 
   it("breaks ties by session ID alphabetically", () => {
@@ -211,8 +213,8 @@ describe("buildTopSessions", () => {
 
     const result = buildTopSessions(metrics, sessionLabelCounts);
     // Same friction and incident count, so sorted by sessionId
-    expect(result[0]!.sessionId).toBe("session-a");
-    expect(result[1]!.sessionId).toBe("session-b");
+    expect(result[0]?.sessionId).toBe("session-a");
+    expect(result[1]?.sessionId).toBe("session-b");
   });
 });
 
@@ -317,8 +319,8 @@ describe("buildVictoryLaps", () => {
     ];
 
     const result = buildVictoryLaps(topSessions);
-    expect(result[0]!.sessionId).toBe("higher-compliance");
-    expect(result[1]!.sessionId).toBe("lower-compliance");
+    expect(result[0]?.sessionId).toBe("higher-compliance");
+    expect(result[1]?.sessionId).toBe("lower-compliance");
   });
 
   it("limits to maximum 6 sessions", () => {

@@ -4,7 +4,6 @@
  * Notes: Extracted from CLI to separate presentation from business logic.
  */
 
-import type { EvaluationResult, SummaryOnlyEvaluationResult } from "../evaluator.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "../version.js";
 
 interface InspectOutput {
@@ -90,5 +89,3 @@ export function formatEvalOutput(
   };
   return JSON.stringify(output, null, 2);
 }
-
-

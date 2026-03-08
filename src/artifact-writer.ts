@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { PREVIEWS } from "./constants/index.js";
 import { writeJsonLinesFile, writeTextFile } from "./filesystem.js";
 import {
-  createEmptySessionLabelMap,
+  collectSessionLabelCounts,
   createEmptySeverityCounts,
   insertTopIncident,
   type SummaryInputs,
@@ -145,40 +145,26 @@ export function createSummaryInputs(
   }>,
   writeTurnCount: number,
 ): SummaryInputs {
-  const sessionLabelCounts = new Map<
-    string,
-    ReturnType<typeof createEmptySessionLabelMap>
-  >();
+  const allTurns = sessions.flatMap((s) => s.turns);
+  const sessionLabelCounts = collectSessionLabelCounts(allTurns);
   const severityCounts = createEmptySeverityCounts();
   let topIncidents: SummaryArtifact["topIncidents"] = [];
 
-  for (const session of sessions) {
-    const localLabelCounts = createEmptySessionLabelMap();
-
-    for (const turn of session.turns) {
-      for (const label of turn.labels) {
-        localLabelCounts[label.label] += 1;
-      }
-    }
-
-    sessionLabelCounts.set(session.sessionId, localLabelCounts);
-
-    for (const incident of session.incidents) {
-      severityCounts[incident.severity] += 1;
-      topIncidents = insertTopIncident(
-        topIncidents,
-        {
-          incidentId: incident.incidentId,
-          sessionId: incident.sessionId,
-          summary: incident.summary,
-          severity: incident.severity,
-          confidence: incident.confidence,
-          turnSpan: incident.turnIndices.length,
-          evidencePreview: incident.evidencePreviews[0],
-        },
-        PREVIEWS.MAX_TOP_INCIDENTS,
-      );
-    }
+  for (const incident of sessions.flatMap((s) => s.incidents)) {
+    severityCounts[incident.severity] += 1;
+    topIncidents = insertTopIncident(
+      topIncidents,
+      {
+        incidentId: incident.incidentId,
+        sessionId: incident.sessionId,
+        summary: incident.summary,
+        severity: incident.severity,
+        confidence: incident.confidence,
+        turnSpan: incident.turnIndices.length,
+        evidencePreview: incident.evidencePreviews[0],
+      },
+      PREVIEWS.MAX_TOP_INCIDENTS,
+    );
   }
 
   return {

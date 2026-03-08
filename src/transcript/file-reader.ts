@@ -22,7 +22,9 @@ export function createTranscriptLineReader(path: string): readline.Interface {
 /**
  * Gets the underlying stream from a line reader for cleanup.
  */
-export function getReaderStream(reader: readline.Interface): NodeJS.ReadableStream {
+export function getReaderStream(
+  reader: readline.Interface,
+): NodeJS.ReadableStream {
   // The reader has a private _inputStream property we need to access for cleanup
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (reader as any).input || (reader as any)._inputStream;

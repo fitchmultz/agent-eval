@@ -4,11 +4,19 @@
  * Notes: Handles label counts, session aggregation, and data collection.
  */
 
-import type { IncidentRecord, LabelName, MetricsRecord, RawTurnRecord } from "../schema.js";
 import { getConfig } from "../config.js";
 import { insertTopIncident } from "../incident-selection.js";
-import type { SummaryArtifact } from "../schema.js";
-import { createEmptySessionLabelMap, createEmptySeverityCounts } from "./scoring.js";
+import type {
+  IncidentRecord,
+  LabelName,
+  MetricsRecord,
+  RawTurnRecord,
+  SummaryArtifact,
+} from "../schema.js";
+import {
+  createEmptySessionLabelMap,
+  createEmptySeverityCounts,
+} from "./scoring.js";
 import type { SummaryInputs } from "./types.js";
 
 /**
@@ -98,8 +106,11 @@ export function aggregateDeliveryMetrics(
   return {
     sessionsWithWrites: sessionsWithWrites.length,
     verifiedWriteSessions: verifiedWriteSessions.length,
-    writeVerificationRate: sessionsWithWrites.length > 0
-      ? Math.round((verifiedWriteSessions.length / sessionsWithWrites.length) * 100)
-      : 0,
+    writeVerificationRate:
+      sessionsWithWrites.length > 0
+        ? Math.round(
+            (verifiedWriteSessions.length / sessionsWithWrites.length) * 100,
+          )
+        : 0,
   };
 }

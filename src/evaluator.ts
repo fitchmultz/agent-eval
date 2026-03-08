@@ -19,6 +19,7 @@ import type { MetricsRecord } from "./schema.js";
 import { processSession } from "./session-processor.js";
 import { parseTranscriptFile } from "./transcript/index.js";
 import { mapWithConcurrency } from "./utils/concurrency.js";
+import { getHomeDirectory } from "./utils/environment.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
 
 export type { EvaluationResult, SummaryOnlyEvaluationResult };
@@ -34,11 +35,6 @@ export interface EvaluateOptions {
   outputDir: string;
   /** Maximum number of most recent sessions to evaluate (undefined for all) */
   sessionLimit?: number;
-}
-
-function getHomeDirectory(): string | undefined {
-  // biome-ignore lint/complexity/useLiteralKeys: Required for TypeScript index signature access
-  return process.env["HOME"];
 }
 
 function selectSessionPaths(

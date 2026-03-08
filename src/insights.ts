@@ -5,10 +5,6 @@
  */
 import type { MetricsRecord, SummaryArtifact } from "./schema.js";
 import {
-  buildSummaryCore,
-  buildSummaryInputsFromArtifacts,
-} from "./summary-core.js";
-import {
   collectSessionLabelCounts,
   countLabel,
   countWriteTurns,
@@ -16,8 +12,12 @@ import {
   createEmptySeverityCounts,
   safeRate,
 } from "./summary/index.js";
-import { buildSummaryDecorations } from "./summary-decorations.js";
 import type { SummaryInputs } from "./summary/types.js";
+import {
+  buildSummaryCore,
+  buildSummaryInputsFromArtifacts,
+} from "./summary-core.js";
+import { buildSummaryDecorations } from "./summary-decorations.js";
 
 export {
   buildComparativeSlices,

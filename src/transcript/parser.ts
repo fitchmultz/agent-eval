@@ -10,7 +10,12 @@ import { createSourceRef, routeEvent } from "./event-router.js";
 import { createTranscriptLineReader } from "./file-reader.js";
 import { buildParsedSession, createTurn } from "./session-builder.js";
 import { asRecord, asString, getValue } from "./type-guards.js";
-import type { JsonlEventRecord, ParseOptions, ParsedSession, ParserContext } from "./types.js";
+import type {
+  JsonlEventRecord,
+  ParsedSession,
+  ParseOptions,
+  ParserContext,
+} from "./types.js";
 
 /**
  * Infers session ID from the filename.

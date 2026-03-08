@@ -4,10 +4,10 @@
  */
 
 import {
-  CONCURRENCY,
   CLUSTERING,
-  PREVIEWS,
+  CONCURRENCY,
   LABEL_WEIGHTS,
+  PREVIEWS,
   SCORING,
 } from "./constants/index.js";
 import type { LabelName } from "./schema.js";

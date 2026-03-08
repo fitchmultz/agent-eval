@@ -4,8 +4,13 @@
  * Notes: Handles both modern function_call and legacy custom_tool_call formats.
  */
 
-import { asRecord, asString, getValue } from "./type-guards.js";
-import type { JsonlEventRecord, ParsedToolCall, ParserContext, SourceRef } from "./types.js";
+import { asString, getValue } from "./type-guards.js";
+import type {
+  JsonlEventRecord,
+  ParsedToolCall,
+  ParserContext,
+  SourceRef,
+} from "./types.js";
 
 /**
  * Normalizes tool output text to determine completion status.

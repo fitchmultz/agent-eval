@@ -4,48 +4,49 @@
  * Notes: All transcript parsing functionality is exported from here.
  */
 
-// Main entrypoint
-export { parseTranscriptFile, parseEventLine, createParserContext } from "./parser.js";
-
-// Types
-export type {
-  ParsedToolCall,
-  ParsedTurn,
-  ParsedSession,
-  ParseOptions,
-  ParserContext,
-  JsonlEventRecord,
-} from "./types.js";
-
-// Session building
-export {
-  createTurn,
-  hasTurnContent,
-  buildParsedSession,
-  handleSessionMetaEvent,
-  handleTurnContextEvent,
-  flushCurrentTurn,
-  inferSessionIdFromFilename,
-} from "./session-builder.js";
-
 // Event routing
 export {
-  handleResponseItemEvent,
   createSourceRef,
+  handleResponseItemEvent,
   routeEvent,
 } from "./event-router.js";
-
 // Message handling
-export { handleMessageResponse, extractMessageText } from "./message-extractor.js";
-
+export {
+  extractMessageText,
+  handleMessageResponse,
+} from "./message-extractor.js";
+// Main entrypoint
+export {
+  createParserContext,
+  parseEventLine,
+  parseTranscriptFile,
+} from "./parser.js";
+// Session building
+export {
+  buildParsedSession,
+  createTurn,
+  flushCurrentTurn,
+  handleSessionMetaEvent,
+  handleTurnContextEvent,
+  hasTurnContent,
+  inferSessionIdFromFilename,
+} from "./session-builder.js";
 // Tool call handling
 export {
-  handleFunctionCallResponse,
-  handleFunctionCallOutputResponse,
-  handleCustomToolCallResponse,
   handleCustomToolCallOutputResponse,
+  handleCustomToolCallResponse,
+  handleFunctionCallOutputResponse,
+  handleFunctionCallResponse,
   normalizeToolOutput,
 } from "./tool-call-handler.js";
-
 // Type guards
-export { isRecord, asRecord, asString, getValue } from "./type-guards.js";
+export { asRecord, asString, getValue, isRecord } from "./type-guards.js";
+// Types
+export type {
+  JsonlEventRecord,
+  ParsedSession,
+  ParsedToolCall,
+  ParsedTurn,
+  ParseOptions,
+  ParserContext,
+} from "./types.js";

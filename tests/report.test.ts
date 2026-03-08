@@ -6,7 +6,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSummaryArtifact,
-  buildSummaryInputsFromArtifacts,
   createEmptySessionLabelMap,
 } from "../src/insights.js";
 import { renderReport, renderSummaryReport } from "../src/report.js";
@@ -14,7 +13,6 @@ import type {
   IncidentRecord,
   MetricsRecord,
   RawTurnRecord,
-  SummaryArtifact,
 } from "../src/schema.js";
 
 function createTestMetrics(overrides?: Partial<MetricsRecord>): MetricsRecord {

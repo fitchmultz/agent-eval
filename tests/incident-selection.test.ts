@@ -27,7 +27,7 @@ describe("insertTopIncident", () => {
     const incident = createIncident();
     const result = insertTopIncident([], incident, 8);
     expect(result).toHaveLength(1);
-    expect(result[0]!.incidentId).toBe(incident.incidentId);
+    expect(result[0]?.incidentId).toBe(incident.incidentId);
   });
 
   it("maintains list under limit", () => {
@@ -86,7 +86,7 @@ describe("insertTopIncident", () => {
 
     const result = insertTopIncident([existing], higherSeverity, 8);
     expect(result).toHaveLength(1);
-    expect(result[0]!.incidentId).toBe("high-severity");
+    expect(result[0]?.incidentId).toBe("high-severity");
   });
 
   it("prefers non-low-signal evidence when severities are equal", () => {
@@ -110,7 +110,7 @@ describe("insertTopIncident", () => {
 
     const result = insertTopIncident([lowSignal], highSignal, 8);
     expect(result).toHaveLength(1);
-    expect(result[0]!.incidentId).toBe("high-signal");
+    expect(result[0]?.incidentId).toBe("high-signal");
   });
 
   it("prefers wider turn span when severity and signal quality are equal", () => {
@@ -132,7 +132,7 @@ describe("insertTopIncident", () => {
 
     const result = insertTopIncident([narrow], wide, 8);
     expect(result).toHaveLength(1);
-    expect(result[0]!.incidentId).toBe("wide");
+    expect(result[0]?.incidentId).toBe("wide");
   });
 
   it("sorts alphabetically by summary as final tiebreaker", () => {
@@ -154,8 +154,8 @@ describe("insertTopIncident", () => {
 
     const result = insertTopIncident([first], second, 8);
     expect(result).toHaveLength(2);
-    expect(result[0]!.summary).toBe("apple incident");
-    expect(result[1]!.summary).toBe("zebra incident");
+    expect(result[0]?.summary).toBe("apple incident");
+    expect(result[1]?.summary).toBe("zebra incident");
   });
 
   it("handles multiple sessions without deduplication across sessions", () => {
@@ -218,7 +218,7 @@ describe("insertTopIncident", () => {
 
     const result = insertTopIncident([worse], better, 8);
     expect(result).toHaveLength(1);
-    expect(result[0]!.incidentId).toBe("better");
+    expect(result[0]?.incidentId).toBe("better");
   });
 
   it("handles incidents without evidence preview", () => {
@@ -232,6 +232,6 @@ describe("insertTopIncident", () => {
 
     const result = insertTopIncident([], withoutPreview, 8);
     expect(result).toHaveLength(1);
-    expect(result[0]!.incidentId).toBe("no-preview");
+    expect(result[0]?.incidentId).toBe("no-preview");
   });
 });

@@ -81,7 +81,8 @@ function buildHeadlineInsights(
       detail:
         "Interrupt labels per 100 turns, useful for spotting redirected or churn-heavy sessions.",
       tone:
-        summary.rates.interruptionsPer100Turns >= INTERRUPTION_LOAD.WARN_THRESHOLD
+        summary.rates.interruptionsPer100Turns >=
+        INTERRUPTION_LOAD.WARN_THRESHOLD
           ? "warn"
           : "neutral",
     },

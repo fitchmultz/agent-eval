@@ -5,6 +5,7 @@
  */
 
 import type { ParsedToolCall } from "./transcript/index.js";
+import { isRecord } from "./utils/type-guards.js";
 
 /**
  * Tool names that perform write operations on files.
@@ -120,7 +121,7 @@ export function extractCommandText(
       return payloadText;
     }
 
-    if (!isStringRecord(parsedUnknown)) {
+    if (!isRecord(parsedUnknown)) {
       return payloadText;
     }
 
@@ -140,8 +141,4 @@ export function extractCommandText(
   }
 
   return undefined;
-}
-
-function isStringRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

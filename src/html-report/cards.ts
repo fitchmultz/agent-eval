@@ -47,7 +47,12 @@ export function renderSummaryCards(summary: SummaryArtifact): string {
 
   return cards
     .map((card) =>
-      createMetricCard(card.label, card.value, card.detail, card.tone ?? "neutral"),
+      createMetricCard(
+        card.label,
+        card.value,
+        card.detail,
+        card.tone ?? "neutral",
+      ),
     )
     .join("");
 }
@@ -62,7 +67,13 @@ export function renderBragCards(summary: SummaryArtifact): string {
 
   return summary.bragCards
     .map((card) =>
-      createMetricCard(card.title, card.value, card.detail, card.tone, "brag-card"),
+      createMetricCard(
+        card.title,
+        card.value,
+        card.detail,
+        card.tone,
+        "brag-card",
+      ),
     )
     .join("");
 }
@@ -76,7 +87,9 @@ export function renderScoreCards(summary: SummaryArtifact): string {
   }
 
   return summary.scoreCards
-    .map((card) => createScoreCard(card.title, card.score, card.detail, card.tone))
+    .map((card) =>
+      createScoreCard(card.title, card.score, card.detail, card.tone),
+    )
     .join("");
 }
 
@@ -93,7 +106,13 @@ export function renderMomentumCards(summary: SummaryArtifact): string {
 
   return sections.recentMomentum
     .map((card) =>
-      createMetricCard(card.title, card.value, card.detail, card.tone, "score-card"),
+      createMetricCard(
+        card.title,
+        card.value,
+        card.detail,
+        card.tone,
+        "score-card",
+      ),
     )
     .join("");
 }

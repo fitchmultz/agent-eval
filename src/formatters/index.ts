@@ -5,7 +5,7 @@
  */
 
 export {
+  formatEvalOutput,
   formatInspectOutput,
   formatParseOutput,
-  formatEvalOutput,
 } from "./json-formatter.js";

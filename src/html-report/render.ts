@@ -17,7 +17,10 @@ import {
   renderSummaryCards,
   renderVictoryLapCards,
 } from "./cards.js";
-import { renderComparativeSliceTable, renderComplianceTable } from "./tables.js";
+import {
+  renderComparativeSliceTable,
+  renderComplianceTable,
+} from "./tables.js";
 import { escapeHtml, renderStyles } from "./templates.js";
 
 /**

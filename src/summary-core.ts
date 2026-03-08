@@ -4,23 +4,15 @@
  * Notes: This is a thin orchestrator that delegates to specialized modules in src/summary/
  */
 
-import { buildComparativeSlices, buildScoreSnapshot } from "./comparative-slices.js";
+import { buildComparativeSlices } from "./comparative-slices.js";
 import { getConfig } from "./config.js";
-import type {
-  LabelName,
-  MetricsRecord,
-  SummaryArtifact,
-} from "./schema.js";
+import type { LabelName, MetricsRecord } from "./schema.js";
 import {
   filterVerifiedWriteSessions,
   filterWriteSessions,
 } from "./session-filters.js";
 import { buildTopSessions, buildVictoryLaps } from "./session-ranking.js";
-import {
-  buildSummaryInputsFromArtifacts,
-  countLabel,
-  safeRate,
-} from "./summary/index.js";
+import { countLabel, safeRate } from "./summary/index.js";
 import type { SummaryCoreData, SummaryInputs } from "./summary/types.js";
 
 // Re-export for backward compatibility during transition
@@ -82,7 +74,11 @@ export function buildSummaryCore(
     labels: Object.entries(metrics.labelCounts)
       .filter((entry): entry is [LabelName, number] => {
         const [key, value] = entry;
-        return value !== undefined && value > 0 && VALID_LABELS.includes(key as LabelName);
+        return (
+          value !== undefined &&
+          value > 0 &&
+          VALID_LABELS.includes(key as LabelName)
+        );
       })
       .map(([label, count]) => ({ label, count }))
       .sort(
@@ -91,7 +87,8 @@ export function buildSummaryCore(
       ),
     severities: ["info", "low", "medium", "high"].map((severity) => ({
       severity: severity as SummaryCoreData["severities"][number]["severity"],
-      count: inputs.severityCounts[severity as keyof typeof inputs.severityCounts],
+      count:
+        inputs.severityCounts[severity as keyof typeof inputs.severityCounts],
     })),
     compliance: metrics.complianceSummary,
     rates: {

@@ -4,11 +4,8 @@
  * Notes: This module keeps badges, brag cards, score cards, and opportunities out of the core summary math.
  */
 
-import {
-  BADGES,
-  OPPORTUNITIES,
-} from "./constants/index.js";
 import { buildScoreSnapshot } from "./comparative-slices.js";
+import { BADGES, OPPORTUNITIES } from "./constants/index.js";
 import type { MetricsRecord, SummaryArtifact } from "./schema.js";
 import {
   filterQuietSessions,

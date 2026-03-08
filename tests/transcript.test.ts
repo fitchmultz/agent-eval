@@ -10,7 +10,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { TranscriptParseError } from "../src/errors.js";
-import { parseEventLine, parseTranscriptFile } from "../src/transcript/index.js";
+import {
+  parseEventLine,
+  parseTranscriptFile,
+} from "../src/transcript/index.js";
 
 const sampleTranscript = [
   {

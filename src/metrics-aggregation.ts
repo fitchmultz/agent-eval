@@ -3,132 +3,38 @@
  * Entrypoint: `aggregateMetrics()` for building MetricsRecord.
  */
 import type {
-  ComplianceAggregate,
-  ComplianceRuleName,
-  ComplianceStatus,
   InventoryRecord,
   LabelCountRecord,
   LabelName,
   MetricsRecord,
 } from "./schema.js";
-import { complianceRuleValues } from "./schema.js";
 import type { ProcessedSession } from "./session-processor.js";
+import { aggregateComplianceSummary } from "./utils/compliance-aggregation.js";
+import { getHomeDirectory } from "./utils/environment.js";
+import { redactPath } from "./utils/path-redaction.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
 
-/**
- * Creates empty label counts record.
- */
-function createEmptyLabelCounts(): LabelCountRecord {
-  return {};
-}
-
-/**
- * Creates empty compliance summary with all rules initialized to zero.
- */
-function createEmptyComplianceSummary(): ComplianceAggregate[] {
-  return complianceRuleValues.map((rule) => ({
-    rule,
-    passCount: 0,
-    failCount: 0,
-    notApplicableCount: 0,
-    unknownCount: 0,
-  }));
-}
-
-/**
- * Increments compliance summary counter for a specific rule and status.
- */
-function incrementComplianceSummary(
-  summary: readonly ComplianceAggregate[],
-  rule: ComplianceRuleName,
-  status: ComplianceStatus,
-): ComplianceAggregate[] {
-  return summary.map((entry) => {
-    if (entry.rule !== rule) {
-      return entry;
-    }
-
-    if (status === "pass") {
-      return { ...entry, passCount: entry.passCount + 1 };
-    }
-    if (status === "fail") {
-      return { ...entry, failCount: entry.failCount + 1 };
-    }
-    if (status === "not_applicable") {
-      return { ...entry, notApplicableCount: entry.notApplicableCount + 1 };
-    }
-
-    return { ...entry, unknownCount: entry.unknownCount + 1 };
-  });
-}
-
-/**
- * Aggregates label counts across all sessions.
- */
 function aggregateLabelCounts(
   sessions: readonly ProcessedSession[],
 ): LabelCountRecord {
-  let labelCounts = createEmptyLabelCounts();
+  const counts: LabelCountRecord = {};
 
   for (const session of sessions) {
-    // Count labels from turns
     for (const turn of session.turns) {
       for (const label of turn.labels) {
-        labelCounts = {
-          ...labelCounts,
-          [label.label]: (labelCounts[label.label] ?? 0) + 1,
-        };
+        counts[label.label] = (counts[label.label] ?? 0) + 1;
       }
     }
   }
 
-  return labelCounts;
+  return counts;
 }
 
-/**
- * Aggregates compliance summary across all sessions.
- */
-function aggregateComplianceSummary(
-  sessions: readonly ProcessedSession[],
-): ComplianceAggregate[] {
-  let complianceSummary = createEmptyComplianceSummary();
-
-  for (const session of sessions) {
-    for (const rule of session.metrics.complianceRules) {
-      complianceSummary = incrementComplianceSummary(
-        complianceSummary,
-        rule.rule,
-        rule.status,
-      );
-    }
-  }
-
-  return complianceSummary;
-}
-
-/**
- * Gets the home directory from environment.
- */
-function getHomeDirectory(): string | undefined {
-  const homeEnvironmentKey = "HOME";
-  return process.env[homeEnvironmentKey];
-}
-
-/**
- * Redacts the home directory from a path.
- */
-function redactPath(path: string): string {
-  const homeDirectory = getHomeDirectory();
-  return homeDirectory ? path.replace(homeDirectory, "~") : path;
-}
-
-/**
- * Redacts inventory paths.
- */
 function redactInventory(inventory: InventoryRecord[]): InventoryRecord[] {
+  const homeDirectory = getHomeDirectory();
   return inventory.map((record) => ({
     ...record,
-    path: redactPath(record.path),
+    path: redactPath(record.path, homeDirectory),
   }));
 }
 
@@ -143,7 +49,8 @@ export function aggregateMetrics(
   inventory: InventoryRecord[],
 ): MetricsRecord {
   const labelCounts = aggregateLabelCounts(sessions);
-  const complianceSummary = aggregateComplianceSummary(sessions);
+  const sessionMetrics = sessions.map((s) => s.metrics);
+  const complianceSummary = aggregateComplianceSummary(sessionMetrics);
 
   return {
     evaluatorVersion: EVALUATOR_VERSION,
@@ -154,7 +61,7 @@ export function aggregateMetrics(
     incidentCount: sessions.reduce((sum, s) => sum + s.incidents.length, 0),
     labelCounts,
     complianceSummary,
-    sessions: sessions.map((s) => s.metrics),
+    sessions: sessionMetrics,
     inventory: redactInventory(inventory),
   };
 }

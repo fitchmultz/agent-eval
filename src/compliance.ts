@@ -38,7 +38,8 @@ function hasPreWriteContext(
   return priorTurns.some(
     (turn) =>
       turn.assistantMessages.some(
-        (message) => message.trim().length >= CONTEXT_CONFIRMATION.MIN_MESSAGE_LENGTH,
+        (message) =>
+          message.trim().length >= CONTEXT_CONFIRMATION.MIN_MESSAGE_LENGTH,
       ) ||
       turn.toolCalls.some((toolCall) => {
         const commandText = extractCommandText(toolCall);

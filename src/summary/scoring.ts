@@ -5,8 +5,13 @@
  */
 
 import { SCORE_TONE } from "../constants/index.js";
-import type { LabelName, MetricsRecord, Severity, SummaryArtifact } from "../schema.js";
-import { severityValues } from "../schema.js";
+import type {
+  LabelName,
+  MetricsRecord,
+  Severity,
+  SummaryArtifact,
+} from "../schema.js";
+import { labelTaxonomy } from "../schema.js";
 import type { ScoreSnapshot, SessionInsightRow } from "./types.js";
 
 /**
@@ -74,16 +79,10 @@ export function countLabel(
  * @returns Record with all label names initialized to 0
  */
 export function createEmptySessionLabelMap(): Record<LabelName, number> {
-  return {
-    context_drift: 0,
-    test_build_lint_failure_complaint: 0,
-    interrupt: 0,
-    regression_report: 0,
-    praise: 0,
-    context_reinjection: 0,
-    verification_request: 0,
-    stalled_or_guessing: 0,
-  };
+  return Object.fromEntries(labelTaxonomy.map((l) => [l, 0])) as Record<
+    LabelName,
+    number
+  >;
 }
 
 /**

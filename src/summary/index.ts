@@ -4,28 +4,27 @@
  * Notes: Centralized exports for summary-related functionality.
  */
 
+// Aggregation functions
+export {
+  aggregateDeliveryMetrics,
+  buildSummaryInputsFromArtifacts,
+  collectSessionLabelCounts,
+  countWriteTurns,
+} from "./aggregation.js";
 // Scoring functions
 export {
-  safeRate,
-  toneForScore,
+  buildScoreSnapshot,
   countLabel,
   createEmptySessionLabelMap,
   createEmptySeverityCounts,
-  buildScoreSnapshot,
+  safeRate,
+  toneForScore,
 } from "./scoring.js";
-
-// Aggregation functions
-export {
-  collectSessionLabelCounts,
-  countWriteTurns,
-  buildSummaryInputsFromArtifacts,
-  aggregateDeliveryMetrics,
-} from "./aggregation.js";
 
 // Types
 export type {
-  SummaryInputs,
-  SummaryCoreData,
-  SessionInsightRow,
   ScoreSnapshot,
+  SessionInsightRow,
+  SummaryCoreData,
+  SummaryInputs,
 } from "./types.js";

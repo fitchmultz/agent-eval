@@ -15,6 +15,7 @@ import type {
 } from "./schema.js";
 import { categorizeToolCall } from "./tool-classification.js";
 import type { ParsedSession } from "./transcript/index.js";
+import { redactPath } from "./utils/path-redaction.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
 
 /**
@@ -63,13 +64,6 @@ function summarizeToolCall(
     verificationLike: categorization.verificationLike,
     status: "unknown",
   };
-}
-
-/**
- * Redacts the home directory from a path.
- */
-function redactPath(path: string, homeDirectory?: string): string {
-  return homeDirectory ? path.replace(homeDirectory, "~") : path;
 }
 
 /**

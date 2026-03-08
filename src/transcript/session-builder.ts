@@ -6,7 +6,13 @@
 
 import { basename } from "node:path";
 import { asRecord, asString, getValue } from "./type-guards.js";
-import type { JsonlEventRecord, ParsedSession, ParsedTurn, ParserContext, SourceRef } from "./types.js";
+import type {
+  JsonlEventRecord,
+  ParsedSession,
+  ParsedTurn,
+  ParserContext,
+  SourceRef,
+} from "./types.js";
 
 /**
  * Creates a new empty turn with the given index.

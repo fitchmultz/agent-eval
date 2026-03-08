@@ -4,7 +4,12 @@
  * Notes: Shared types to avoid circular dependencies.
  */
 
-import type { LabelName, MetricsRecord, SessionArchetype, Severity, SummaryArtifact } from "../schema.js";
+import type {
+  LabelName,
+  SessionArchetype,
+  Severity,
+  SummaryArtifact,
+} from "../schema.js";
 
 // Re-export for convenience
 export type { LabelName, SessionArchetype };
