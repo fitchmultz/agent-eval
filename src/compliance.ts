@@ -10,7 +10,7 @@ import {
   isVerificationTool,
   isWriteTool,
 } from "./tool-classification.js";
-import type { ParsedSession, ParsedTurn } from "./transcript.js";
+import type { ParsedSession, ParsedTurn } from "./transcript/index.js";
 
 /**
  * Scorecard for a session's compliance with AGENTS-style operating rules.

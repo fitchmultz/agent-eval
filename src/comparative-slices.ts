@@ -18,8 +18,8 @@ import {
   countLabel,
   createEmptySessionLabelMap,
   safeRate,
-} from "./summary-core.js";
-import type { ScoreSnapshot } from "./types.js";
+} from "./summary/index.js";
+import type { ScoreSnapshot } from "./summary/types.js";
 
 function applicablePassRate(
   metrics: MetricsRecord,

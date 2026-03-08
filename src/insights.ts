@@ -7,15 +7,17 @@ import type { MetricsRecord, SummaryArtifact } from "./schema.js";
 import {
   buildSummaryCore,
   buildSummaryInputsFromArtifacts,
+} from "./summary-core.js";
+import {
   collectSessionLabelCounts,
   countLabel,
   countWriteTurns,
   createEmptySessionLabelMap,
   createEmptySeverityCounts,
   safeRate,
-} from "./summary-core.js";
+} from "./summary/index.js";
 import { buildSummaryDecorations } from "./summary-decorations.js";
-import type { SummaryInputs } from "./types.js";
+import type { SummaryInputs } from "./summary/types.js";
 
 export {
   buildComparativeSlices,
@@ -35,13 +37,13 @@ export {
 } from "./session-archetype.js";
 export { buildTopSessions, buildVictoryLaps } from "./session-ranking.js";
 
-// Re-export types from types.ts
+// Re-export types from summary/types.ts
 export type {
   ScoreSnapshot,
   SessionInsightRow,
   SummaryCoreData,
   SummaryInputs,
-} from "./types.js";
+} from "./summary/types.js";
 
 // Re-export utilities from summary-core
 export {

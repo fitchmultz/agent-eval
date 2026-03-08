@@ -14,7 +14,7 @@ import type {
   ToolCallSummary,
 } from "./schema.js";
 import { categorizeToolCall } from "./tool-classification.js";
-import type { ParsedSession } from "./transcript.js";
+import type { ParsedSession } from "./transcript/index.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
 
 /**
@@ -211,7 +211,7 @@ export async function processSessionFromPath(
   sessionPath: string,
   homeDirectory?: string,
 ): Promise<ProcessedSession> {
-  const { parseTranscriptFile } = await import("./transcript.js");
+  const { parseTranscriptFile } = await import("./transcript/index.js");
   const session = await parseTranscriptFile(sessionPath);
   return processSession(session, homeDirectory);
 }

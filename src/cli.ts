@@ -21,7 +21,11 @@ import {
   writeEvaluationArtifacts,
   writeSummaryArtifacts,
 } from "./evaluator.js";
-import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
+import {
+  formatEvalOutput,
+  formatInspectOutput,
+  formatParseOutput,
+} from "./formatters/index.js";
 
 interface GlobalOptions {
   codexHome: string;
@@ -35,16 +39,10 @@ interface GlobalOptions {
 async function runInspectCommand(options: GlobalOptions): Promise<void> {
   const inventory = await discoverArtifacts(options.codexHome);
   process.stdout.write(
-    `${JSON.stringify(
-      {
-        evaluatorVersion: EVALUATOR_VERSION,
-        schemaVersion: SCHEMA_VERSION,
-        codexHome: options.codexHome,
-        sessionFileCount: inventory.sessionFiles.length,
-        inventory: inventory.inventory,
-      },
-      null,
-      2,
+    `${formatInspectOutput(
+      options.codexHome,
+      inventory.sessionFiles.length,
+      inventory.inventory,
     )}\n`,
   );
 }
@@ -64,16 +62,7 @@ async function runParseCommand(options: GlobalOptions): Promise<void> {
     options.outputDir,
   );
   process.stdout.write(
-    `${JSON.stringify(
-      {
-        evaluatorVersion: EVALUATOR_VERSION,
-        schemaVersion: SCHEMA_VERSION,
-        outputDir: options.outputDir,
-        rawTurnCount: result.rawTurns.length,
-      },
-      null,
-      2,
-    )}\n`,
+    `${formatParseOutput(options.outputDir, result.rawTurns.length)}\n`,
   );
 }
 
@@ -82,17 +71,11 @@ async function runEvalCommand(options: GlobalOptions): Promise<void> {
     const result = await evaluateArtifactsSummaryOnly(options);
     await writeSummaryArtifacts(result, options.outputDir);
     process.stdout.write(
-      `${JSON.stringify(
-        {
-          evaluatorVersion: EVALUATOR_VERSION,
-          schemaVersion: SCHEMA_VERSION,
-          outputDir: options.outputDir,
-          sessionCount: result.metrics.sessionCount,
-          incidentCount: result.metrics.incidentCount,
-          summaryOnly: true,
-        },
-        null,
-        2,
+      `${formatEvalOutput(
+        options.outputDir,
+        result.metrics.sessionCount,
+        result.metrics.incidentCount,
+        true,
       )}\n`,
     );
     return;
@@ -101,16 +84,10 @@ async function runEvalCommand(options: GlobalOptions): Promise<void> {
   const result = await evaluateArtifacts(options);
   await writeEvaluationArtifacts(result, options.outputDir);
   process.stdout.write(
-    `${JSON.stringify(
-      {
-        evaluatorVersion: EVALUATOR_VERSION,
-        schemaVersion: SCHEMA_VERSION,
-        outputDir: options.outputDir,
-        sessionCount: result.metrics.sessionCount,
-        incidentCount: result.metrics.incidentCount,
-      },
-      null,
-      2,
+    `${formatEvalOutput(
+      options.outputDir,
+      result.metrics.sessionCount,
+      result.metrics.incidentCount,
     )}\n`,
   );
 }
@@ -169,7 +146,7 @@ export async function main(argv: string[]): Promise<number> {
     .description(
       "Evaluate local Codex session artifacts and emit structured reports.",
     )
-    .version(EVALUATOR_VERSION)
+    .version("0.1.0")
     .showHelpAfterError()
     .option("--codex-home <path>", "Codex home to inspect", defaultCodexHome)
     .option(

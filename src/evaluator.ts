@@ -17,7 +17,7 @@ import { aggregateMetrics, countWriteTurns } from "./metrics-aggregation.js";
 import { renderReport, renderSummaryReport } from "./report.js";
 import type { MetricsRecord } from "./schema.js";
 import { processSession } from "./session-processor.js";
-import { parseTranscriptFile } from "./transcript.js";
+import { parseTranscriptFile } from "./transcript/index.js";
 import { mapWithConcurrency } from "./utils/concurrency.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
 

@@ -15,8 +15,8 @@ import {
   filterVerifiedWriteSessions,
   filterWriteSessions,
 } from "./session-filters.js";
-import { countLabel, safeRate, toneForScore } from "./summary-core.js";
-import type { SessionInsightRow } from "./types.js";
+import { countLabel, safeRate, toneForScore } from "./summary/index.js";
+import type { SessionInsightRow } from "./summary/types.js";
 
 /**
  * Presentation-oriented decorations added to the summary core.

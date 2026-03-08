@@ -11,7 +11,7 @@ import {
   getLabelWeight,
 } from "../src/friction-scoring.js";
 import type { LabelName } from "../src/schema.js";
-import { createEmptySessionLabelMap } from "../src/summary-core.js";
+import { createEmptySessionLabelMap } from "../src/summary/index.js";
 
 describe("getLabelWeight", () => {
   it("returns positive weights for friction-indicating labels", () => {

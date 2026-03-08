@@ -4,7 +4,7 @@
  * Notes: Delegates to specialized modules for HTML and SVG generation.
  */
 
-import { renderHtmlReport } from "./html-report.js";
+import { renderHtmlReport } from "./html-report/index.js";
 import {
   buildSummaryArtifact,
   buildSummaryInputsFromArtifacts,

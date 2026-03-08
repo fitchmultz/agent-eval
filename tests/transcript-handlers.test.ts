@@ -20,7 +20,7 @@ import {
   handleTurnContextEvent,
   hasTurnContent,
   type ParserContext,
-} from "../src/transcript.js";
+} from "../src/transcript/index.js";
 
 function createTestSourceRef(line = 1): SourceRef {
   return {

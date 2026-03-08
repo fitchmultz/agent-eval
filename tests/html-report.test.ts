@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { renderHtmlReport } from "../src/html-report.js";
+import { renderHtmlReport } from "../src/html-report/index.js";
 import type { MetricsRecord, SummaryArtifact } from "../src/schema.js";
 
 const baseMetrics: MetricsRecord = {

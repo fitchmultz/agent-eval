@@ -3,7 +3,7 @@ import {
   processSession,
   type SessionMetrics,
 } from "../src/session-processor.js";
-import type { ParsedSession } from "../src/transcript.js";
+import type { ParsedSession } from "../src/transcript/index.js";
 
 describe("processSession", () => {
   const mockSession: ParsedSession = {

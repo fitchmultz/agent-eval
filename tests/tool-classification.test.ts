@@ -15,7 +15,7 @@ import {
   VERIFICATION_COMMAND_PATTERNS,
   WRITE_TOOL_NAMES,
 } from "../src/tool-classification.js";
-import type { ParsedToolCall } from "../src/transcript.js";
+import type { ParsedToolCall } from "../src/transcript/index.js";
 
 function createParsedToolCall(
   overrides: Partial<ParsedToolCall> & {

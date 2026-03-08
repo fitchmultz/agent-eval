@@ -15,8 +15,8 @@ import {
   createArchetypeNote,
   determineArchetype,
 } from "./session-archetype.js";
-import { createEmptySessionLabelMap } from "./summary-core.js";
-import type { SessionInsightRow } from "./types.js";
+import { createEmptySessionLabelMap } from "./summary/index.js";
+import type { SessionInsightRow } from "./summary/types.js";
 
 /**
  * Builds a ranked list of session insights sorted by friction (highest first).

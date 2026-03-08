@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import type { LabelName, MetricsRecord } from "../src/schema.js";
 import { buildTopSessions, buildVictoryLaps } from "../src/session-ranking.js";
-import { createEmptySessionLabelMap } from "../src/summary-core.js";
+import { createEmptySessionLabelMap } from "../src/summary/index.js";
 
 function createSession(
   sessionId: string,

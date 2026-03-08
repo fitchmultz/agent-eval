@@ -5,7 +5,7 @@
  */
 import type { LabelRecord } from "./schema.js";
 
-import type { ParsedTurn } from "./transcript.js";
+import type { ParsedTurn } from "./transcript/index.js";
 
 interface LabelRule {
   label: LabelRecord["label"];

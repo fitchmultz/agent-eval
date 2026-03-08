@@ -4,7 +4,7 @@
  * Notes: Centralizes tool classification to eliminate duplication between compliance scoring and evaluation.
  */
 
-import type { ParsedToolCall } from "./transcript.js";
+import type { ParsedToolCall } from "./transcript/index.js";
 
 /**
  * Tool names that perform write operations on files.
