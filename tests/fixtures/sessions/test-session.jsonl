@@ -1,0 +1,7 @@
+{"timestamp":"2026-03-06T19:00:00.000Z","type":"session_meta","payload":{"id":"test-session-1","timestamp":"2026-03-06T19:00:00.000Z","cwd":"/workspace/test"}}
+{"timestamp":"2026-03-06T19:00:01.000Z","type":"turn_context","payload":{"turn_id":"turn-1","cwd":"/workspace/test"}}
+{"timestamp":"2026-03-06T19:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Please fix the bug in the auth module."}]}}
+{"timestamp":"2026-03-06T19:00:03.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"pwd\"}","call_id":"call-1"}}
+{"timestamp":"2026-03-06T19:00:04.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-1","output":"/workspace/test"}}
+{"timestamp":"2026-03-06T19:00:05.000Z","type":"turn_context","payload":{"turn_id":"turn-2","cwd":"/workspace/test"}}
+{"timestamp":"2026-03-06T19:00:06.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Great, now run the tests to verify."}]}}
