@@ -21,6 +21,13 @@ export {
   parseEventLine,
   parseTranscriptFile,
 } from "./parser.js";
+// Schema validation
+export {
+  jsonlEventRecordSchema,
+  type ValidatedEventRecord,
+  validateEventRecord,
+  validateEventRecordStrict,
+} from "./schema.js";
 // Session building
 export {
   buildParsedSession,

@@ -14,6 +14,7 @@ import {
   errorToMessage,
   FileNotFoundError,
   isEnoentError,
+  ValidationError,
 } from "./errors.js";
 import {
   evaluateArtifacts,
@@ -26,6 +27,7 @@ import {
   formatInspectOutput,
   formatParseOutput,
 } from "./formatters/index.js";
+import { getValidatedHomeDirectory } from "./utils/environment.js";
 
 interface GlobalOptions {
   codexHome: string;
@@ -106,9 +108,15 @@ async function runReportCommand(options: GlobalOptions): Promise<void> {
 }
 
 export async function main(argv: string[]): Promise<number> {
-  const homeEnvironmentKey = "HOME";
-  const homeDirectory = process.env[homeEnvironmentKey];
-  const defaultCodexHome = homeDirectory ? `${homeDirectory}/.codex` : ".codex";
+  // Validate and get home directory with cross-platform support
+  let defaultCodexHome: string;
+  try {
+    const homeDirectory = getValidatedHomeDirectory();
+    defaultCodexHome = `${homeDirectory}/.codex`;
+  } catch {
+    // Fallback to relative path if HOME is not set
+    defaultCodexHome = ".codex";
+  }
 
   // Apply CLI-provided config overrides before any command runs
   const applyConfigOverrides = (options: GlobalOptions): void => {

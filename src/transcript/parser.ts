@@ -1,15 +1,15 @@
 /**
- * Purpose: Main orchestrator for transcript parsing.
+ * Purpose: Main orchestrator for transcript parsing with Zod schema validation.
  * Entrypoint: `parseTranscriptFile()` is used by the evaluator for canonical session reconstruction.
- * Notes: Delegates to specialized handlers for different event types.
+ * Notes: Delegates to specialized handlers for different event types and validates with Zod schemas.
  */
 
 import { basename } from "node:path";
-import { TranscriptParseError } from "../errors.js";
+import { normalizeError, TranscriptParseError } from "../errors.js";
 import { createSourceRef, routeEvent } from "./event-router.js";
 import { createTranscriptLineReader } from "./file-reader.js";
+import { validateEventRecord } from "./schema.js";
 import { buildParsedSession, createTurn } from "./session-builder.js";
-import { asRecord, asString, getValue } from "./type-guards.js";
 import type {
   JsonlEventRecord,
   ParsedSession,
@@ -42,7 +42,7 @@ export function createParserContext(path: string): ParserContext {
 }
 
 /**
- * Parses a single JSONL line into an event record.
+ * Parses a single JSONL line into an event record with Zod schema validation.
  * Returns an empty object if parsing fails (in non-strict mode).
  *
  * @param line - The JSONL line to parse
@@ -62,31 +62,38 @@ export function parseEventLine(
   try {
     parsedUnknown = JSON.parse(line);
   } catch (error) {
+    const normalizedError = normalizeError(error);
     if (options.strict) {
-      throw new TranscriptParseError(path, lineNumber, error as Error);
+      throw new TranscriptParseError(path, lineNumber, normalizedError);
     }
-    options.onParseError?.(line, lineNumber, error as Error);
+    options.onParseError?.(line, lineNumber, normalizedError);
     return {};
   }
 
-  const eventRecord = asRecord(parsedUnknown);
-  if (!eventRecord) {
+  // Validate with Zod schema
+  const validated = validateEventRecord(parsedUnknown);
+  if (!validated) {
+    const validationError = new Error(
+      "JSONL record does not match expected schema",
+    );
+    if (options.strict) {
+      throw new TranscriptParseError(path, lineNumber, validationError);
+    }
+    options.onParseError?.(line, lineNumber, validationError);
     return {};
   }
 
+  // Convert validated record to JsonlEventRecord format
   const event: JsonlEventRecord = {};
-  const timestamp = asString(getValue(eventRecord, "timestamp"));
-  const eventType = asString(getValue(eventRecord, "type"));
-  const eventPayload = asRecord(getValue(eventRecord, "payload"));
 
-  if (timestamp) {
-    event.timestamp = timestamp;
+  if (validated.timestamp !== undefined) {
+    event.timestamp = validated.timestamp;
   }
-  if (eventType) {
-    event.type = eventType;
+  if (validated.type !== undefined) {
+    event.type = validated.type;
   }
-  if (eventPayload) {
-    event.payload = eventPayload;
+  if (validated.payload !== undefined) {
+    event.payload = validated.payload;
   }
 
   return event;
@@ -94,7 +101,7 @@ export function parseEventLine(
 
 /**
  * Parses a transcript JSONL file into a normalized ParsedSession.
- * Orchestrates the parsing process by delegating to specialized handlers.
+ * Orchestrates the parsing process with Zod schema validation.
  *
  * @param path - Path to the transcript JSONL file
  * @param options - Optional parsing options

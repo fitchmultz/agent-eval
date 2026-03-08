@@ -8,11 +8,42 @@ import type {
   LabelName,
   MetricsRecord,
 } from "./schema.js";
+import { labelTaxonomy } from "./schema.js";
 import type { ProcessedSession } from "./session-processor.js";
 import { aggregateComplianceSummary } from "./utils/compliance-aggregation.js";
-import { getHomeDirectory } from "./utils/environment.js";
+import { getValidatedHomeDirectory } from "./utils/environment.js";
 import { redactPath } from "./utils/path-redaction.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
+
+/**
+ * Validates that a label is in the taxonomy.
+ * @param label - The label to validate
+ * @returns True if the label is valid
+ */
+function isValidLabel(label: string): label is LabelName {
+  return (labelTaxonomy as readonly string[]).includes(label);
+}
+
+/**
+ * Safely increments a label count in the record.
+ * Validates the label before incrementing to prevent invalid keys.
+ *
+ * @param counts - The label count record to update
+ * @param label - The label to increment
+ */
+function incrementLabelCount(counts: LabelCountRecord, label: string): void {
+  if (!isValidLabel(label)) {
+    // Skip invalid labels - this could log a warning in debug mode
+    if (process.env["DEBUG"]) {
+      process.stderr.write(
+        `[metrics-aggregation] Skipping invalid label: ${label}\n`,
+      );
+    }
+    return;
+  }
+
+  counts[label] = (counts[label] ?? 0) + 1;
+}
 
 function aggregateLabelCounts(
   sessions: readonly ProcessedSession[],
@@ -22,7 +53,7 @@ function aggregateLabelCounts(
   for (const session of sessions) {
     for (const turn of session.turns) {
       for (const label of turn.labels) {
-        counts[label.label] = (counts[label.label] ?? 0) + 1;
+        incrementLabelCount(counts, label.label);
       }
     }
   }
@@ -31,7 +62,7 @@ function aggregateLabelCounts(
 }
 
 function redactInventory(inventory: InventoryRecord[]): InventoryRecord[] {
-  const homeDirectory = getHomeDirectory();
+  const homeDirectory = getValidatedHomeDirectory();
   return inventory.map((record) => ({
     ...record,
     path: redactPath(record.path, homeDirectory),
@@ -68,11 +99,23 @@ export function aggregateMetrics(
 
 /**
  * Counts occurrences of a specific label in sessions.
+ * Validates that the label is in the taxonomy before counting.
+ *
+ * @param sessions - Array of processed sessions
+ * @param labelName - The label name to count
+ * @returns The count of occurrences
+ * @throws Error if the label is not in the taxonomy
  */
 export function countLabel(
   sessions: readonly ProcessedSession[],
   labelName: LabelName,
 ): number {
+  if (!isValidLabel(labelName)) {
+    throw new Error(
+      `Invalid label: ${labelName}. Expected one of: ${labelTaxonomy.join(", ")}`,
+    );
+  }
+
   return sessions.reduce(
     (sum, session) =>
       sum +

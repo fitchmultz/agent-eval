@@ -100,6 +100,8 @@ export function isVerificationTool(toolCall: ParsedToolCall): boolean {
  * Extracts command text from a tool call's arguments.
  * Attempts to parse JSON arguments and extract command/cmd fields.
  * Falls back to returning the raw payload text if parsing fails.
+ * Logs JSON parsing errors for debugging purposes.
+ *
  * @param toolCall - The parsed tool call
  * @returns The extracted command text or undefined if not found
  */
@@ -136,7 +138,16 @@ export function extractCommandText(
     if (Array.isArray(command)) {
       return command.filter((item) => typeof item === "string").join(" ");
     }
-  } catch {
+  } catch (error) {
+    // Log JSON parsing errors for debugging, but don't fail silently
+    // This helps identify malformed tool call arguments during development
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    // Only log in development/debug mode to avoid noise in production
+    if (process.env["DEBUG"]) {
+      process.stderr.write(
+        `[tool-classification] JSON parse error: ${errorMessage}\n`,
+      );
+    }
     return payloadText;
   }
 

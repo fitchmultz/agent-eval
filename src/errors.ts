@@ -5,6 +5,41 @@
  */
 
 /**
+ * Minimal interface for errors with a code property.
+ * Used for safe type narrowing of system errors like ENOENT, EACCES.
+ */
+interface ErrorWithCode {
+  code: string;
+  path?: string;
+}
+
+/**
+ * Type guard to check if an unknown value is an error with a code property.
+ * @param error - The unknown value to check
+ * @returns True if the value is an object with a string code property
+ */
+function hasErrorCode(error: unknown): error is ErrorWithCode {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as Record<string, unknown>)["code"] === "string"
+  );
+}
+
+/**
+ * Safely normalizes an unknown error value to an Error instance.
+ * @param error - The unknown error value
+ * @returns An Error instance (either the original or a wrapped error)
+ */
+export function normalizeError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
+  }
+  return new Error(String(error));
+}
+
+/**
  * Base error class for all evaluator errors.
  * Provides error code and exit code for CLI handling.
  */
@@ -93,27 +128,16 @@ export class TranscriptFormatError extends EvaluatorError {
  * Type guard to check if an error is an ENOENT error.
  * Used to distinguish "file not found" from other filesystem errors.
  */
-export function isEnoentError(error: unknown): error is NodeJS.ErrnoException {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as NodeJS.ErrnoException).code === "ENOENT"
-  );
+export function isEnoentError(error: unknown): error is ErrorWithCode {
+  return hasErrorCode(error) && error.code === "ENOENT";
 }
 
 /**
  * Type guard to check if an error is an EACCES/EPERM (permission) error.
  */
-export function isPermissionError(
-  error: unknown,
-): error is NodeJS.ErrnoException {
+export function isPermissionError(error: unknown): error is ErrorWithCode {
   return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    ((error as NodeJS.ErrnoException).code === "EACCES" ||
-      (error as NodeJS.ErrnoException).code === "EPERM")
+    hasErrorCode(error) && (error.code === "EACCES" || error.code === "EPERM")
   );
 }
 
