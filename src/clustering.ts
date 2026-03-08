@@ -5,40 +5,12 @@
  */
 
 import type { EvaluatedTurn } from "./evaluator.js";
+import { chooseMaxConfidence, chooseMaxSeverity } from "./ranking.js";
 import { isLowSignalPreview } from "./sanitization.js";
-import type {
-  Confidence,
-  IncidentRecord,
-  LabelRecord,
-  Severity,
-} from "./schema.js";
-import { confidenceValues, severityValues } from "./schema.js";
+import type { IncidentRecord, LabelRecord } from "./schema.js";
 
 export interface ClusterOptions {
   maxTurnGap: number;
-}
-
-const severityRank = new Map<Severity, number>(
-  severityValues.map((value, index) => [value, index]),
-);
-const confidenceRank = new Map<Confidence, number>(
-  confidenceValues.map((value, index) => [value, index]),
-);
-
-function chooseMaxSeverity(values: readonly Severity[]): Severity {
-  return values.reduce((current, candidate) =>
-    (severityRank.get(candidate) ?? 0) > (severityRank.get(current) ?? 0)
-      ? candidate
-      : current,
-  );
-}
-
-function chooseMaxConfidence(values: readonly Confidence[]): Confidence {
-  return values.reduce((current, candidate) =>
-    (confidenceRank.get(candidate) ?? 0) > (confidenceRank.get(current) ?? 0)
-      ? candidate
-      : current,
-  );
 }
 
 function mergeLabels(labels: readonly LabelRecord[]): LabelRecord[] {

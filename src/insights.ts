@@ -1,7 +1,7 @@
 /**
  * Purpose: Composes deterministic core summary data with optional presentation-oriented decorations.
  * Entrypoint: `buildSummaryArtifact()` is the public summary facade consumed by the evaluator and renderers.
- * Notes: Core math lives in summary-core.ts; UI-friendly extras live in summary-decorations.ts.
+ * Notes: Core math lives in summary-core.ts and focused modules; UI-friendly extras live in summary-decorations.ts.
  */
 import type { MetricsRecord, SummaryArtifact } from "./schema.js";
 import {
@@ -12,15 +12,38 @@ import {
   countWriteTurns,
   createEmptySessionLabelMap,
   createEmptySeverityCounts,
-  insertTopIncident,
-  type ScoreSnapshot,
-  type SessionInsightRow,
-  type SummaryCoreData,
-  type SummaryInputs,
   safeRate,
 } from "./summary-core.js";
 import { buildSummaryDecorations } from "./summary-decorations.js";
+import type { SummaryInputs } from "./types.js";
 
+export {
+  buildComparativeSlices,
+  buildScoreSnapshot,
+} from "./comparative-slices.js";
+export {
+  calculateFrictionScore,
+  dominantLabelsForSession,
+  getLabelWeight,
+} from "./friction-scoring.js";
+export { insertTopIncident } from "./incident-selection.js";
+// Re-export from focused modules
+export {
+  archetypeLabel,
+  createArchetypeNote,
+  determineArchetype,
+} from "./session-archetype.js";
+export { buildTopSessions, buildVictoryLaps } from "./session-ranking.js";
+
+// Re-export types from types.ts
+export type {
+  ScoreSnapshot,
+  SessionInsightRow,
+  SummaryCoreData,
+  SummaryInputs,
+} from "./types.js";
+
+// Re-export utilities from summary-core
 export {
   buildSummaryInputsFromArtifacts,
   collectSessionLabelCounts,
@@ -28,12 +51,7 @@ export {
   countWriteTurns,
   createEmptySessionLabelMap,
   createEmptySeverityCounts,
-  insertTopIncident,
   safeRate,
-  type ScoreSnapshot,
-  type SessionInsightRow,
-  type SummaryCoreData,
-  type SummaryInputs,
 };
 
 export function buildSummaryArtifact(

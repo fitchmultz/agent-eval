@@ -3,14 +3,16 @@
  * Entrypoint: `buildSummaryDecorations()` is composed into the final summary artifact by the insights facade.
  * Notes: This module keeps badges, brag cards, score cards, and opportunities out of the core summary math.
  */
+
+import { buildScoreSnapshot } from "./comparative-slices.js";
 import type { MetricsRecord, SummaryArtifact } from "./schema.js";
-import type { SessionInsightRow } from "./summary-core.js";
 import {
-  buildScoreSnapshot,
-  countLabel,
-  safeRate,
-  toneForScore,
-} from "./summary-core.js";
+  filterQuietSessions,
+  filterVerifiedWriteSessions,
+  filterWriteSessions,
+} from "./session-filters.js";
+import { countLabel, safeRate, toneForScore } from "./summary-core.js";
+import type { SessionInsightRow } from "./types.js";
 
 export interface SummaryDecorations {
   scoreCards: SummaryArtifact["scoreCards"];
@@ -50,15 +52,8 @@ function buildScoreCards(
 }
 
 function buildBragCards(metrics: MetricsRecord): SummaryArtifact["bragCards"] {
-  const sessionsWithWrites = metrics.sessions.filter(
-    (session) => session.writeCount > 0,
-  );
-  const verifiedWriteSessions = sessionsWithWrites.filter(
-    (session) => session.verificationPassedCount > 0,
-  );
-  const quietSessions = metrics.sessions.filter(
-    (session) => session.incidentCount === 0,
-  );
+  const verifiedWriteSessions = filterVerifiedWriteSessions(metrics.sessions);
+  const quietSessions = filterQuietSessions(metrics.sessions);
 
   return [
     {
@@ -91,12 +86,8 @@ function buildAchievementBadges(
   topSessions: readonly SessionInsightRow[],
 ): SummaryArtifact["achievementBadges"] {
   const badges: string[] = [];
-  const sessionsWithWrites = metrics.sessions.filter(
-    (session) => session.writeCount > 0,
-  );
-  const verifiedWriteSessions = sessionsWithWrites.filter(
-    (session) => session.verificationPassedCount > 0,
-  );
+  const sessionsWithWrites = filterWriteSessions(metrics.sessions);
+  const verifiedWriteSessions = filterVerifiedWriteSessions(metrics.sessions);
   const verificationRate = safeRate(
     verifiedWriteSessions.length,
     sessionsWithWrites.length,

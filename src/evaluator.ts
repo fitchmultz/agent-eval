@@ -35,7 +35,9 @@ import type {
   ToolCallSummary,
 } from "./schema.js";
 import { complianceRuleValues, labelTaxonomy } from "./schema.js";
+import { categorizeToolCall } from "./tool-classification.js";
 import { parseTranscriptFile } from "./transcript.js";
+import { mapWithConcurrency } from "./utils/concurrency.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
 
 export interface EvaluatedTurn extends RawTurnRecord {}
@@ -98,21 +100,14 @@ function summarizeToolCall(
   const commandText = argumentsText?.includes('"cmd"')
     ? argumentsText
     : undefined;
-  const writeLike = [
-    "apply_patch",
-    "mcp__RepoPrompt__apply_edits",
-    "mcp__RepoPrompt__file_actions",
-  ].includes(toolName);
-  const verificationLike =
-    typeof commandText === "string" &&
-    /\b(test|vitest|lint|typecheck|build|make ci)\b/i.test(commandText);
+  const categorization = categorizeToolCall(toolName, commandText);
 
   return {
     toolName,
-    category: writeLike ? "write" : verificationLike ? "verification" : "other",
+    category: categorization.category,
     commandText,
-    writeLike,
-    verificationLike,
+    writeLike: categorization.writeLike,
+    verificationLike: categorization.verificationLike,
     status: "unknown",
   };
 }
@@ -163,36 +158,6 @@ function incrementComplianceSummary(
 
     return { ...entry, unknownCount: entry.unknownCount + 1 };
   });
-}
-
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  worker: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-
-  async function runWorker(): Promise<void> {
-    while (true) {
-      const currentIndex = nextIndex;
-      nextIndex += 1;
-      const item = items[currentIndex];
-      if (item === undefined) {
-        return;
-      }
-
-      results[currentIndex] = await worker(item, currentIndex);
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, () =>
-      runWorker(),
-    ),
-  );
-
-  return results;
 }
 
 async function summarizeSession(

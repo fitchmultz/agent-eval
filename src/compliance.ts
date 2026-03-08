@@ -4,11 +4,12 @@
  * Notes: Rules are heuristic and optimized for precision over recall in evaluator v1.
  */
 import type { ComplianceRuleResult, ComplianceStatus } from "./schema.js";
-import type {
-  ParsedSession,
-  ParsedToolCall,
-  ParsedTurn,
-} from "./transcript.js";
+import {
+  extractCommandText,
+  isVerificationTool,
+  isWriteTool,
+} from "./tool-classification.js";
+import type { ParsedSession, ParsedTurn } from "./transcript.js";
 
 export interface ComplianceScorecard {
   score: number;
@@ -17,67 +18,6 @@ export interface ComplianceScorecard {
   verificationPassedCount: number;
   verificationFailedCount: number;
   writeCount: number;
-}
-
-function isWriteTool(toolCall: ParsedToolCall): boolean {
-  return [
-    "apply_patch",
-    "mcp__RepoPrompt__apply_edits",
-    "mcp__RepoPrompt__file_actions",
-  ].includes(toolCall.toolName);
-}
-
-function extractCommandText(toolCall: ParsedToolCall): string | undefined {
-  const payloadText = toolCall.argumentsText;
-  if (!payloadText) {
-    return undefined;
-  }
-
-  try {
-    const parsedUnknown: unknown = JSON.parse(payloadText);
-    if (
-      typeof parsedUnknown !== "object" ||
-      parsedUnknown === null ||
-      Array.isArray(parsedUnknown)
-    ) {
-      return payloadText;
-    }
-
-    if (!isStringRecord(parsedUnknown)) {
-      return payloadText;
-    }
-
-    const parsed = parsedUnknown;
-    const commandKey = "command";
-    const cmdKey = "cmd";
-    const cmd = parsed[cmdKey];
-    const command = parsed[commandKey];
-    if (typeof cmd === "string") {
-      return cmd;
-    }
-    if (Array.isArray(command)) {
-      return command.filter((item) => typeof item === "string").join(" ");
-    }
-  } catch {
-    return payloadText;
-  }
-
-  return undefined;
-}
-
-function isStringRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isVerificationTool(toolCall: ParsedToolCall): boolean {
-  const commandText = extractCommandText(toolCall);
-  if (!commandText) {
-    return false;
-  }
-
-  return /\b(test|vitest|jest|cargo test|pytest|ruff|lint|typecheck|tsc|build|make ci)\b/i.test(
-    commandText,
-  );
 }
 
 function hasPreWriteContext(
