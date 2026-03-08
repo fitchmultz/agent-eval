@@ -1,0 +1,123 @@
+/**
+ * Purpose: Generates SVG bar charts for summary visualization.
+ * Entrypoint: `renderBarChart()` is used by the presentation layer.
+ * Notes: Charts are rendered as static SVG strings for portability.
+ */
+import type { Severity, SummaryArtifact } from "./schema.js";
+
+interface BarDatum {
+  label: string;
+  value: number;
+  tone: string;
+}
+
+const severityTones: Record<Severity, string> = {
+  info: "#5B8DEF",
+  low: "#2E9E6F",
+  medium: "#F4A259",
+  high: "#D64545",
+};
+
+const labelChartPalette = ["#0F766E", "#1D8A7A", "#329F8A", "#49B39A"] as const;
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+/**
+ * Renders a horizontal bar chart as an SVG string.
+ *
+ * @param title - The chart title displayed at the top
+ * @param data - Array of bar data with labels, values, and colors
+ * @returns SVG string
+ */
+export function renderBarChart(
+  title: string,
+  data: readonly BarDatum[],
+): string {
+  const width = 920;
+  const rowHeight = 34;
+  const topPadding = 56;
+  const leftPadding = 220;
+  const rightPadding = 72;
+  const chartWidth = width - leftPadding - rightPadding;
+  const height = topPadding + data.length * rowHeight + 24;
+  const maxValue = Math.max(1, ...data.map((entry) => entry.value));
+
+  const rows = data
+    .map((entry, index) => {
+      const y = topPadding + index * rowHeight;
+      const barWidth = Math.round((entry.value / maxValue) * chartWidth);
+      return [
+        `<text x="12" y="${y + 20}" font-size="14" fill="#17324D">${escapeHtml(entry.label)}</text>`,
+        `<rect x="${leftPadding}" y="${y + 6}" width="${barWidth}" height="18" rx="6" fill="${entry.tone}" />`,
+        `<text x="${leftPadding + barWidth + 10}" y="${y + 20}" font-size="13" fill="#17324D">${entry.value}</text>`,
+      ].join("");
+    })
+    .join("");
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">`,
+    `<rect width="${width}" height="${height}" fill="#FFFDF8" />`,
+    `<text x="12" y="30" font-size="22" font-weight="700" fill="#10263B">${escapeHtml(title)}</text>`,
+    `<line x1="${leftPadding}" y1="44" x2="${leftPadding}" y2="${height - 12}" stroke="#D8E0E8" stroke-width="1" />`,
+    rows,
+    "</svg>",
+  ].join("");
+}
+
+/**
+ * Renders a bar chart of label counts.
+ *
+ * @param summary - The summary artifact containing label data
+ * @returns SVG string
+ */
+export function renderLabelChart(summary: SummaryArtifact): string {
+  return renderBarChart(
+    "Label Counts",
+    summary.labels.map((entry, index) => ({
+      label: entry.label,
+      value: entry.count,
+      tone: labelChartPalette[index % labelChartPalette.length] ?? "#0F766E",
+    })),
+  );
+}
+
+/**
+ * Renders a bar chart of compliance pass counts.
+ *
+ * @param summary - The summary artifact containing compliance data
+ * @returns SVG string
+ */
+export function renderComplianceChart(summary: SummaryArtifact): string {
+  return renderBarChart(
+    "Compliance Pass Counts",
+    summary.compliance.map((entry) => ({
+      label: entry.rule,
+      value: entry.passCount,
+      tone: "#335C81",
+    })),
+  );
+}
+
+/**
+ * Renders a bar chart of incident severity distribution.
+ *
+ * @param summary - The summary artifact containing severity data
+ * @returns SVG string
+ */
+export function renderSeverityChart(summary: SummaryArtifact): string {
+  return renderBarChart(
+    "Incident Severity",
+    summary.severities.map((entry) => ({
+      label: entry.severity,
+      value: entry.count,
+      tone: severityTones[entry.severity],
+    })),
+  );
+}
