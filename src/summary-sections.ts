@@ -3,6 +3,11 @@
  * Entrypoint: `buildSummarySections()` is consumed by both report.ts and presentation.ts to reduce structural drift.
  * Notes: Derived headline and momentum sections are computed here instead of being persisted in summary.json.
  */
+import {
+  INTERRUPTION_LOAD,
+  MOMENTUM_TONE,
+  SCORING,
+} from "./constants/index.js";
 import type { SummaryArtifact } from "./schema.js";
 
 /**
@@ -33,13 +38,13 @@ export interface SummarySectionModel {
 }
 
 function toneForDelta(delta: number): SummarySectionCard["tone"] {
-  if (delta >= 5) {
+  if (delta >= MOMENTUM_TONE.GOOD_THRESHOLD) {
     return "good";
   }
-  if (delta <= -10) {
+  if (delta <= MOMENTUM_TONE.DANGER_THRESHOLD) {
     return "danger";
   }
-  if (delta <= -5) {
+  if (delta <= MOMENTUM_TONE.WARN_THRESHOLD) {
     return "warn";
   }
   return "neutral";
@@ -75,7 +80,10 @@ function buildHeadlineInsights(
       value: `${summary.rates.interruptionsPer100Turns}`,
       detail:
         "Interrupt labels per 100 turns, useful for spotting redirected or churn-heavy sessions.",
-      tone: summary.rates.interruptionsPer100Turns >= 10 ? "warn" : "neutral",
+      tone:
+        summary.rates.interruptionsPer100Turns >= INTERRUPTION_LOAD.WARN_THRESHOLD
+          ? "warn"
+          : "neutral",
     },
     {
       title: "Highest Friction Session",
@@ -84,7 +92,8 @@ function buildHeadlineInsights(
         ? `${highestFriction.frictionScore} friction points, archetype ${highestFriction.archetype}.`
         : "No sessions were available.",
       tone:
-        highestFriction && highestFriction.frictionScore >= 8
+        highestFriction &&
+        highestFriction.frictionScore >= SCORING.HIGH_FRICTION_THRESHOLD
           ? "danger"
           : "neutral",
     },

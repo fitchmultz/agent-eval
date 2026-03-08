@@ -4,6 +4,10 @@
  * Notes: Creates snapshots of different corpus windows (recent 100/500/1000) for comparison.
  */
 
+import {
+  COMPARATIVE_SLICES,
+  FLOW_PENALTY_MULTIPLIERS,
+} from "./constants/index.js";
 import type { LabelName, MetricsRecord, SummaryArtifact } from "./schema.js";
 import { complianceRuleValues, labelTaxonomy } from "./schema.js";
 import {
@@ -38,17 +42,17 @@ export function buildScoreSnapshot(metrics: MetricsRecord): ScoreSnapshot {
   const proofScore = Math.round(writeVerificationRate);
   const flowPenalty =
     safeRate(countLabel(metrics.labelCounts, "interrupt"), metrics.turnCount) *
-      8 +
+      FLOW_PENALTY_MULTIPLIERS.INTERRUPT +
     safeRate(
       countLabel(metrics.labelCounts, "context_reinjection"),
       metrics.turnCount,
     ) *
-      20 +
+      FLOW_PENALTY_MULTIPLIERS.CONTEXT_REINJECTION +
     safeRate(
       countLabel(metrics.labelCounts, "context_drift"),
       metrics.turnCount,
     ) *
-      40;
+      FLOW_PENALTY_MULTIPLIERS.CONTEXT_DRIFT;
   const flowScore = Math.max(0, Math.round(100 - flowPenalty));
   const disciplineScore = Math.round(
     (applicablePassRate(metrics, "scope_confirmed_before_major_write") +
@@ -153,7 +157,7 @@ export function buildComparativeSlices(
   metrics: MetricsRecord,
   sessionLabelCounts: Map<string, Record<LabelName, number>>,
 ): SummaryArtifact["comparativeSlices"] {
-  const candidateSizes = [100, 500, 1000];
+  const candidateSizes = [...COMPARATIVE_SLICES.CANDIDATE_SIZES];
   const slices: SummaryArtifact["comparativeSlices"] = [];
   const selectedSnapshot = buildScoreSnapshot(metrics);
 

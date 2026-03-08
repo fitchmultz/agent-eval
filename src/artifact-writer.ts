@@ -3,6 +3,7 @@
  * Entrypoint: `writeEvaluationArtifacts()` and `writeSummaryArtifacts()`.
  */
 import { join } from "node:path";
+import { PREVIEWS } from "./constants/index.js";
 import { writeJsonLinesFile, writeTextFile } from "./filesystem.js";
 import {
   createEmptySessionLabelMap,
@@ -175,7 +176,7 @@ export function createSummaryInputs(
           turnSpan: incident.turnIndices.length,
           evidencePreview: incident.evidencePreviews[0],
         },
-        8,
+        PREVIEWS.MAX_TOP_INCIDENTS,
       );
     }
   }

@@ -3,6 +3,7 @@
  * Entrypoint: `renderBarChart()` is used by the presentation layer.
  * Notes: Charts are rendered as static SVG strings for portability.
  */
+import { CHARTS } from "./constants/index.js";
 import type { Severity, SummaryArtifact } from "./schema.js";
 
 interface BarDatum {
@@ -40,11 +41,11 @@ export function renderBarChart(
   title: string,
   data: readonly BarDatum[],
 ): string {
-  const width = 920;
-  const rowHeight = 34;
-  const topPadding = 56;
-  const leftPadding = 220;
-  const rightPadding = 72;
+  const width = CHARTS.WIDTH;
+  const rowHeight = CHARTS.ROW_HEIGHT;
+  const topPadding = CHARTS.TOP_PADDING;
+  const leftPadding = CHARTS.LEFT_PADDING;
+  const rightPadding = CHARTS.RIGHT_PADDING;
   const chartWidth = width - leftPadding - rightPadding;
   const height = topPadding + data.length * rowHeight + 24;
   const maxValue = Math.max(1, ...data.map((entry) => entry.value));

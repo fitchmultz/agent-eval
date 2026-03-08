@@ -5,6 +5,7 @@
  *           friction scoring, ranking, and incident selection logic have been extracted to focused modules.
  */
 
+import { SCORE_TONE } from "./constants/index.js";
 import { buildComparativeSlices } from "./comparative-slices.js";
 import { getConfig } from "./config.js";
 import { insertTopIncident } from "./incident-selection.js";
@@ -160,13 +161,13 @@ export function countWriteTurns(rawTurns: readonly RawTurnRecord[]): number {
 export function toneForScore(
   score: number,
 ): import("./schema.js").SummaryArtifact["scoreCards"][number]["tone"] {
-  if (score >= 90) {
+  if (score >= SCORE_TONE.GOOD) {
     return "good";
   }
-  if (score >= 70) {
+  if (score >= SCORE_TONE.NEUTRAL) {
     return "neutral";
   }
-  if (score >= 40) {
+  if (score >= SCORE_TONE.WARN) {
     return "warn";
   }
   return "danger";

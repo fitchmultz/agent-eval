@@ -3,6 +3,13 @@
  * Entrypoint: `getConfig()` returns current configuration.
  */
 
+import {
+  CONCURRENCY,
+  CLUSTERING,
+  PREVIEWS,
+  LABEL_WEIGHTS,
+  SCORING,
+} from "./constants/index.js";
 import type { LabelName } from "./schema.js";
 
 /**
@@ -52,32 +59,23 @@ export interface EvaluatorConfig {
  */
 const DEFAULT_CONFIG: EvaluatorConfig = {
   concurrency: {
-    full: 4,
-    summary: 8,
+    full: CONCURRENCY.FULL_EVALUATION,
+    summary: CONCURRENCY.SUMMARY_EVALUATION,
   },
   clustering: {
-    maxTurnGap: 2,
+    maxTurnGap: CLUSTERING.MAX_TURN_GAP,
   },
   previews: {
-    maxMessageLength: 220,
-    maxMessageItems: 2,
-    maxIncidentEvidence: 3,
-    maxTopIncidents: 8,
-    maxVictoryLaps: 6,
-    maxTopSessions: 8,
+    maxMessageLength: PREVIEWS.MAX_MESSAGE_LENGTH,
+    maxMessageItems: PREVIEWS.MAX_MESSAGE_ITEMS,
+    maxIncidentEvidence: PREVIEWS.MAX_INCIDENT_EVIDENCE,
+    maxTopIncidents: PREVIEWS.MAX_TOP_INCIDENTS,
+    maxVictoryLaps: PREVIEWS.MAX_VICTORY_LAPS,
+    maxTopSessions: PREVIEWS.MAX_TOP_SESSIONS,
   },
   scoring: {
-    labelWeights: {
-      context_drift: 4,
-      test_build_lint_failure_complaint: 5,
-      interrupt: 2,
-      regression_report: 5,
-      praise: -1,
-      context_reinjection: 2,
-      verification_request: 2,
-      stalled_or_guessing: 5,
-    },
-    frictionThreshold: 6,
+    labelWeights: { ...LABEL_WEIGHTS },
+    frictionThreshold: SCORING.FRICTION_THRESHOLD,
   },
 };
 

@@ -4,6 +4,7 @@
  * Notes: Archetypes categorize sessions by their delivery pattern and friction characteristics.
  */
 
+import { SCORING } from "./constants/index.js";
 import type { LabelName, SessionArchetype } from "./schema.js";
 
 /**
@@ -41,7 +42,9 @@ export function determineArchetype(
   frictionScore: number,
 ): SessionArchetype {
   if (writeCount > 0 && verificationPassedCount > 0) {
-    return frictionScore >= 6 ? "high_friction_recovery" : "verified_delivery";
+    return frictionScore >= SCORING.FRICTION_THRESHOLD
+      ? "high_friction_recovery"
+      : "verified_delivery";
   }
   if (writeCount > 0) {
     return "unverified_delivery";

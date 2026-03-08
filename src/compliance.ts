@@ -3,6 +3,7 @@
  * Entrypoint: `scoreCompliance()` is called once per parsed session during evaluation.
  * Notes: Rules are heuristic and optimized for precision over recall in evaluator v1.
  */
+import { COMPLIANCE, CONTEXT_CONFIRMATION } from "./constants/index.js";
 import type { ComplianceRuleResult, ComplianceStatus } from "./schema.js";
 import {
   extractCommandText,
@@ -36,7 +37,9 @@ function hasPreWriteContext(
   const priorTurns = turns.slice(0, firstWriteIndex + 1);
   return priorTurns.some(
     (turn) =>
-      turn.assistantMessages.some((message) => message.trim().length >= 20) ||
+      turn.assistantMessages.some(
+        (message) => message.trim().length >= CONTEXT_CONFIRMATION.MIN_MESSAGE_LENGTH,
+      ) ||
       turn.toolCalls.some((toolCall) => {
         const commandText = extractCommandText(toolCall);
         return (
@@ -142,7 +145,7 @@ export function scoreCompliance(session: ParsedSession): ComplianceScorecard {
       ),
     );
     return {
-      score: 100,
+      score: COMPLIANCE.STARTING_SCORE,
       rules,
       verificationCount: verificationCalls.length,
       verificationPassedCount,
@@ -184,10 +187,10 @@ export function scoreCompliance(session: ParsedSession): ComplianceScorecard {
     ),
   );
 
-  let score = 100;
+  let score = COMPLIANCE.STARTING_SCORE;
   for (const rule of rules) {
     if (rule.status === "fail") {
-      score -= 20;
+      score -= COMPLIANCE.FAILURE_PENALTY;
     }
   }
 

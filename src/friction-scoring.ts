@@ -4,6 +4,7 @@
  * Notes: Higher friction scores indicate more operator burden and session disruption.
  */
 
+import { DOMINANT_LABELS, SCORING } from "./constants/index.js";
 import { getConfig } from "./config.js";
 import type { LabelName } from "./schema.js";
 import { labelTaxonomy } from "./schema.js";
@@ -32,7 +33,8 @@ export function calculateFrictionScore(
     (total, label) => total + labelCounts[label] * labelWeights[label],
     0,
   );
-  const compliancePenalty = Math.max(0, 100 - complianceScore) / 10;
+  const compliancePenalty =
+    Math.max(0, 100 - complianceScore) / SCORING.COMPLIANCE_PENALTY_DIVISOR;
   return Number(Math.max(0, weighted + compliancePenalty).toFixed(1));
 }
 
@@ -50,5 +52,5 @@ export function dominantLabelsForSession(
       (left, right) =>
         labelCounts[right] - labelCounts[left] || left.localeCompare(right),
     )
-    .slice(0, 3);
+    .slice(0, DOMINANT_LABELS.MAX_COUNT);
 }

@@ -4,6 +4,10 @@
  * Notes: This module keeps badges, brag cards, score cards, and opportunities out of the core summary math.
  */
 
+import {
+  BADGES,
+  OPPORTUNITIES,
+} from "./constants/index.js";
 import { buildScoreSnapshot } from "./comparative-slices.js";
 import type { MetricsRecord, SummaryArtifact } from "./schema.js";
 import {
@@ -108,13 +112,13 @@ function buildAchievementBadges(
   );
   const driftSignals = countLabel(metrics.labelCounts, "context_drift");
 
-  if (metrics.sessionCount >= 1000) {
+  if (metrics.sessionCount >= BADGES.MIN_SESSIONS_FOR_BATTLE_TESTED) {
     badges.push("Battle-Tested Corpus");
   }
-  if (verificationRate >= 90) {
+  if (verificationRate >= BADGES.MIN_VERIFICATION_RATE) {
     badges.push("Proof-Backed Builder");
   }
-  if (interruptionRate <= 2) {
+  if (interruptionRate <= BADGES.MAX_INTERRUPTION_RATE) {
     badges.push("Low-Drama Operator");
   }
   if (driftSignals === 0) {
@@ -146,7 +150,7 @@ function buildOpportunities(
   );
   const driftSignals = countLabel(metrics.labelCounts, "context_drift");
 
-  if (verificationDemand >= 15) {
+  if (verificationDemand >= OPPORTUNITIES.MIN_VERIFICATION_DEMAND) {
     opportunities.push({
       title: "Reduce verification prompting burden",
       rationale:
@@ -154,7 +158,7 @@ function buildOpportunities(
     });
   }
 
-  if (reinjectionDemand >= 8) {
+  if (reinjectionDemand >= OPPORTUNITIES.MIN_REINJECTION_DEMAND) {
     opportunities.push({
       title: "Improve context retention",
       rationale:
@@ -180,7 +184,7 @@ function buildOpportunities(
     });
   }
 
-  return opportunities.slice(0, 5);
+  return opportunities.slice(0, OPPORTUNITIES.MAX_SUGGESTIONS);
 }
 
 /**

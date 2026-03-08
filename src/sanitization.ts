@@ -3,6 +3,9 @@
  * Entrypoint: `createMessagePreviews()` is used by the evaluator and report pipeline when generating outputs.
  * Notes: v1 favors compact, public-safe previews and prioritizes human-authored signal over harness boilerplate.
  */
+
+import { SIGNAL_SCORING, SANITIZATION } from "./constants/index.js";
+
 /**
  * Options for creating message previews.
  */
@@ -154,7 +157,7 @@ export function sanitizeMessageText(
     return redacted;
   }
 
-  const sliceLength = Math.max(0, options.maxLength - 3);
+  const sliceLength = Math.max(0, options.maxLength - SANITIZATION.ELLIPSIS_LENGTH);
   return `${redacted.slice(0, sliceLength).trimEnd()}...`;
 }
 
