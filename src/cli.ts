@@ -7,6 +7,7 @@
 
 import { Command } from "commander";
 
+import { getConfig, setConfig } from "./config.js";
 import { discoverArtifacts } from "./discovery.js";
 import {
   evaluateArtifacts,
@@ -21,6 +22,8 @@ interface GlobalOptions {
   outputDir: string;
   sessionLimit?: number;
   summaryOnly?: boolean;
+  concurrency?: number;
+  maxTurnGap?: number;
 }
 
 async function runInspectCommand(options: GlobalOptions): Promise<void> {
@@ -123,6 +126,36 @@ export async function main(argv: string[]): Promise<number> {
   const homeEnvironmentKey = "HOME";
   const homeDirectory = process.env[homeEnvironmentKey];
   const defaultCodexHome = homeDirectory ? `${homeDirectory}/.codex` : ".codex";
+
+  // Apply CLI-provided config overrides before any command runs
+  const applyConfigOverrides = (options: GlobalOptions): void => {
+    const configUpdates: Partial<Parameters<typeof setConfig>[0]> = {};
+
+    if (
+      typeof options.concurrency === "number" &&
+      !Number.isNaN(options.concurrency)
+    ) {
+      configUpdates.concurrency = {
+        ...getConfig().concurrency,
+        full: options.concurrency,
+      };
+    }
+
+    if (
+      typeof options.maxTurnGap === "number" &&
+      !Number.isNaN(options.maxTurnGap)
+    ) {
+      configUpdates.clustering = {
+        ...getConfig().clustering,
+        maxTurnGap: options.maxTurnGap,
+      };
+    }
+
+    if (Object.keys(configUpdates).length > 0) {
+      setConfig(configUpdates);
+    }
+  };
+
   const program = new Command();
 
   program
@@ -148,6 +181,16 @@ export async function main(argv: string[]): Promise<number> {
       "Skip raw-turn and incident JSONL emission and compute only summary/report artifacts",
       false,
     )
+    .option(
+      "--concurrency <n>",
+      "Number of concurrent sessions to process (full evaluation)",
+      (value) => Number.parseInt(value, 10),
+    )
+    .option(
+      "--max-turn-gap <n>",
+      "Maximum turn gap for incident clustering",
+      (value) => Number.parseInt(value, 10),
+    )
     .addHelpText(
       "after",
       [
@@ -171,14 +214,18 @@ export async function main(argv: string[]): Promise<number> {
     .command("inspect")
     .description("Discover canonical and optional local Codex artifact stores.")
     .action(async () => {
-      await runInspectCommand(program.opts<GlobalOptions>());
+      const options = program.opts<GlobalOptions>();
+      applyConfigOverrides(options);
+      await runInspectCommand(options);
     });
 
   program
     .command("parse")
     .description("Parse transcript files and emit raw turn artifacts.")
     .action(async () => {
-      await runParseCommand(program.opts<GlobalOptions>());
+      const options = program.opts<GlobalOptions>();
+      applyConfigOverrides(options);
+      await runParseCommand(options);
     });
 
   program
@@ -187,7 +234,9 @@ export async function main(argv: string[]): Promise<number> {
       "Run parsing, labeling, clustering, scoring, and artifact emission.",
     )
     .action(async () => {
-      await runEvalCommand(program.opts<GlobalOptions>());
+      const options = program.opts<GlobalOptions>();
+      applyConfigOverrides(options);
+      await runEvalCommand(options);
     });
 
   program
@@ -196,7 +245,9 @@ export async function main(argv: string[]): Promise<number> {
       "Generate the markdown evaluator report and write all artifacts.",
     )
     .action(async () => {
-      await runReportCommand(program.opts<GlobalOptions>());
+      const options = program.opts<GlobalOptions>();
+      applyConfigOverrides(options);
+      await runReportCommand(options);
     });
 
   try {

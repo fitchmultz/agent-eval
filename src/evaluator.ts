@@ -10,6 +10,7 @@ import {
   writeSummaryArtifacts,
 } from "./artifact-writer.js";
 import { clusterIncidents } from "./clustering.js";
+import { getConfig } from "./config.js";
 import { discoverArtifacts } from "./discovery.js";
 import { buildSummaryArtifact } from "./insights.js";
 import { aggregateMetrics, countWriteTurns } from "./metrics-aggregation.js";
@@ -28,9 +29,6 @@ export interface EvaluateOptions {
   outputDir: string;
   sessionLimit?: number;
 }
-
-const FULL_CONCURRENCY = 4;
-const SUMMARY_CONCURRENCY = 8;
 
 function getHomeDirectory(): string | undefined {
   // biome-ignore lint/complexity/useLiteralKeys: Required for TypeScript index signature access
@@ -77,9 +75,10 @@ export async function evaluateArtifacts(
   );
   const homeDirectory = getHomeDirectory();
 
+  const { full } = getConfig().concurrency;
   const processed = await mapWithConcurrency(
     sessionPaths,
-    FULL_CONCURRENCY,
+    full,
     async (sessionPath) => {
       const session = await parseTranscriptFile(sessionPath);
       return processSession(session, homeDirectory);
@@ -89,9 +88,10 @@ export async function evaluateArtifacts(
   const metrics = aggregateMetrics(processed, discovered.inventory);
   const allTurns = processed.flatMap((s) => s.turns);
   const evaluatedTurns = allTurns.filter((turn) => turn.labels.length > 0);
+  const { maxTurnGap } = getConfig().clustering;
   const incidents = clusterIncidents(
     evaluatedTurns,
-    { maxTurnGap: 2 },
+    { maxTurnGap },
     EVALUATOR_VERSION,
     SCHEMA_VERSION,
   );
@@ -110,6 +110,7 @@ export async function evaluateArtifacts(
 export async function evaluateArtifactsSummaryOnly(
   options: EvaluateOptions,
 ): Promise<SummaryOnlyEvaluationResult> {
+  const { summary: summaryConcurrency } = getConfig().concurrency;
   const discovered = await discoverArtifacts(options.codexHome);
   const sessionPaths = selectSessionPaths(
     discovered.sessionFiles,
@@ -119,7 +120,7 @@ export async function evaluateArtifactsSummaryOnly(
 
   const processed = await mapWithConcurrency(
     sessionPaths,
-    SUMMARY_CONCURRENCY,
+    summaryConcurrency,
     async (sessionPath) => {
       const session = await parseTranscriptFile(sessionPath);
       return processSession(session, homeDirectory);

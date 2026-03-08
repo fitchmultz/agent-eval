@@ -4,6 +4,7 @@
  */
 import { clusterIncidents } from "./clustering.js";
 import { scoreCompliance } from "./compliance.js";
+import { getConfig } from "./config.js";
 import { labelTurn } from "./labels.js";
 import { createMessagePreviews } from "./sanitization.js";
 import type {
@@ -101,13 +102,13 @@ function buildSessionTurns(
       assistantMessageCount: turn.assistantMessages.length,
       userMessagePreviews: createMessagePreviews(turn.userMessages, {
         homeDirectory,
-        maxItems: 2,
-        maxLength: 220,
+        maxItems: getConfig().previews.maxMessageItems,
+        maxLength: getConfig().previews.maxMessageLength,
       }),
       assistantMessagePreviews: createMessagePreviews(turn.assistantMessages, {
         homeDirectory,
-        maxItems: 2,
-        maxLength: 220,
+        maxItems: getConfig().previews.maxMessageItems,
+        maxLength: getConfig().previews.maxMessageLength,
       }),
       toolCalls,
       labels,
@@ -180,7 +181,7 @@ export async function processSession(
   // Cluster incidents from labeled turns
   const incidents = clusterIncidents(
     labeledTurns,
-    { maxTurnGap: 2 },
+    { maxTurnGap: getConfig().clustering.maxTurnGap },
     EVALUATOR_VERSION,
     SCHEMA_VERSION,
   );

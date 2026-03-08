@@ -6,6 +6,7 @@
  */
 
 import { buildComparativeSlices } from "./comparative-slices.js";
+import { getConfig } from "./config.js";
 import { insertTopIncident } from "./incident-selection.js";
 import type {
   IncidentRecord,
@@ -129,7 +130,7 @@ export function buildSummaryInputsFromArtifacts(
         turnSpan: incident.turnIndices.length,
         evidencePreview: incident.evidencePreviews[0],
       },
-      8,
+      getConfig().previews.maxTopIncidents,
     );
   }
 
@@ -212,7 +213,7 @@ export function buildSummaryCore(
       ),
     },
     comparativeSlices,
-    topSessions: topSessions.slice(0, 8),
+    topSessions: topSessions.slice(0, getConfig().previews.maxTopSessions),
     victoryLaps,
     topIncidents: inputs.topIncidents,
   };

@@ -71,9 +71,16 @@ describe("processSession", () => {
       ...mockSession,
       turns: [
         {
-          ...mockSession.turns[0],
+          turnId: "turn-1",
           turnIndex: 0,
+          startedAt: "2024-01-01T00:00:00Z",
+          cwd: "/test/workspace",
           userMessages: ["You broke the build! The tests are still failing."],
+          assistantMessages: [],
+          toolCalls: [],
+          sourceRefs: [
+            { kind: "session_jsonl", path: "/test/path.jsonl", line: 1 },
+          ],
         },
       ],
     };
@@ -102,14 +109,28 @@ describe("processSession", () => {
       ...mockSession,
       turns: [
         {
-          ...mockSession.turns[0],
+          turnId: "turn-1",
           turnIndex: 0,
+          startedAt: "2024-01-01T00:00:00Z",
+          cwd: "/test/workspace",
           userMessages: ["Stop! Wait, I need to check something."],
+          assistantMessages: [],
+          toolCalls: [],
+          sourceRefs: [
+            { kind: "session_jsonl", path: "/test/path.jsonl", line: 1 },
+          ],
         },
         {
-          ...mockSession.turns[1],
+          turnId: "turn-2",
           turnIndex: 1,
+          startedAt: "2024-01-01T00:01:00Z",
+          cwd: "/test/workspace",
           userMessages: ["Actually, nevermind."],
+          assistantMessages: [],
+          toolCalls: [],
+          sourceRefs: [
+            { kind: "session_jsonl", path: "/test/path.jsonl", line: 2 },
+          ],
         },
       ],
     };

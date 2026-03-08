@@ -7,7 +7,10 @@ import {
   extractAllTurns,
 } from "../src/metrics-aggregation.js";
 import type { InventoryRecord, LabelName } from "../src/schema.js";
-import type { ProcessedSession, SessionMetrics } from "../src/session-processor.js";
+import type {
+  ProcessedSession,
+  SessionMetrics,
+} from "../src/session-processor.js";
 
 describe("aggregateMetrics", () => {
   const createMockSession = (

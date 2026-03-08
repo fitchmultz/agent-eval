@@ -10,7 +10,7 @@ format:
 lint:
 	pnpm lint
 
-type-check:
+typecheck:
 	pnpm typecheck
 
 test:
@@ -19,7 +19,7 @@ test:
 build:
 	pnpm build
 
-ci: install format lint type-check build test
+ci: install format lint typecheck build test
 
 clean:
 	rm -rf dist node_modules

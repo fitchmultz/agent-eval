@@ -13,10 +13,10 @@ export interface ParsedToolCall {
   callId: string;
   toolName: string;
   categoryHint: string;
-  argumentsText?: string;
-  outputText?: string;
+  argumentsText?: string | undefined;
+  outputText?: string | undefined;
   status: "completed" | "errored" | "unknown";
-  timestamp?: string;
+  timestamp?: string | undefined;
 }
 
 export interface ParsedTurn {
@@ -43,6 +43,22 @@ interface JsonlEventRecord {
   payload?: Record<string, unknown>;
   timestamp?: string;
   type?: string;
+}
+
+/**
+ * Context object that holds the mutable state during transcript parsing.
+ * Passed to all event handlers to avoid global state and enable testability.
+ */
+export interface ParserContext {
+  sessionId: string;
+  parentSessionId?: string;
+  sessionStartedAt?: string;
+  sessionCwd?: string;
+  turns: ParsedTurn[];
+  currentTurn: ParsedTurn;
+  nextTurnIndex: number;
+  pendingToolCalls: Map<string, ParsedToolCall>;
+  lineNumber: number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -90,8 +106,7 @@ function normalizeToolOutput(
 
   if (
     outputText.includes("Process exited with code 0") ||
-    outputText.includes("Command succeeded") ||
-    outputText.includes("Process exited with code 0")
+    outputText.includes("Command succeeded")
   ) {
     return "completed";
   }
@@ -121,7 +136,7 @@ function inferSessionIdFromFilename(path: string): string {
   return parts.slice(-5).join("-");
 }
 
-function createTurn(turnIndex: number): ParsedTurn {
+export function createTurn(turnIndex: number): ParsedTurn {
   return {
     turnIndex,
     userMessages: [],
@@ -131,246 +146,365 @@ function createTurn(turnIndex: number): ParsedTurn {
   };
 }
 
+export function createParserContext(path: string): ParserContext {
+  return {
+    sessionId: inferSessionIdFromFilename(path),
+    turns: [],
+    currentTurn: createTurn(0),
+    nextTurnIndex: 0,
+    pendingToolCalls: new Map(),
+    lineNumber: 0,
+  };
+}
+
+export function hasTurnContent(turn: ParsedTurn): boolean {
+  return (
+    turn.userMessages.length > 0 ||
+    turn.assistantMessages.length > 0 ||
+    turn.toolCalls.length > 0
+  );
+}
+
+function flushCurrentTurn(context: ParserContext): void {
+  if (!hasTurnContent(context.currentTurn)) {
+    return;
+  }
+  context.turns.push(context.currentTurn);
+  context.nextTurnIndex += 1;
+  context.currentTurn = createTurn(context.nextTurnIndex);
+}
+
+/**
+ * Handles session_meta events by extracting session metadata including
+ * session ID, timestamp, working directory, and parent session info.
+ */
+export function handleSessionMetaEvent(
+  payload: Record<string, unknown>,
+  event: JsonlEventRecord,
+  context: ParserContext,
+): void {
+  context.sessionId = asString(getValue(payload, "id")) ?? context.sessionId;
+
+  const startedAt = asString(getValue(payload, "timestamp")) ?? event.timestamp;
+  if (startedAt) {
+    context.sessionStartedAt = startedAt;
+  }
+
+  const cwd = asString(getValue(payload, "cwd"));
+  if (cwd) {
+    context.sessionCwd = cwd;
+  }
+
+  const source = asRecord(getValue(payload, "source"));
+  const subagent = source ? asRecord(getValue(source, "subagent")) : undefined;
+  const threadSpawn = subagent
+    ? asRecord(getValue(subagent, "thread_spawn"))
+    : undefined;
+  const parentId = threadSpawn
+    ? asString(getValue(threadSpawn, "parent_thread_id"))
+    : undefined;
+  if (parentId) {
+    context.parentSessionId = parentId;
+  }
+}
+
+/**
+ * Handles turn_context events by flushing the current turn if it has content
+ * and initializing a new turn with the provided context.
+ */
+export function handleTurnContextEvent(
+  payload: Record<string, unknown>,
+  event: JsonlEventRecord,
+  sourceRef: SourceRef,
+  context: ParserContext,
+): void {
+  flushCurrentTurn(context);
+
+  const turnId = asString(getValue(payload, "turn_id"));
+  const turnCwd = asString(getValue(payload, "cwd")) ?? context.sessionCwd;
+
+  if (turnId) {
+    context.currentTurn.turnId = turnId;
+  }
+  if (event.timestamp) {
+    context.currentTurn.startedAt = event.timestamp;
+  }
+  if (turnCwd) {
+    context.currentTurn.cwd = turnCwd;
+  }
+  context.currentTurn.sourceRefs.push(sourceRef);
+}
+
+/**
+ * Handles message response items by extracting text content based on role.
+ */
+export function handleMessageResponse(
+  payload: Record<string, unknown>,
+  sourceRef: SourceRef,
+  context: ParserContext,
+): void {
+  const text = extractMessageText(payload);
+  if (!text) {
+    return;
+  }
+
+  const role = asString(getValue(payload, "role"));
+
+  if (role === "user") {
+    context.currentTurn.userMessages.push(text);
+  } else if (role === "assistant") {
+    context.currentTurn.assistantMessages.push(text);
+  }
+
+  context.currentTurn.sourceRefs.push(sourceRef);
+}
+
+/**
+ * Handles function_call response items by creating a pending tool call.
+ */
+export function handleFunctionCallResponse(
+  payload: Record<string, unknown>,
+  event: JsonlEventRecord,
+  sourceRef: SourceRef,
+  context: ParserContext,
+): void {
+  const callId = asString(getValue(payload, "call_id"));
+  const toolName = asString(getValue(payload, "name"));
+  if (!callId || !toolName) return;
+
+  const toolCall: ParsedToolCall = {
+    callId,
+    toolName,
+    categoryHint: "function_call",
+    status: "unknown",
+    argumentsText: asString(getValue(payload, "arguments")),
+    timestamp: event.timestamp,
+  };
+
+  context.pendingToolCalls.set(callId, toolCall);
+  context.currentTurn.toolCalls.push(toolCall);
+  context.currentTurn.sourceRefs.push(sourceRef);
+}
+
+/**
+ * Handles function_call_output response items by updating the matching pending tool call.
+ */
+export function handleFunctionCallOutputResponse(
+  payload: Record<string, unknown>,
+  sourceRef: SourceRef,
+  context: ParserContext,
+): void {
+  const callId = asString(getValue(payload, "call_id"));
+  const outputText = asString(getValue(payload, "output"));
+
+  if (!callId) {
+    return;
+  }
+
+  const toolCall = context.pendingToolCalls.get(callId);
+  if (toolCall && outputText) {
+    toolCall.outputText = outputText;
+    toolCall.status = normalizeToolOutput(outputText);
+  }
+
+  context.currentTurn.sourceRefs.push(sourceRef);
+}
+
+/**
+ * Handles custom_tool_call response items (legacy format) by creating a pending tool call.
+ */
+export function handleCustomToolCallResponse(
+  payload: Record<string, unknown>,
+  event: JsonlEventRecord,
+  sourceRef: SourceRef,
+  context: ParserContext,
+): void {
+  const callId = asString(getValue(payload, "call_id"));
+  const toolName = asString(getValue(payload, "name"));
+  if (!callId || !toolName) return;
+
+  const toolCall: ParsedToolCall = {
+    callId,
+    toolName,
+    categoryHint: "custom_tool_call",
+    status:
+      asString(getValue(payload, "status")) === "completed"
+        ? "completed"
+        : "unknown",
+    argumentsText: asString(getValue(payload, "input")),
+    timestamp: event.timestamp,
+  };
+
+  context.pendingToolCalls.set(callId, toolCall);
+  context.currentTurn.toolCalls.push(toolCall);
+  context.currentTurn.sourceRefs.push(sourceRef);
+}
+
+/**
+ * Handles custom_tool_call_output response items (legacy format) by updating the matching tool call.
+ */
+export function handleCustomToolCallOutputResponse(
+  payload: Record<string, unknown>,
+  sourceRef: SourceRef,
+  context: ParserContext,
+): void {
+  const callId = asString(getValue(payload, "call_id"));
+  const outputText = asString(getValue(payload, "output"));
+
+  if (!callId) {
+    return;
+  }
+
+  const toolCall = context.pendingToolCalls.get(callId);
+  if (toolCall && outputText) {
+    toolCall.outputText = outputText;
+    toolCall.status = normalizeToolOutput(outputText);
+  }
+
+  context.currentTurn.sourceRefs.push(sourceRef);
+}
+
+/**
+ * Routes response_item events to the appropriate handler based on response type.
+ */
+export function handleResponseItemEvent(
+  payload: Record<string, unknown>,
+  event: JsonlEventRecord,
+  sourceRef: SourceRef,
+  context: ParserContext,
+): void {
+  const responseType = asString(getValue(payload, "type"));
+
+  switch (responseType) {
+    case "message":
+      handleMessageResponse(payload, sourceRef, context);
+      break;
+    case "function_call":
+      handleFunctionCallResponse(payload, event, sourceRef, context);
+      break;
+    case "function_call_output":
+      handleFunctionCallOutputResponse(payload, sourceRef, context);
+      break;
+    case "custom_tool_call":
+      handleCustomToolCallResponse(payload, event, sourceRef, context);
+      break;
+    case "custom_tool_call_output":
+      handleCustomToolCallOutputResponse(payload, sourceRef, context);
+      break;
+  }
+}
+
+/**
+ * Parses a single JSONL line into an event record.
+ * Returns an empty object if parsing fails.
+ */
+export function parseEventLine(line: string): JsonlEventRecord {
+  let parsedUnknown: unknown;
+  try {
+    parsedUnknown = JSON.parse(line);
+  } catch {
+    return {};
+  }
+
+  const eventRecord = asRecord(parsedUnknown);
+  if (!eventRecord) {
+    return {};
+  }
+
+  const event: JsonlEventRecord = {};
+  const timestamp = asString(getValue(eventRecord, "timestamp"));
+  const eventType = asString(getValue(eventRecord, "type"));
+  const eventPayload = asRecord(getValue(eventRecord, "payload"));
+
+  if (timestamp) {
+    event.timestamp = timestamp;
+  }
+  if (eventType) {
+    event.type = eventType;
+  }
+  if (eventPayload) {
+    event.payload = eventPayload;
+  }
+
+  return event;
+}
+
+/**
+ * Builds the final ParsedSession from the parser context.
+ */
+export function buildParsedSession(
+  context: ParserContext,
+  path: string,
+): ParsedSession {
+  if (hasTurnContent(context.currentTurn)) {
+    context.turns.push(context.currentTurn);
+  }
+
+  const parsedSession: ParsedSession = {
+    sessionId: context.sessionId,
+    path,
+    turns: context.turns,
+  };
+
+  if (context.parentSessionId) {
+    parsedSession.parentSessionId = context.parentSessionId;
+  }
+  if (context.sessionStartedAt) {
+    parsedSession.startedAt = context.sessionStartedAt;
+  }
+  if (context.sessionCwd) {
+    parsedSession.cwd = context.sessionCwd;
+  }
+
+  return parsedSession;
+}
+
+/**
+ * Parses a transcript JSONL file into a normalized ParsedSession.
+ * Orchestrates the parsing process by delegating to specialized handlers.
+ */
 export async function parseTranscriptFile(
   path: string,
 ): Promise<ParsedSession> {
-  const pendingToolCalls = new Map<string, ParsedToolCall>();
-  const turns: ParsedTurn[] = [];
-  let currentTurn = createTurn(0);
-  let nextTurnIndex = 0;
-  let sessionId = inferSessionIdFromFilename(path);
-  let parentSessionId: string | undefined;
-  let sessionStartedAt: string | undefined;
-  let sessionCwd: string | undefined;
-  let lineNumber = 0;
+  const context = createParserContext(path);
   const stream = createReadStream(path, { encoding: "utf8" });
   const reader = readline.createInterface({
     input: stream,
     crlfDelay: Number.POSITIVE_INFINITY,
   });
 
-  for await (const rawLine of reader) {
-    const line = rawLine.trim();
-    if (line.length === 0) {
-      continue;
-    }
-
-    lineNumber += 1;
-    let parsedUnknown: unknown;
-    try {
-      parsedUnknown = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const eventRecord = asRecord(parsedUnknown);
-    const event: JsonlEventRecord = {};
-    const timestamp = eventRecord
-      ? asString(getValue(eventRecord, "timestamp"))
-      : undefined;
-    const eventType = eventRecord
-      ? asString(getValue(eventRecord, "type"))
-      : undefined;
-    const eventPayload = eventRecord
-      ? asRecord(getValue(eventRecord, "payload"))
-      : undefined;
-    if (timestamp) {
-      event.timestamp = timestamp;
-    }
-    if (eventType) {
-      event.type = eventType;
-    }
-    if (eventPayload) {
-      event.payload = eventPayload;
-    }
-    const payload = event.payload;
-    const sourceRef = createSourceRef(path, lineNumber);
-
-    if (!payload) {
-      continue;
-    }
-
-    switch (event.type) {
-      case "session_meta": {
-        sessionId = asString(getValue(payload, "id")) ?? sessionId;
-        sessionStartedAt =
-          asString(getValue(payload, "timestamp")) ?? event.timestamp;
-        sessionCwd = asString(getValue(payload, "cwd"));
-        const source = asRecord(getValue(payload, "source"));
-        const subagent = source
-          ? asRecord(getValue(source, "subagent"))
-          : undefined;
-        const threadSpawn = subagent
-          ? asRecord(getValue(subagent, "thread_spawn"))
-          : undefined;
-        parentSessionId = threadSpawn
-          ? asString(getValue(threadSpawn, "parent_thread_id"))
-          : parentSessionId;
-        break;
+  try {
+    for await (const rawLine of reader) {
+      const line = rawLine.trim();
+      if (line.length === 0) {
+        continue;
       }
-      case "turn_context": {
-        if (
-          currentTurn.userMessages.length > 0 ||
-          currentTurn.assistantMessages.length > 0 ||
-          currentTurn.toolCalls.length > 0
-        ) {
-          turns.push(currentTurn);
-          nextTurnIndex += 1;
-          currentTurn = createTurn(nextTurnIndex);
-        }
 
-        const turnId = asString(getValue(payload, "turn_id"));
-        const turnCwd = asString(getValue(payload, "cwd")) ?? sessionCwd;
-        if (turnId) {
-          currentTurn.turnId = turnId;
-        }
-        if (event.timestamp) {
-          currentTurn.startedAt = event.timestamp;
-        }
-        if (turnCwd) {
-          currentTurn.cwd = turnCwd;
-        }
-        currentTurn.sourceRefs.push(sourceRef);
-        break;
+      context.lineNumber += 1;
+      const event = parseEventLine(line);
+
+      if (!event.payload) {
+        continue;
       }
-      case "response_item": {
-        const responseType = asString(getValue(payload, "type"));
-        if (!responseType) {
+
+      const sourceRef = createSourceRef(path, context.lineNumber);
+
+      switch (event.type) {
+        case "session_meta":
+          handleSessionMetaEvent(event.payload, event, context);
           break;
-        }
-
-        if (responseType === "message") {
-          const role = asString(getValue(payload, "role"));
-          const text = extractMessageText(payload);
-          if (!text) {
-            break;
-          }
-
-          if (role === "user") {
-            currentTurn.userMessages.push(text);
-          } else if (role === "assistant") {
-            currentTurn.assistantMessages.push(text);
-          }
-          currentTurn.sourceRefs.push(sourceRef);
+        case "turn_context":
+          handleTurnContextEvent(event.payload, event, sourceRef, context);
           break;
-        }
-
-        if (responseType === "function_call") {
-          const callId = asString(getValue(payload, "call_id"));
-          const toolName = asString(getValue(payload, "name"));
-          if (!callId || !toolName) {
-            break;
-          }
-
-          const toolCall: ParsedToolCall = {
-            callId,
-            toolName,
-            categoryHint: "function_call",
-            status: "unknown",
-          };
-          const argumentsText = asString(getValue(payload, "arguments"));
-          if (argumentsText) {
-            toolCall.argumentsText = argumentsText;
-          }
-          if (event.timestamp) {
-            toolCall.timestamp = event.timestamp;
-          }
-          pendingToolCalls.set(callId, toolCall);
-          currentTurn.toolCalls.push(toolCall);
-          currentTurn.sourceRefs.push(sourceRef);
+        case "response_item":
+          handleResponseItemEvent(event.payload, event, sourceRef, context);
           break;
-        }
-
-        if (responseType === "function_call_output") {
-          const callId = asString(getValue(payload, "call_id"));
-          const outputText = asString(getValue(payload, "output"));
-          if (!callId) {
-            break;
-          }
-
-          const toolCall = pendingToolCalls.get(callId);
-          if (toolCall && outputText) {
-            toolCall.outputText = outputText;
-            toolCall.status = normalizeToolOutput(outputText);
-          }
-          currentTurn.sourceRefs.push(sourceRef);
-          break;
-        }
-
-        if (responseType === "custom_tool_call") {
-          const callId = asString(getValue(payload, "call_id"));
-          const toolName = asString(getValue(payload, "name"));
-          if (!callId || !toolName) {
-            break;
-          }
-
-          const toolCall: ParsedToolCall = {
-            callId,
-            toolName,
-            categoryHint: "custom_tool_call",
-            status:
-              asString(getValue(payload, "status")) === "completed"
-                ? "completed"
-                : "unknown",
-          };
-          const inputText = asString(getValue(payload, "input"));
-          if (inputText) {
-            toolCall.argumentsText = inputText;
-          }
-          if (event.timestamp) {
-            toolCall.timestamp = event.timestamp;
-          }
-          pendingToolCalls.set(callId, toolCall);
-          currentTurn.toolCalls.push(toolCall);
-          currentTurn.sourceRefs.push(sourceRef);
-          break;
-        }
-
-        if (responseType === "custom_tool_call_output") {
-          const callId = asString(getValue(payload, "call_id"));
-          const outputText = asString(getValue(payload, "output"));
-          if (!callId) {
-            break;
-          }
-
-          const toolCall = pendingToolCalls.get(callId);
-          if (toolCall && outputText) {
-            toolCall.outputText = outputText;
-            toolCall.status = normalizeToolOutput(outputText);
-          }
-          currentTurn.sourceRefs.push(sourceRef);
-        }
-        break;
       }
-      default:
-        break;
     }
+  } finally {
+    reader.close();
+    stream.close();
   }
 
-  if (
-    currentTurn.userMessages.length > 0 ||
-    currentTurn.assistantMessages.length > 0 ||
-    currentTurn.toolCalls.length > 0
-  ) {
-    turns.push(currentTurn);
-  }
-
-  reader.close();
-  stream.close();
-
-  const parsedSession: ParsedSession = {
-    sessionId,
-    path,
-    turns,
-  };
-  if (parentSessionId) {
-    parsedSession.parentSessionId = parentSessionId;
-  }
-  if (sessionStartedAt) {
-    parsedSession.startedAt = sessionStartedAt;
-  }
-  if (sessionCwd) {
-    parsedSession.cwd = sessionCwd;
-  }
-
-  return parsedSession;
+  return buildParsedSession(context, path);
 }

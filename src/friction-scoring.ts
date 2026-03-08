@@ -4,23 +4,9 @@
  * Notes: Higher friction scores indicate more operator burden and session disruption.
  */
 
+import { getConfig } from "./config.js";
 import type { LabelName } from "./schema.js";
 import { labelTaxonomy } from "./schema.js";
-
-/**
- * Weights for each label type when calculating friction scores.
- * Positive weights increase friction, negative weights reduce it.
- */
-const LABEL_WEIGHTS: Record<LabelName, number> = {
-  context_drift: 4,
-  test_build_lint_failure_complaint: 5,
-  interrupt: 2,
-  regression_report: 5,
-  praise: -1,
-  context_reinjection: 2,
-  verification_request: 2,
-  stalled_or_guessing: 5,
-} as const;
 
 /**
  * Gets the friction weight for a specific label.
@@ -28,7 +14,7 @@ const LABEL_WEIGHTS: Record<LabelName, number> = {
  * @returns The weight value for the label
  */
 export function getLabelWeight(label: LabelName): number {
-  return LABEL_WEIGHTS[label];
+  return getConfig().scoring.labelWeights[label];
 }
 
 /**
@@ -41,8 +27,9 @@ export function calculateFrictionScore(
   labelCounts: Record<LabelName, number>,
   complianceScore: number,
 ): number {
+  const { labelWeights } = getConfig().scoring;
   const weighted = labelTaxonomy.reduce(
-    (total, label) => total + labelCounts[label] * LABEL_WEIGHTS[label],
+    (total, label) => total + labelCounts[label] * labelWeights[label],
     0,
   );
   const compliancePenalty = Math.max(0, 100 - complianceScore) / 10;

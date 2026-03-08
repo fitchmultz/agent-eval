@@ -4,6 +4,7 @@
  * Notes: Clustering is intentionally conservative to preserve precision in evaluator v1.
  */
 
+import { getConfig } from "./config.js";
 import { chooseMaxConfidence, chooseMaxSeverity } from "./ranking.js";
 import { isLowSignalPreview } from "./sanitization.js";
 import type { IncidentRecord, LabelRecord, RawTurnRecord } from "./schema.js";
@@ -44,7 +45,7 @@ function buildEvidencePreviews(turns: readonly RawTurnRecord[]): string[] {
   const previews = turns.flatMap((turn) => turn.userMessagePreviews);
   const preferred = previews.filter((preview) => !isLowSignalPreview(preview));
   const selected = preferred.length > 0 ? preferred : previews;
-  return selected.slice(0, 3);
+  return selected.slice(0, getConfig().previews.maxIncidentEvidence);
 }
 
 export function clusterIncidents(

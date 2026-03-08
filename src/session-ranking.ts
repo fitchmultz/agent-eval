@@ -4,6 +4,7 @@
  * Notes: Victory laps highlight the best verified delivery sessions.
  */
 
+import { getConfig } from "./config.js";
 import {
   calculateFrictionScore,
   dominantLabelsForSession,
@@ -84,5 +85,5 @@ export function buildVictoryLaps(
         left.frictionScore - right.frictionScore ||
         left.sessionId.localeCompare(right.sessionId),
     )
-    .slice(0, 6);
+    .slice(0, getConfig().previews.maxVictoryLaps);
 }
