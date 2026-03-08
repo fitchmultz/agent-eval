@@ -14,7 +14,6 @@ import {
   errorToMessage,
   FileNotFoundError,
   isEnoentError,
-  ValidationError,
 } from "./errors.js";
 import {
   evaluateArtifacts,
@@ -27,6 +26,7 @@ import {
   formatInspectOutput,
   formatParseOutput,
 } from "./formatters/index.js";
+import { throwIfAborted } from "./utils/abort.js";
 import { getValidatedHomeDirectory } from "./utils/environment.js";
 
 interface GlobalOptions {
@@ -38,8 +38,11 @@ interface GlobalOptions {
   maxTurnGap?: number;
 }
 
-async function runInspectCommand(options: GlobalOptions): Promise<void> {
-  const inventory = await discoverArtifacts(options.codexHome);
+async function runInspectCommand(
+  options: GlobalOptions,
+  signal: AbortSignal,
+): Promise<void> {
+  const inventory = await discoverArtifacts(options.codexHome, { signal });
   process.stdout.write(
     `${formatInspectOutput(
       options.codexHome,
@@ -49,8 +52,11 @@ async function runInspectCommand(options: GlobalOptions): Promise<void> {
   );
 }
 
-async function runParseCommand(options: GlobalOptions): Promise<void> {
-  const result = await evaluateArtifacts(options);
+async function runParseCommand(
+  options: GlobalOptions,
+  signal: AbortSignal,
+): Promise<void> {
+  const result = await evaluateArtifacts(options, signal);
   await writeEvaluationArtifacts(
     {
       ...result,
@@ -68,9 +74,12 @@ async function runParseCommand(options: GlobalOptions): Promise<void> {
   );
 }
 
-async function runEvalCommand(options: GlobalOptions): Promise<void> {
+async function runEvalCommand(
+  options: GlobalOptions,
+  signal: AbortSignal,
+): Promise<void> {
   if (options.summaryOnly) {
-    const result = await evaluateArtifactsSummaryOnly(options);
+    const result = await evaluateArtifactsSummaryOnly(options, signal);
     await writeSummaryArtifacts(result, options.outputDir);
     process.stdout.write(
       `${formatEvalOutput(
@@ -83,7 +92,7 @@ async function runEvalCommand(options: GlobalOptions): Promise<void> {
     return;
   }
 
-  const result = await evaluateArtifacts(options);
+  const result = await evaluateArtifacts(options, signal);
   await writeEvaluationArtifacts(result, options.outputDir);
   process.stdout.write(
     `${formatEvalOutput(
@@ -94,20 +103,49 @@ async function runEvalCommand(options: GlobalOptions): Promise<void> {
   );
 }
 
-async function runReportCommand(options: GlobalOptions): Promise<void> {
+async function runReportCommand(
+  options: GlobalOptions,
+  signal: AbortSignal,
+): Promise<void> {
   if (options.summaryOnly) {
-    const result = await evaluateArtifactsSummaryOnly(options);
+    const result = await evaluateArtifactsSummaryOnly(options, signal);
     await writeSummaryArtifacts(result, options.outputDir);
     process.stdout.write(result.report);
     return;
   }
 
-  const result = await evaluateArtifacts(options);
+  const result = await evaluateArtifacts(options, signal);
   await writeEvaluationArtifacts(result, options.outputDir);
   process.stdout.write(result.report);
 }
 
 export async function main(argv: string[]): Promise<number> {
+  // Set up abort controller for graceful shutdown
+  const abortController = new AbortController();
+
+  const handleInterrupt = (): void => {
+    abortController.abort();
+    process.stderr.write("\nInterrupted, cleaning up...\n");
+  };
+
+  process.on("SIGINT", handleInterrupt);
+  process.on("SIGTERM", handleInterrupt);
+
+  try {
+    return await runMain(argv, abortController.signal);
+  } catch (error) {
+    // Handle abort errors from signal
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return 130; // Standard exit code for SIGINT
+    }
+    throw error;
+  } finally {
+    process.off("SIGINT", handleInterrupt);
+    process.off("SIGTERM", handleInterrupt);
+  }
+}
+
+async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
   // Validate and get home directory with cross-platform support
   let defaultCodexHome: string;
   try {
@@ -205,18 +243,20 @@ export async function main(argv: string[]): Promise<number> {
     .command("inspect")
     .description("Discover canonical and optional local Codex artifact stores.")
     .action(async () => {
+      throwIfAborted(signal);
       const options = program.opts<GlobalOptions>();
       applyConfigOverrides(options);
-      await runInspectCommand(options);
+      await runInspectCommand(options, signal);
     });
 
   program
     .command("parse")
     .description("Parse transcript files and emit raw turn artifacts.")
     .action(async () => {
+      throwIfAborted(signal);
       const options = program.opts<GlobalOptions>();
       applyConfigOverrides(options);
-      await runParseCommand(options);
+      await runParseCommand(options, signal);
     });
 
   program
@@ -225,9 +265,10 @@ export async function main(argv: string[]): Promise<number> {
       "Run parsing, labeling, clustering, scoring, and artifact emission.",
     )
     .action(async () => {
+      throwIfAborted(signal);
       const options = program.opts<GlobalOptions>();
       applyConfigOverrides(options);
-      await runEvalCommand(options);
+      await runEvalCommand(options, signal);
     });
 
   program
@@ -236,9 +277,10 @@ export async function main(argv: string[]): Promise<number> {
       "Generate the markdown evaluator report and write all artifacts.",
     )
     .action(async () => {
+      throwIfAborted(signal);
       const options = program.opts<GlobalOptions>();
       applyConfigOverrides(options);
-      await runReportCommand(options);
+      await runReportCommand(options, signal);
     });
 
   try {

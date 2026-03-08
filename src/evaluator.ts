@@ -11,13 +11,14 @@ import {
 } from "./artifact-writer.js";
 import { clusterIncidents } from "./clustering.js";
 import { getConfig } from "./config.js";
-import { discoverArtifacts } from "./discovery.js";
+import { type DiscoveryOptions, discoverArtifacts } from "./discovery.js";
 import { buildSummaryArtifact } from "./insights.js";
 import { aggregateMetrics, countWriteTurns } from "./metrics-aggregation.js";
 import { renderReport, renderSummaryReport } from "./report.js";
 import type { MetricsRecord } from "./schema.js";
 import { processSession } from "./session-processor.js";
 import { parseTranscriptFile } from "./transcript/index.js";
+import { throwIfAborted } from "./utils/abort.js";
 import { mapWithConcurrency } from "./utils/concurrency.js";
 import { getHomeDirectory } from "./utils/environment.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
@@ -35,6 +36,8 @@ export interface EvaluateOptions {
   outputDir: string;
   /** Maximum number of most recent sessions to evaluate (undefined for all) */
   sessionLimit?: number;
+  /** Timeout for parsing individual transcript files (milliseconds). Default: 30000 */
+  parseTimeoutMs?: number;
 }
 
 function selectSessionPaths(
@@ -78,9 +81,11 @@ function recalculateIncidentCounts(
  * 5. Aggregates metrics and generates reports
  *
  * @param options - Evaluation options including codexHome, outputDir, and optional sessionLimit
+ * @param signal - Optional AbortSignal for cancellation
  * @returns Promise resolving to the full evaluation result with raw turns, incidents, metrics, and report
  * @throws {FileNotFoundError} If the codexHome directory does not exist
  * @throws {TranscriptParseError} If strict mode is enabled and a transcript fails to parse
+ * @throws {DOMException} with name "AbortError" if signal is aborted
  *
  * @example
  * ```typescript
@@ -94,8 +99,20 @@ function recalculateIncidentCounts(
  */
 export async function evaluateArtifacts(
   options: EvaluateOptions,
+  signal?: AbortSignal,
 ): Promise<EvaluationResult> {
-  const discovered = await discoverArtifacts(options.codexHome);
+  // Check for abort before starting
+  throwIfAborted(signal);
+
+  const discoveryOptions: DiscoveryOptions = { signal };
+  const discovered = await discoverArtifacts(
+    options.codexHome,
+    discoveryOptions,
+  );
+
+  // Check for abort after discovery
+  throwIfAborted(signal);
+
   const sessionPaths = selectSessionPaths(
     discovered.sessionFiles,
     options.sessionLimit,
@@ -103,14 +120,23 @@ export async function evaluateArtifacts(
   const homeDirectory = getHomeDirectory();
 
   const { full } = getConfig().concurrency;
+  const parseTimeoutMs = options.parseTimeoutMs ?? 30000;
+
   const processed = await mapWithConcurrency(
     sessionPaths,
     full,
     async (sessionPath) => {
-      const session = await parseTranscriptFile(sessionPath);
+      const session = await parseTranscriptFile(sessionPath, {
+        timeoutMs: parseTimeoutMs,
+        signal,
+      });
       return processSession(session, homeDirectory);
     },
+    signal,
   );
+
+  // Check for abort after processing
+  throwIfAborted(signal);
 
   const metrics = aggregateMetrics(processed, discovered.inventory);
   const allTurns = processed.flatMap((s) => s.turns);
@@ -145,9 +171,11 @@ export async function evaluateArtifacts(
  * Use this when you only need high-level insights without detailed incident data.
  *
  * @param options - Evaluation options including codexHome, outputDir, and optional sessionLimit
+ * @param signal - Optional AbortSignal for cancellation
  * @returns Promise resolving to summary metrics, summary artifact, and markdown report
  * @throws {FileNotFoundError} If the codexHome directory does not exist
  * @throws {TranscriptParseError} If strict mode is enabled and a transcript fails to parse
+ * @throws {DOMException} with name "AbortError" if signal is aborted
  *
  * @example
  * ```typescript
@@ -160,23 +188,43 @@ export async function evaluateArtifacts(
  */
 export async function evaluateArtifactsSummaryOnly(
   options: EvaluateOptions,
+  signal?: AbortSignal,
 ): Promise<SummaryOnlyEvaluationResult> {
+  // Check for abort before starting
+  throwIfAborted(signal);
+
   const { summary: summaryConcurrency } = getConfig().concurrency;
-  const discovered = await discoverArtifacts(options.codexHome);
+  const discoveryOptions: DiscoveryOptions = { signal };
+  const discovered = await discoverArtifacts(
+    options.codexHome,
+    discoveryOptions,
+  );
+
+  // Check for abort after discovery
+  throwIfAborted(signal);
+
   const sessionPaths = selectSessionPaths(
     discovered.sessionFiles,
     options.sessionLimit,
   );
   const homeDirectory = getHomeDirectory();
+  const parseTimeoutMs = options.parseTimeoutMs ?? 30000;
 
   const processed = await mapWithConcurrency(
     sessionPaths,
     summaryConcurrency,
     async (sessionPath) => {
-      const session = await parseTranscriptFile(sessionPath);
+      const session = await parseTranscriptFile(sessionPath, {
+        timeoutMs: parseTimeoutMs,
+        signal,
+      });
       return processSession(session, homeDirectory);
     },
+    signal,
   );
+
+  // Check for abort after processing
+  throwIfAborted(signal);
 
   const metrics = aggregateMetrics(processed, discovered.inventory);
   const summaryInputs = createSummaryInputs(

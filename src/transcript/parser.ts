@@ -6,6 +6,11 @@
 
 import { basename } from "node:path";
 import { normalizeError, TranscriptParseError } from "../errors.js";
+import {
+  combineSignals,
+  createTimeoutSignal,
+  throwIfAborted,
+} from "../utils/abort.js";
 import { createSourceRef, routeEvent } from "./event-router.js";
 import { createTranscriptLineReader } from "./file-reader.js";
 import { validateEventRecord } from "./schema.js";
@@ -58,6 +63,9 @@ export function parseEventLine(
   path: string,
   options: ParseOptions = {},
 ): JsonlEventRecord {
+  // Check for abort before processing
+  throwIfAborted(options.signal);
+
   let parsedUnknown: unknown;
   try {
     parsedUnknown = JSON.parse(line);
@@ -100,15 +108,10 @@ export function parseEventLine(
 }
 
 /**
- * Parses a transcript JSONL file into a normalized ParsedSession.
- * Orchestrates the parsing process with Zod schema validation.
- *
- * @param path - Path to the transcript JSONL file
- * @param options - Optional parsing options
- * @returns The parsed session
- * @throws TranscriptParseError if strict mode is enabled and a line fails to parse
+ * Internal implementation of transcript parsing with abort signal support.
+ * This function performs the actual parsing work.
  */
-export async function parseTranscriptFile(
+async function doParseTranscriptFile(
   path: string,
   options: ParseOptions = {},
 ): Promise<ParsedSession> {
@@ -119,6 +122,9 @@ export async function parseTranscriptFile(
 
   try {
     for await (const rawLine of reader) {
+      // Check for abort signal before processing each line
+      throwIfAborted(options.signal);
+
       const line = rawLine.trim();
       if (line.length === 0) {
         continue;
@@ -140,4 +146,45 @@ export async function parseTranscriptFile(
   }
 
   return buildParsedSession(context, path);
+}
+
+/**
+ * Parses a transcript JSONL file into a normalized ParsedSession.
+ * Orchestrates the parsing process with Zod schema validation.
+ * Supports timeout and cancellation via AbortSignal.
+ *
+ * @param path - Path to the transcript JSONL file
+ * @param options - Optional parsing options including timeoutMs and signal
+ * @returns The parsed session
+ * @throws TranscriptParseError if strict mode is enabled and a line fails to parse
+ * @throws DOMException with name "TimeoutError" if timeout is exceeded
+ * @throws DOMException with name "AbortError" if signal is aborted
+ */
+export async function parseTranscriptFile(
+  path: string,
+  options: ParseOptions = {},
+): Promise<ParsedSession> {
+  const timeoutMs = options.timeoutMs ?? 30000; // 30 second default
+
+  // Create timeout signal if needed
+  const timeoutResult = createTimeoutSignal(timeoutMs);
+  const timeoutSignal = timeoutResult?.signal;
+  const clearTimeoutFn = timeoutResult?.clear;
+
+  // Combine user signal with timeout signal
+  const combinedSignal = options.signal
+    ? timeoutSignal
+      ? combineSignals([options.signal, timeoutSignal])
+      : options.signal
+    : timeoutSignal;
+
+  try {
+    return await doParseTranscriptFile(path, {
+      ...options,
+      signal: combinedSignal,
+    });
+  } finally {
+    // Always clean up timeout
+    clearTimeoutFn?.();
+  }
 }

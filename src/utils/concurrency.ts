@@ -6,6 +6,7 @@
  */
 
 import { normalizeError } from "../errors.js";
+import { throwIfAborted } from "./abort.js";
 
 /**
  * Error thrown when one or more concurrent workers fail.
@@ -31,17 +32,21 @@ export class ConcurrencyError extends Error {
  * Maps an array of items to results using async workers with a concurrency limit.
  * Maintains order of results matching the input array order.
  * All workers are wrapped in try/catch to ensure proper error handling.
+ * Supports cancellation via optional AbortSignal.
  *
  * @param items - Array of items to process
  * @param concurrency - Maximum number of concurrent workers
  * @param worker - Async function to process each item
+ * @param signal - Optional AbortSignal for cancellation
  * @returns Array of results in the same order as input items
  * @throws ConcurrencyError if any worker fails, aggregating all errors with context
+ * @throws DOMException with name "AbortError" if signal is aborted
  */
 export async function mapWithConcurrency<T, R>(
   items: readonly T[],
   concurrency: number,
   worker: (item: T, index: number) => Promise<R>,
+  signal?: AbortSignal,
 ): Promise<R[]> {
   // Use a Map instead of sparse array to avoid undefined gaps
   const results = new Map<number, R>();
@@ -51,6 +56,9 @@ export async function mapWithConcurrency<T, R>(
 
   async function runWorker(): Promise<void> {
     while (true) {
+      // Check for abort signal before picking up next item
+      throwIfAborted(signal);
+
       const currentIndex = nextIndex;
       nextIndex += 1;
       const item = items[currentIndex];

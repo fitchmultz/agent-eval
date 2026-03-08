@@ -53,6 +53,10 @@ export interface ParseOptions {
   strict?: boolean;
   /** Callback invoked when a line fails to parse (only called in non-strict mode). */
   onParseError?: (line: string, lineNumber: number, error: Error) => void;
+  /** Maximum time to wait for file parsing (milliseconds). Default: 30000 (30 seconds) */
+  timeoutMs?: number;
+  /** Signal to abort parsing */
+  signal?: AbortSignal | undefined;
 }
 
 /**
