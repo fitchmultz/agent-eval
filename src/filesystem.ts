@@ -6,12 +6,30 @@
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import {
+  isEnoentError,
+  isPermissionError,
+  PermissionDeniedError,
+} from "./errors.js";
+
+/**
+ * Checks if a path exists.
+ * Returns false for non-existent paths.
+ * Re-throws permission errors and other non-ENOENT errors.
+ */
 export async function pathExists(path: string): Promise<boolean> {
   try {
     await stat(path);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (isEnoentError(error)) {
+      return false;
+    }
+    if (isPermissionError(error)) {
+      throw new PermissionDeniedError(path);
+    }
+    // Re-throw other unexpected errors
+    throw error;
   }
 }
 

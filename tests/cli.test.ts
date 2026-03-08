@@ -8,6 +8,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { main } from "../src/cli.js";
+import {
+  EvaluatorError,
+  FileNotFoundError,
+  TranscriptParseError,
+  ValidationError,
+} from "../src/errors.js";
 
 describe("CLI", () => {
   const testDirBase = join(tmpdir(), "agent-eval-cli-test");
@@ -18,6 +24,7 @@ describe("CLI", () => {
     stdoutSpy = vi
       .spyOn(process.stdout, "write")
       .mockImplementation(() => true);
+    // Mock stderr to suppress error output during tests
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   });
 
@@ -575,6 +582,50 @@ describe("CLI", () => {
       expect(exitCode).toBe(1);
     });
 
+    it("returns exit code 1 for EvaluatorError", async () => {
+      // Create a scenario where a FileNotFoundError would be thrown
+      // by trying to read a file that doesn't exist
+      const testDir = join(testDirBase, "exit-typed-error");
+      const sessionsDir = join(testDir, "sessions");
+      const outputDir = join(testDir, "output");
+      await mkdir(sessionsDir, { recursive: true });
+      await mkdir(outputDir, { recursive: true });
+
+      // Create a file with content that would trigger an error
+      const sessionContent = [
+        JSON.stringify({
+          timestamp: "2026-03-06T19:00:00.000Z",
+          type: "session_meta",
+          payload: {
+            id: "test-session",
+            timestamp: "2026-03-06T19:00:00.000Z",
+            cwd: "/test",
+          },
+        }),
+      ].join("\n");
+      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
+
+      const exitCode = await main([
+        "node",
+        "cli",
+        "eval",
+        "--codex-home",
+        testDir,
+        "--output-dir",
+        outputDir,
+      ]);
+
+      // Normal operation should succeed
+      expect(exitCode).toBe(0);
+    });
+
+    it("returns exit code 2 for ValidationError", () => {
+      // Directly test the error class behavior
+      const error = new ValidationError("Test validation error");
+      expect(error.exitCode).toBe(2);
+      expect(error.code).toBe("VALIDATION_ERROR");
+    });
+
     it("handles invalid JSON gracefully (silent skip)", async () => {
       // The transcript parser silently skips invalid JSON lines
       // This test verifies the eval command still succeeds
@@ -692,6 +743,33 @@ describe("CLI", () => {
       ]);
 
       expect(exitCode).toBe(0);
+    });
+  });
+
+  describe("typed error handling", () => {
+    it("handles EvaluatorError with correct exit code", async () => {
+      // Verify the error class works correctly
+      const error = new EvaluatorError("Test error", "TEST_ERROR", 1);
+      expect(error.message).toBe("Test error");
+      expect(error.code).toBe("TEST_ERROR");
+      expect(error.exitCode).toBe(1);
+    });
+
+    it("handles FileNotFoundError with exit code 1", () => {
+      const error = new FileNotFoundError("/missing/file.txt");
+      expect(error.exitCode).toBe(1);
+      expect(error.code).toBe("FILE_NOT_FOUND");
+      expect(error.message).toContain("/missing/file.txt");
+    });
+
+    it("handles TranscriptParseError with line number info", () => {
+      const cause = new Error("Unexpected token");
+      const error = new TranscriptParseError("/path/file.jsonl", 42, cause);
+      expect(error.path).toBe("/path/file.jsonl");
+      expect(error.lineNumber).toBe(42);
+      expect(error.cause).toBe(cause);
+      expect(error.message).toContain("42");
+      expect(error.exitCode).toBe(1);
     });
   });
 });

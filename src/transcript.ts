@@ -7,6 +7,7 @@ import { createReadStream } from "node:fs";
 import { basename } from "node:path";
 import * as readline from "node:readline";
 
+import { TranscriptParseError } from "./errors.js";
 import type { SourceRef } from "./schema.js";
 
 export interface ParsedToolCall {
@@ -43,6 +44,16 @@ interface JsonlEventRecord {
   payload?: Record<string, unknown>;
   timestamp?: string;
   type?: string;
+}
+
+/**
+ * Options for parsing transcript files.
+ */
+export interface ParseOptions {
+  /** If true, throw on parse errors instead of skipping malformed lines. */
+  strict?: boolean;
+  /** Callback invoked when a line fails to parse (only called in non-strict mode). */
+  onParseError?: (line: string, lineNumber: number, error: Error) => void;
 }
 
 /**
@@ -396,13 +407,29 @@ export function handleResponseItemEvent(
 
 /**
  * Parses a single JSONL line into an event record.
- * Returns an empty object if parsing fails.
+ * Returns an empty object if parsing fails (in non-strict mode).
+ *
+ * @param line - The JSONL line to parse
+ * @param lineNumber - The line number for error reporting
+ * @param path - The file path for error reporting
+ * @param options - Parsing options
+ * @returns The parsed event record, or empty object if parsing fails
+ * @throws TranscriptParseError if strict mode is enabled and parsing fails
  */
-export function parseEventLine(line: string): JsonlEventRecord {
+export function parseEventLine(
+  line: string,
+  lineNumber: number,
+  path: string,
+  options: ParseOptions = {},
+): JsonlEventRecord {
   let parsedUnknown: unknown;
   try {
     parsedUnknown = JSON.parse(line);
-  } catch {
+  } catch (error) {
+    if (options.strict) {
+      throw new TranscriptParseError(path, lineNumber, error as Error);
+    }
+    options.onParseError?.(line, lineNumber, error as Error);
     return {};
   }
 
@@ -462,9 +489,15 @@ export function buildParsedSession(
 /**
  * Parses a transcript JSONL file into a normalized ParsedSession.
  * Orchestrates the parsing process by delegating to specialized handlers.
+ *
+ * @param path - Path to the transcript JSONL file
+ * @param options - Optional parsing options
+ * @returns The parsed session
+ * @throws TranscriptParseError if strict mode is enabled and a line fails to parse
  */
 export async function parseTranscriptFile(
   path: string,
+  options: ParseOptions = {},
 ): Promise<ParsedSession> {
   const context = createParserContext(path);
   const stream = createReadStream(path, { encoding: "utf8" });
@@ -481,7 +514,7 @@ export async function parseTranscriptFile(
       }
 
       context.lineNumber += 1;
-      const event = parseEventLine(line);
+      const event = parseEventLine(line, context.lineNumber, path, options);
 
       if (!event.payload) {
         continue;

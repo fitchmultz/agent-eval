@@ -10,6 +10,12 @@ import { Command } from "commander";
 import { getConfig, setConfig } from "./config.js";
 import { discoverArtifacts } from "./discovery.js";
 import {
+  EvaluatorError,
+  errorToMessage,
+  FileNotFoundError,
+  isEnoentError,
+} from "./errors.js";
+import {
   evaluateArtifacts,
   evaluateArtifactsSummaryOnly,
   writeEvaluationArtifacts,
@@ -254,7 +260,25 @@ export async function main(argv: string[]): Promise<number> {
     await program.parseAsync(argv);
     return 0;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    // Handle typed errors with appropriate exit codes
+    if (error instanceof EvaluatorError) {
+      process.stderr.write(`${error.message}\n`);
+      return error.exitCode;
+    }
+
+    // Convert ENOENT errors to FileNotFoundError for better messaging
+    if (isEnoentError(error)) {
+      const path =
+        typeof error === "object" && error !== null && "path" in error
+          ? String(error.path)
+          : "unknown path";
+      const fileError = new FileNotFoundError(path);
+      process.stderr.write(`${fileError.message}\n`);
+      return fileError.exitCode;
+    }
+
+    // Generic error handling
+    const message = errorToMessage(error);
     process.stderr.write(`${message}\n`);
     return 1;
   }

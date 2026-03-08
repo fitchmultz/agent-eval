@@ -1,0 +1,146 @@
+/**
+ * Purpose: Provides typed error classes and error handling utilities for the evaluator.
+ * Entrypoint: Imported by CLI, transcript parser, and filesystem modules.
+ * Notes: All evaluator errors extend EvaluatorError for consistent error handling.
+ */
+
+/**
+ * Base error class for all evaluator errors.
+ * Provides error code and exit code for CLI handling.
+ */
+export class EvaluatorError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly exitCode: number = 1,
+  ) {
+    super(message);
+    this.name = "EvaluatorError";
+  }
+}
+
+/**
+ * Error for validation failures (invalid input, bad options, etc.).
+ * Exit code: 2 (usage error)
+ */
+export class ValidationError extends EvaluatorError {
+  override name = "ValidationError";
+  constructor(message: string) {
+    super(message, "VALIDATION_ERROR", 2);
+  }
+}
+
+/**
+ * Error for file not found scenarios.
+ * Exit code: 1 (runtime failure)
+ */
+export class FileNotFoundError extends EvaluatorError {
+  override name = "FileNotFoundError";
+  constructor(path: string) {
+    super(`File or directory not found: ${path}`, "FILE_NOT_FOUND", 1);
+  }
+}
+
+/**
+ * Error for permission denied scenarios.
+ * Exit code: 1 (runtime failure)
+ */
+export class PermissionDeniedError extends EvaluatorError {
+  override name = "PermissionDeniedError";
+  constructor(path: string) {
+    super(`Permission denied: ${path}`, "PERMISSION_DENIED", 1);
+  }
+}
+
+/**
+ * Error for transcript parsing failures.
+ * Exit code: 1 (runtime failure)
+ */
+export class TranscriptParseError extends EvaluatorError {
+  override name = "TranscriptParseError";
+  constructor(
+    public readonly path: string,
+    public readonly lineNumber: number,
+    public override readonly cause: Error,
+  ) {
+    super(
+      `Failed to parse transcript at ${path}:${lineNumber}: ${cause.message}`,
+      "TRANSCRIPT_PARSE_ERROR",
+      1,
+    );
+  }
+}
+
+/**
+ * Error for invalid transcript format/structure.
+ * Exit code: 1 (runtime failure)
+ */
+export class TranscriptFormatError extends EvaluatorError {
+  override name = "TranscriptFormatError";
+  constructor(
+    public readonly path: string,
+    message: string,
+  ) {
+    super(
+      `Invalid transcript format at ${path}: ${message}`,
+      "TRANSCRIPT_FORMAT_ERROR",
+      1,
+    );
+  }
+}
+
+/**
+ * Type guard to check if an error is an ENOENT error.
+ * Used to distinguish "file not found" from other filesystem errors.
+ */
+export function isEnoentError(error: unknown): error is NodeJS.ErrnoException {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as NodeJS.ErrnoException).code === "ENOENT"
+  );
+}
+
+/**
+ * Type guard to check if an error is an EACCES/EPERM (permission) error.
+ */
+export function isPermissionError(
+  error: unknown,
+): error is NodeJS.ErrnoException {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    ((error as NodeJS.ErrnoException).code === "EACCES" ||
+      (error as NodeJS.ErrnoException).code === "EPERM")
+  );
+}
+
+/**
+ * Type guard to check if an error is an EvaluatorError.
+ */
+export function isEvaluatorError(error: unknown): error is EvaluatorError {
+  return error instanceof EvaluatorError;
+}
+
+/**
+ * Converts an unknown error to a string message safely.
+ */
+export function errorToMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+/**
+ * Get the appropriate exit code for an error.
+ * Returns 1 for generic errors, or the error's exit code if it's an EvaluatorError.
+ */
+export function getExitCode(error: unknown): number {
+  if (error instanceof EvaluatorError) {
+    return error.exitCode;
+  }
+  return 1;
+}
