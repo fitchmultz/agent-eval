@@ -4,10 +4,9 @@
  * Notes: Clustering is intentionally conservative to preserve precision in evaluator v1.
  */
 
-import type { EvaluatedTurn } from "./evaluator.js";
 import { chooseMaxConfidence, chooseMaxSeverity } from "./ranking.js";
 import { isLowSignalPreview } from "./sanitization.js";
-import type { IncidentRecord, LabelRecord } from "./schema.js";
+import type { IncidentRecord, LabelRecord, RawTurnRecord } from "./schema.js";
 
 export interface ClusterOptions {
   maxTurnGap: number;
@@ -41,7 +40,7 @@ function sharesAnyLabel(
   return right.some((label) => leftLabels.has(label.label));
 }
 
-function buildEvidencePreviews(turns: readonly EvaluatedTurn[]): string[] {
+function buildEvidencePreviews(turns: readonly RawTurnRecord[]): string[] {
   const previews = turns.flatMap((turn) => turn.userMessagePreviews);
   const preferred = previews.filter((preview) => !isLowSignalPreview(preview));
   const selected = preferred.length > 0 ? preferred : previews;
@@ -49,13 +48,13 @@ function buildEvidencePreviews(turns: readonly EvaluatedTurn[]): string[] {
 }
 
 export function clusterIncidents(
-  turns: readonly EvaluatedTurn[],
+  turns: readonly RawTurnRecord[],
   options: ClusterOptions,
   evaluatorVersion: string,
   schemaVersion: string,
 ): IncidentRecord[] {
   const incidents: IncidentRecord[] = [];
-  let currentCluster: EvaluatedTurn[] = [];
+  let currentCluster: RawTurnRecord[] = [];
 
   function flushCluster(): void {
     if (currentCluster.length === 0) {
