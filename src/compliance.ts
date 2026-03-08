@@ -11,12 +11,21 @@ import {
 } from "./tool-classification.js";
 import type { ParsedSession, ParsedTurn } from "./transcript.js";
 
+/**
+ * Scorecard for a session's compliance with AGENTS-style operating rules.
+ */
 export interface ComplianceScorecard {
+  /** Overall compliance score (0-100, higher is better) */
   score: number;
+  /** Results for each individual compliance rule */
   rules: ComplianceRuleResult[];
+  /** Total number of verification tool calls observed */
   verificationCount: number;
+  /** Number of verification tool calls that succeeded */
   verificationPassedCount: number;
+  /** Number of verification tool calls that failed */
   verificationFailedCount: number;
+  /** Number of write tool calls observed */
   writeCount: number;
 }
 
@@ -62,6 +71,31 @@ function createRule(
   return { rule, status, rationale };
 }
 
+/**
+ * Scores a session's compliance against AGENTS-style operating rules.
+ *
+ * Evaluates five compliance rules:
+ * 1. scope_confirmed_before_major_write - Context exploration before writing
+ * 2. cwd_or_repo_echoed_before_write - Repository/cwd confirmation before writing
+ * 3. short_plan_before_large_change - Explicit plan before major changes
+ * 4. verification_after_code_changes - Verification after code changes
+ * 5. no_unverified_ending - Session ends with passing verification
+ *
+ * The score starts at 100 and loses 20 points for each failed rule.
+ *
+ * @param session - The parsed session to evaluate
+ * @returns ComplianceScorecard with overall score and per-rule results
+ *
+ * @example
+ * ```typescript
+ * const session = await parseTranscriptFile("session.jsonl");
+ * const scorecard = scoreCompliance(session);
+ * console.log(`Compliance: ${scorecard.score}/100`);
+ * for (const rule of scorecard.rules) {
+ *   console.log(`  ${rule.rule}: ${rule.status}`);
+ * }
+ * ```
+ */
 export function scoreCompliance(session: ParsedSession): ComplianceScorecard {
   const writeTurns = session.turns.flatMap((turn, turnIndex) =>
     turn.toolCalls

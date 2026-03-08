@@ -24,9 +24,15 @@ import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
 export type { EvaluationResult, SummaryOnlyEvaluationResult };
 export { writeEvaluationArtifacts, writeSummaryArtifacts };
 
+/**
+ * Options for evaluating Codex session artifacts.
+ */
 export interface EvaluateOptions {
+  /** Path to the Codex home directory (typically ~/.codex) */
   codexHome: string;
+  /** Directory where evaluation artifacts will be written */
   outputDir: string;
+  /** Maximum number of most recent sessions to evaluate (undefined for all) */
   sessionLimit?: number;
 }
 
@@ -65,6 +71,31 @@ function recalculateIncidentCounts(
   };
 }
 
+/**
+ * Performs a full evaluation of Codex session artifacts.
+ *
+ * This function orchestrates the complete evaluation pipeline:
+ * 1. Discovers session files in the Codex home directory
+ * 2. Parses transcript files into normalized sessions
+ * 3. Labels turns based on user message heuristics
+ * 4. Clusters incidents from labeled turns
+ * 5. Aggregates metrics and generates reports
+ *
+ * @param options - Evaluation options including codexHome, outputDir, and optional sessionLimit
+ * @returns Promise resolving to the full evaluation result with raw turns, incidents, metrics, and report
+ * @throws {FileNotFoundError} If the codexHome directory does not exist
+ * @throws {TranscriptParseError} If strict mode is enabled and a transcript fails to parse
+ *
+ * @example
+ * ```typescript
+ * const result = await evaluateArtifacts({
+ *   codexHome: "~/.codex",
+ *   outputDir: "./artifacts",
+ *   sessionLimit: 100
+ * });
+ * console.log(`Found ${result.incidents.length} incidents across ${result.metrics.sessionCount} sessions`);
+ * ```
+ */
 export async function evaluateArtifacts(
   options: EvaluateOptions,
 ): Promise<EvaluationResult> {
@@ -107,6 +138,30 @@ export async function evaluateArtifacts(
   };
 }
 
+/**
+ * Performs a summary-only evaluation of Codex session artifacts.
+ *
+ * This is a lightweight alternative to `evaluateArtifacts()` that:
+ * - Skips raw turn and incident JSONL emission
+ * - Computes only summary metrics and reports
+ * - Uses lower concurrency for reduced resource usage
+ *
+ * Use this when you only need high-level insights without detailed incident data.
+ *
+ * @param options - Evaluation options including codexHome, outputDir, and optional sessionLimit
+ * @returns Promise resolving to summary metrics, summary artifact, and markdown report
+ * @throws {FileNotFoundError} If the codexHome directory does not exist
+ * @throws {TranscriptParseError} If strict mode is enabled and a transcript fails to parse
+ *
+ * @example
+ * ```typescript
+ * const result = await evaluateArtifactsSummaryOnly({
+ *   codexHome: "~/.codex",
+ *   outputDir: "./artifacts"
+ * });
+ * console.log(result.report); // Markdown report
+ * ```
+ */
 export async function evaluateArtifactsSummaryOnly(
   options: EvaluateOptions,
 ): Promise<SummaryOnlyEvaluationResult> {

@@ -121,6 +121,24 @@ function renderInventoryLines(metrics: MetricsRecord): string {
     .join("\n");
 }
 
+/**
+ * Renders a complete markdown report from evaluation results.
+ *
+ * This is the primary report generation function that:
+ * 1. Builds a summary artifact from the metrics and raw data
+ * 2. Renders all report sections including headline insights, incidents, sessions
+ *
+ * @param metrics - Aggregated metrics from the evaluation
+ * @param incidents - Clustered incidents detected during evaluation
+ * @param rawTurns - All parsed and labeled turns from the sessions
+ * @returns Markdown-formatted report string
+ *
+ * @example
+ * ```typescript
+ * const report = renderReport(metrics, incidents, rawTurns);
+ * await writeFile("report.md", report);
+ * ```
+ */
 export function renderReport(
   metrics: MetricsRecord,
   incidents: readonly IncidentRecord[],
@@ -133,6 +151,23 @@ export function renderReport(
   return renderSummaryReport(metrics, summary);
 }
 
+/**
+ * Renders a markdown report from a pre-built summary artifact.
+ *
+ * Use this when you already have a summary artifact and want to
+ * regenerate just the markdown report without reprocessing the data.
+ *
+ * @param metrics - Aggregated metrics from the evaluation
+ * @param summary - Pre-built summary artifact from buildSummaryArtifact()
+ * @returns Markdown-formatted report string
+ *
+ * @example
+ * ```typescript
+ * const summary = buildSummaryArtifact(metrics, inputs);
+ * const report = renderSummaryReport(metrics, summary);
+ * console.log(report);
+ * ```
+ */
 export function renderSummaryReport(
   metrics: MetricsRecord,
   summary: ReturnType<typeof buildSummaryArtifact>,

@@ -99,6 +99,32 @@ const labelRules: LabelRule[] = [
   },
 ];
 
+/**
+ * Labels a turn based on user message heuristics.
+ *
+ * Applies a taxonomy of label rules to user messages to detect:
+ * - context_drift - User indicated the agent drifted from requested scope
+ * - test_build_lint_failure_complaint - User reported failing tests/build/lint
+ * - interrupt - User explicitly interrupted or redirected work
+ * - regression_report - User reported a regression or breakage
+ * - praise - User expressed positive feedback
+ * - context_reinjection - User restated goals or constraints
+ * - verification_request - User requested verification or validation
+ * - stalled_or_guessing - User indicated agent appears stalled
+ *
+ * User-role messages are the primary label source by design for evaluator v1.
+ *
+ * @param turn - The parsed turn to label
+ * @returns Array of label records for the turn (empty if no patterns match)
+ *
+ * @example
+ * ```typescript
+ * const labels = labelTurn(turn);
+ * if (labels.some(l => l.label === "test_build_lint_failure_complaint")) {
+ *   console.log("Build failure detected");
+ * }
+ * ```
+ */
 export function labelTurn(turn: ParsedTurn): LabelRecord[] {
   const text = turn.userMessages.join("\n").trim();
   if (text.length === 0) {

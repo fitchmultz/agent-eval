@@ -7,9 +7,15 @@ import { join } from "node:path";
 import { listFilesRecursively, pathExists } from "./filesystem.js";
 import type { InventoryRecord } from "./schema.js";
 
+/**
+ * Result of discovering Codex artifacts in a home directory.
+ */
 export interface DiscoveredArtifacts {
+  /** Path to the Codex home directory that was scanned */
   codexHome: string;
+  /** Inventory records for all expected and discovered artifact types */
   inventory: InventoryRecord[];
+  /** Full paths to all discovered session JSONL files */
   sessionFiles: string[];
 }
 
@@ -28,6 +34,28 @@ function buildInventoryRecord(
   };
 }
 
+/**
+ * Discovers canonical transcript files and optional local enrichment stores
+ * under a Codex home directory.
+ *
+ * This function scans for:
+ * - Required: Session JSONL files (sessions directory)
+ * - Optional: SQLite state database, history JSONL, TUI logs, shell snapshots
+ *
+ * @param codexHome - Path to the Codex home directory (typically ~/.codex)
+ * @returns Promise resolving to discovered artifacts including session files and inventory
+ * @throws {FileNotFoundError} If required paths cannot be accessed
+ * @throws {PermissionDeniedError} If directory access is denied
+ *
+ * @example
+ * ```typescript
+ * const discovered = await discoverArtifacts("~/.codex");
+ * console.log(`Found ${discovered.sessionFiles.length} sessions`);
+ * for (const item of discovered.inventory) {
+ *   console.log(`${item.kind}: ${item.discovered ? "present" : "missing"}`);
+ * }
+ * ```
+ */
 export async function discoverArtifacts(
   codexHome: string,
 ): Promise<DiscoveredArtifacts> {

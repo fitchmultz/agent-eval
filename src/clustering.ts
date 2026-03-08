@@ -9,7 +9,11 @@ import { chooseMaxConfidence, chooseMaxSeverity } from "./ranking.js";
 import { isLowSignalPreview } from "./sanitization.js";
 import type { IncidentRecord, LabelRecord, RawTurnRecord } from "./schema.js";
 
+/**
+ * Options for incident clustering.
+ */
 export interface ClusterOptions {
+  /** Maximum number of turns between labeled turns to consider them part of the same incident */
   maxTurnGap: number;
 }
 
@@ -48,6 +52,34 @@ function buildEvidencePreviews(turns: readonly RawTurnRecord[]): string[] {
   return selected.slice(0, getConfig().previews.maxIncidentEvidence);
 }
 
+/**
+ * Clusters labeled turns into incident records using turn-gap heuristics.
+ *
+ * This function groups consecutive labeled turns that share overlapping labels
+ * into incidents. Turns are clustered when:
+ * - They are from the same session
+ * - They are within maxTurnGap of each other
+ * - They share at least one label
+ *
+ * The clustering is intentionally conservative to preserve precision.
+ *
+ * @param turns - All labeled turns from the evaluation (unlabeled turns are skipped)
+ * @param options - Clustering options including maxTurnGap
+ * @param evaluatorVersion - Version string for the evaluator (stored in incident records)
+ * @param schemaVersion - Version string for the schema (stored in incident records)
+ * @returns Array of incident records with merged labels and evidence previews
+ *
+ * @example
+ * ```typescript
+ * const incidents = clusterIncidents(
+ *   labeledTurns,
+ *   { maxTurnGap: 3 },
+ *   "1.0.0",
+ *   "1.0.0"
+ * );
+ * console.log(`Found ${incidents.length} incidents`);
+ * ```
+ */
 export function clusterIncidents(
   turns: readonly RawTurnRecord[],
   options: ClusterOptions,

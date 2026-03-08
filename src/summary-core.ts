@@ -35,6 +35,18 @@ export type {
   SummaryInputs,
 } from "./types.js";
 
+/**
+ * Gets the count for a specific label from label counts.
+ *
+ * @param labels - Record of label names to counts
+ * @param label - The label name to look up
+ * @returns The count for the label, or 0 if not present
+ *
+ * @example
+ * ```typescript
+ * const count = countLabel(metrics.labelCounts, "interrupt");
+ * ```
+ */
 export function countLabel(
   labels: MetricsRecord["labelCounts"],
   label: LabelName,
@@ -42,6 +54,22 @@ export function countLabel(
   return labels[label] ?? 0;
 }
 
+/**
+ * Calculates a rate as a percentage with safe division.
+ *
+ * Returns 0 if the denominator is 0 or negative to avoid NaN/Infinity.
+ * Results are rounded to 1 decimal place.
+ *
+ * @param numerator - The count of occurrences
+ * @param denominator - The total count
+ * @returns The rate as a percentage (0-100+), rounded to 1 decimal
+ *
+ * @example
+ * ```typescript
+ * safeRate(15, 100); // 15.0
+ * safeRate(0, 0); // 0
+ * ```
+ */
 export function safeRate(numerator: number, denominator: number): number {
   if (denominator <= 0) {
     return 0;
@@ -50,6 +78,11 @@ export function safeRate(numerator: number, denominator: number): number {
   return Number(((numerator / denominator) * 100).toFixed(1));
 }
 
+/**
+ * Creates an empty label count map for a session.
+ *
+ * @returns Record with all label names initialized to 0
+ */
 export function createEmptySessionLabelMap(): Record<LabelName, number> {
   return {
     context_drift: 0,
@@ -63,6 +96,11 @@ export function createEmptySessionLabelMap(): Record<LabelName, number> {
   };
 }
 
+/**
+ * Creates an empty severity count map.
+ *
+ * @returns Record with all severity levels initialized to 0
+ */
 export function createEmptySeverityCounts(): Record<Severity, number> {
   return {
     info: 0,
@@ -72,6 +110,12 @@ export function createEmptySeverityCounts(): Record<Severity, number> {
   };
 }
 
+/**
+ * Collects label counts per session from raw turn records.
+ *
+ * @param rawTurns - All parsed and labeled turns
+ * @returns Map from session ID to label counts for that session
+ */
 export function collectSessionLabelCounts(
   rawTurns: readonly RawTurnRecord[],
 ): Map<string, Record<LabelName, number>> {
@@ -89,12 +133,30 @@ export function collectSessionLabelCounts(
   return counts;
 }
 
+/**
+ * Counts turns that include write-like tool calls.
+ *
+ * @param rawTurns - All parsed turns
+ * @returns Number of turns containing at least one write tool call
+ */
 export function countWriteTurns(rawTurns: readonly RawTurnRecord[]): number {
   return rawTurns.filter((turn) =>
     turn.toolCalls.some((tool) => tool.writeLike),
   ).length;
 }
 
+/**
+ * Determines the tone classification for a score value.
+ *
+ * Scores are classified as:
+ * - "good": 90-100
+ * - "neutral": 70-89
+ * - "warn": 40-69
+ * - "danger": 0-39
+ *
+ * @param score - The score value (0-100)
+ * @returns The tone classification for the score
+ */
 export function toneForScore(
   score: number,
 ): import("./schema.js").SummaryArtifact["scoreCards"][number]["tone"] {
@@ -110,6 +172,16 @@ export function toneForScore(
   return "danger";
 }
 
+/**
+ * Builds summary inputs from raw turn and incident data.
+ *
+ * Collects session label counts, severity counts, and top incidents
+ * for use in summary generation.
+ *
+ * @param rawTurns - All parsed and labeled turns
+ * @param incidents - Clustered incidents
+ * @returns SummaryInputs ready for buildSummaryArtifact()
+ */
 export function buildSummaryInputsFromArtifacts(
   rawTurns: readonly RawTurnRecord[],
   incidents: readonly IncidentRecord[],
@@ -142,6 +214,20 @@ export function buildSummaryInputsFromArtifacts(
   };
 }
 
+/**
+ * Builds the core summary data from metrics and inputs.
+ *
+ * This function computes all deterministic metrics including:
+ * - Label counts and severity distribution
+ * - Operational rates (incidents, writes, verifications per 100 turns)
+ * - Delivery metrics (write verification rates)
+ * - Comparative slices and session rankings
+ * - Top incidents
+ *
+ * @param metrics - Aggregated metrics from the evaluation
+ * @param inputs - Summary inputs containing session data
+ * @returns Core summary data ready for decoration and reporting
+ */
 export function buildSummaryCore(
   metrics: MetricsRecord,
   inputs: SummaryInputs,

@@ -3,9 +3,15 @@
  * Entrypoint: `createMessagePreviews()` is used by the evaluator and report pipeline when generating outputs.
  * Notes: v1 favors compact, public-safe previews and prioritizes human-authored signal over harness boilerplate.
  */
+/**
+ * Options for creating message previews.
+ */
 export interface PreviewOptions {
+  /** Home directory path to redact (replaced with ~) */
   homeDirectory?: string | undefined;
+  /** Maximum length for each preview string */
   maxLength: number;
+  /** Maximum number of preview items to return */
   maxItems: number;
 }
 
@@ -97,11 +103,45 @@ function previewSignalScore(preview: string): number {
   return score;
 }
 
+/**
+ * Checks if a preview is considered low-signal (boilerplate content).
+ *
+ * Low-signal patterns include AGENTS.md instructions, orchestration wrappers,
+ * forked session markers, and other non-human-authored content.
+ *
+ * @param preview - The preview text to check
+ * @returns True if the preview matches low-signal patterns
+ *
+ * @example
+ * ```typescript
+ * isLowSignalPreview("# AGENTS.md instructions"); // true
+ * isLowSignalPreview("The build is failing"); // false
+ * ```
+ */
 export function isLowSignalPreview(preview: string): boolean {
   const normalized = normalizeWhitespace(preview);
   return lowSignalPatterns.some((pattern) => pattern.test(normalized));
 }
 
+/**
+ * Sanitizes message text for safe, compact display.
+ *
+ * Performs the following transformations:
+ * 1. Normalizes whitespace (collapses multiple spaces/newlines)
+ * 2. Redacts email addresses
+ * 3. Redacts home directory paths (replaces with ~)
+ * 4. Truncates to maxLength with ellipsis
+ *
+ * @param text - The raw message text to sanitize
+ * @param options - Options for home directory redaction and max length
+ * @returns Sanitized, truncated text safe for display
+ *
+ * @example
+ * ```typescript
+ * const sanitized = sanitizeMessageText("Hello world!!!", { maxLength: 8 });
+ * console.log(sanitized); // "Hello..."
+ * ```
+ */
 export function sanitizeMessageText(
   text: string,
   options: Pick<PreviewOptions, "homeDirectory" | "maxLength">,
@@ -118,6 +158,32 @@ export function sanitizeMessageText(
   return `${redacted.slice(0, sliceLength).trimEnd()}...`;
 }
 
+/**
+ * Creates ranked, sanitized message previews from raw messages.
+ *
+ * Scores messages by signal quality (preferring human-authored content over
+ * boilerplate), deduplicates, and returns the top N unique previews.
+ *
+ * Signal scoring criteria:
+ * - Penalty for low-signal patterns (orchestration, instructions)
+ * - Bonus for first-person language ("I", "my", "we")
+ * - Bonus for feedback keywords ("please", "stuck", "broken", "fail")
+ * - Bonus for punctuation indicating human speech (? or !)
+ * - Bonus for reasonable length (6-14 words)
+ *
+ * @param messages - Array of raw message strings
+ * @param options - Preview options for sanitization and limits
+ * @returns Array of sanitized preview strings, ranked by signal quality
+ *
+ * @example
+ * ```typescript
+ * const previews = createMessagePreviews(
+ *   ["Thanks!", "AGENTS.md instructions", "The build is failing"],
+ *   { maxLength: 100, maxItems: 2 }
+ * );
+ * // Returns ["The build is failing", "Thanks!"] (ranked by signal)
+ * ```
+ */
 export function createMessagePreviews(
   messages: readonly string[],
   options: PreviewOptions,

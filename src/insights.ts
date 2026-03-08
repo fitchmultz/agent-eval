@@ -54,6 +54,25 @@ export {
   safeRate,
 };
 
+/**
+ * Builds a complete summary artifact from metrics and turn/incident data.
+ *
+ * This is the main entrypoint for summary generation. It composes:
+ * - Core deterministic metrics (rates, counts, compliance)
+ * - Presentation decorations (badges, brag cards, score cards, opportunities)
+ * - Session rankings and top incidents
+ *
+ * @param metrics - Aggregated metrics record from the evaluation
+ * @param inputs - Summary inputs containing session label counts, top incidents, severity counts, and write turn count
+ * @returns A complete SummaryArtifact suitable for JSON serialization and report generation
+ *
+ * @example
+ * ```typescript
+ * const inputs = buildSummaryInputsFromArtifacts(rawTurns, incidents);
+ * const summary = buildSummaryArtifact(metrics, inputs);
+ * console.log(`Verification rate: ${summary.delivery.writeVerificationRate}%`);
+ * ```
+ */
 export function buildSummaryArtifact(
   metrics: MetricsRecord,
   inputs: SummaryInputs,

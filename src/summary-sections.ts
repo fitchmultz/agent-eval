@@ -5,15 +5,30 @@
  */
 import type { SummaryArtifact } from "./schema.js";
 
+/**
+ * A card in a summary section with a title, value, detail, and visual tone.
+ */
 export interface SummarySectionCard {
+  /** Card title displayed as the label */
   title: string;
+  /** Primary value displayed prominently */
   value: string;
+  /** Detailed explanation or context */
   detail: string;
+  /** Visual tone for styling (affects color/border) */
   tone: "neutral" | "good" | "warn" | "danger";
 }
 
+/**
+ * Model containing all derived summary sections.
+ *
+ * These sections are computed at render time and not persisted
+ * in the summary artifact to avoid structural drift.
+ */
 export interface SummarySectionModel {
+  /** Headline insights for the top of reports */
   headlineInsights: SummarySectionCard[];
+  /** Recent momentum comparisons (recent vs corpus) */
   recentMomentum: SummarySectionCard[];
 }
 
@@ -117,6 +132,20 @@ function buildRecentMomentum(
   ];
 }
 
+/**
+ * Builds shared section data for markdown and HTML reports.
+ *
+ * Creates derived sections that are used by both report renderers:
+ * - Headline insights: Write verification, interruption load, highest friction session
+ * - Recent momentum: Comparative scores between recent sessions and corpus
+ *
+ * These sections are computed at render time from the summary artifact
+ * rather than being persisted, ensuring reports stay consistent with
+ * the canonical summary data.
+ *
+ * @param summary - The complete summary artifact
+ * @returns SummarySectionModel containing headline and momentum sections
+ */
 export function buildSummarySections(
   summary: SummaryArtifact,
 ): SummarySectionModel {

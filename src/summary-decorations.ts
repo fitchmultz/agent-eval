@@ -14,10 +14,20 @@ import {
 import { countLabel, safeRate, toneForScore } from "./summary-core.js";
 import type { SessionInsightRow } from "./types.js";
 
+/**
+ * Presentation-oriented decorations added to the summary core.
+ *
+ * These are non-essential, UI-friendly extras that enhance the report
+ * but are not part of the deterministic core metrics.
+ */
 export interface SummaryDecorations {
+  /** Score cards for proof, flow, and discipline scores */
   scoreCards: SummaryArtifact["scoreCards"];
+  /** Brag cards highlighting achievements (verified writes, quiet runs) */
   bragCards: SummaryArtifact["bragCards"];
+  /** Achievement badges earned by the corpus */
   achievementBadges: SummaryArtifact["achievementBadges"];
+  /** Deterministic improvement opportunities identified */
   opportunities: SummaryArtifact["opportunities"];
 }
 
@@ -173,6 +183,22 @@ function buildOpportunities(
   return opportunities.slice(0, 5);
 }
 
+/**
+ * Builds optional presentation decorations on top of the summary core.
+ *
+ * Creates UI-friendly elements including:
+ * - Score cards (Proof, Flow, Discipline scores with tones)
+ * - Brag cards (proof-backed ships, quiet runs, battle-tested runs)
+ * - Achievement badges (earned based on corpus characteristics)
+ * - Improvement opportunities (deterministic suggestions)
+ *
+ * These decorations are kept separate from core metrics to maintain
+ * a clear distinction between deterministic data and presentation layer.
+ *
+ * @param metrics - Aggregated metrics from the evaluation
+ * @param topSessions - Ranked session insight rows
+ * @returns SummaryDecorations containing all presentation elements
+ */
 export function buildSummaryDecorations(
   metrics: MetricsRecord,
   topSessions: readonly SessionInsightRow[],
