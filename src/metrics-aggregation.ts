@@ -34,6 +34,7 @@ function isValidLabel(label: string): label is LabelName {
 function incrementLabelCount(counts: LabelCountRecord, label: string): void {
   if (!isValidLabel(label)) {
     // Skip invalid labels - this could log a warning in debug mode
+    // biome-ignore lint/complexity/useLiteralKeys: Environment access uses index signatures in Node typings.
     if (process.env["DEBUG"]) {
       process.stderr.write(
         `[metrics-aggregation] Skipping invalid label: ${label}\n`,

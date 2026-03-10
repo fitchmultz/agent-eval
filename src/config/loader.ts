@@ -1,7 +1,7 @@
 /**
  * Purpose: Load configuration from files and environment variables.
  * Responsibilities: File discovery, JSON parsing, env var mapping.
- * Scope: Supports .codex-evalrc, .codex-evalrc.json, codex-eval.config.json.
+ * Scope: Supports .agent-evalrc, .agent-evalrc.json, agent-eval.config.json.
  * Usage: import { loadConfigFile, loadEnvConfig, mergeConfigs } from "./loader.js";
  * Invariants: Never throws on file errors, returns empty partial config instead.
  */
@@ -14,9 +14,9 @@ import type { EvaluatorConfig } from "./index.js";
 
 /** Supported configuration file names in order of precedence */
 const CONFIG_FILES = [
-  ".codex-evalrc",
-  ".codex-evalrc.json",
-  "codex-eval.config.json",
+  ".agent-evalrc",
+  ".agent-evalrc.json",
+  "agent-eval.config.json",
 ] as const;
 
 /** Partial config type helper */
@@ -130,10 +130,14 @@ export function mergeConfigs(
   ...configs: Array<DeepPartial<EvaluatorConfig>>
 ): DeepPartial<EvaluatorConfig> {
   return configs.reduce<DeepPartial<EvaluatorConfig>>((merged, current) => {
-    const result: DeepPartial<EvaluatorConfig> = {
-      ...merged,
-      ...current,
-    };
+    const result: DeepPartial<EvaluatorConfig> = {};
+
+    for (const [key, value] of Object.entries(merged)) {
+      result[key as keyof EvaluatorConfig] = value as never;
+    }
+    for (const [key, value] of Object.entries(current)) {
+      result[key as keyof EvaluatorConfig] = value as never;
+    }
 
     if (merged.concurrency || current.concurrency) {
       result.concurrency = {

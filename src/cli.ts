@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 /**
- * Purpose: Implements the `codex-eval` CLI entrypoint with file/env config support.
- * Entrypoint: `main()` is invoked when the file is run directly or through the package bin.
- * Notes:
- *   - Loads config from .codex-evalrc files and CODEX_EVAL_* environment variables
- *   - All commands emit machine-readable data to stdout and write artifacts only when requested
- *   - Configuration precedence: defaults → file → env vars → CLI flags
+ * Purpose: Implements the source-aware `agent-eval` CLI entrypoint with file/env config support.
+ * Responsibilities: Parse CLI flags, initialize config, dispatch commands, and emit machine-readable stdout.
+ * Scope: Public CLI for transcript discovery, parsing, evaluation, and report generation across supported providers.
+ * Usage: `agent-eval inspect --source claude --home ~/.claude`.
+ * Invariants/Assumptions: CLI defaults remain local-first, transcript-first, and source-aware across supported providers.
  */
 
 import { Command } from "commander";
@@ -22,6 +21,7 @@ import {
   errorToMessage,
   FileNotFoundError,
   isEnoentError,
+  ValidationError,
 } from "./errors.js";
 import {
   evaluateArtifacts,
@@ -34,11 +34,17 @@ import {
   formatInspectOutput,
   formatParseOutput,
 } from "./formatters/index.js";
+import {
+  getDefaultSourceHome,
+  isSourceProvider,
+  type SourceProvider,
+} from "./sources.js";
 import { throwIfAborted } from "./utils/abort.js";
 import { getValidatedHomeDirectory } from "./utils/environment.js";
 
 interface GlobalOptions {
-  codexHome: string;
+  source: SourceProvider;
+  home: string;
   outputDir: string;
   sessionLimit?: number;
   summaryOnly?: boolean;
@@ -50,12 +56,16 @@ async function runInspectCommand(
   options: GlobalOptions,
   signal: AbortSignal,
 ): Promise<void> {
-  const inventory = await discoverArtifacts(options.codexHome, { signal });
+  const discovered = await discoverArtifacts(options.home, {
+    provider: options.source,
+    signal,
+  });
   process.stdout.write(
     `${formatInspectOutput(
-      options.codexHome,
-      inventory.sessionFiles.length,
-      inventory.inventory,
+      discovered.provider,
+      discovered.homePath,
+      discovered.sessionFiles.length,
+      discovered.inventory,
     )}\n`,
   );
 }
@@ -128,21 +138,31 @@ async function runReportCommand(
 }
 
 /**
- * Gets the default Codex home directory.
- * Uses environment variable first, then falls back to HOME/.codex or .codex.
- * @returns The default Codex home directory path
+ * Gets the default source provider.
  */
-function getDefaultCodexHome(): string {
-  const envHome = process.env[ENV_VARS.CODEX_HOME];
+function getDefaultSource(): SourceProvider {
+  const envSource = process.env[`CODEX_EVAL_${ENV_VARS.SOURCE}`];
+
+  if (envSource && isSourceProvider(envSource)) {
+    return envSource;
+  }
+
+  return "codex";
+}
+
+/**
+ * Gets the default source home directory.
+ */
+function getDefaultHome(source: SourceProvider): string {
+  const envHome = process.env[`CODEX_EVAL_${ENV_VARS.SOURCE_HOME}`];
   if (envHome) {
     return envHome;
   }
 
   try {
-    const homeDirectory = getValidatedHomeDirectory();
-    return `${homeDirectory}/.codex`;
+    return getDefaultSourceHome(source, getValidatedHomeDirectory());
   } catch {
-    return ".codex";
+    return source === "claude" ? ".claude" : ".codex";
   }
 }
 
@@ -216,22 +236,28 @@ export async function main(argv: string[]): Promise<number> {
 }
 
 async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
-  const defaultCodexHome = getDefaultCodexHome();
+  const defaultSource = getDefaultSource();
+  const defaultHome = getDefaultHome(defaultSource);
   const defaultOutputDir = getDefaultOutputDir();
 
   const program = new Command();
 
   program
-    .name("codex-eval")
+    .name("agent-eval")
     .description(
-      "Evaluate local Codex session artifacts and emit structured reports.",
+      "Evaluate local developer-agent transcript artifacts and emit structured reports.",
     )
     .version("0.1.0")
     .showHelpAfterError()
     .option(
-      "--codex-home <path>",
-      "Codex home to inspect (env: CODEX_EVAL_CODEX_HOME)",
-      defaultCodexHome,
+      "--source <provider>",
+      "Source provider to inspect: codex or claude (env: CODEX_EVAL_SOURCE)",
+      defaultSource,
+    )
+    .option(
+      "--home <path>",
+      "Source home to inspect (env: CODEX_EVAL_SOURCE_HOME)",
+      defaultHome,
     )
     .option(
       "--output-dir <path>",
@@ -264,24 +290,25 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
         "",
         "Configuration:",
         "  Config files (in order of precedence):",
-        "    - .codex-evalrc",
-        "    - .codex-evalrc.json",
-        "    - codex-eval.config.json",
+        "    - .agent-evalrc",
+        "    - .agent-evalrc.json",
+        "    - agent-eval.config.json",
         "",
         "  Environment variables:",
-        "    CODEX_EVAL_CODEX_HOME          - Codex home directory",
+        "    CODEX_EVAL_SOURCE              - Source provider (codex|claude)",
+        "    CODEX_EVAL_SOURCE_HOME         - Source home directory",
         "    CODEX_EVAL_OUTPUT_DIR          - Output directory for artifacts",
         "    CODEX_EVAL_CONCURRENCY_FULL    - Concurrency for full evaluation",
         "    CODEX_EVAL_CONCURRENCY_SUMMARY - Concurrency for summary evaluation",
         "    CODEX_EVAL_MAX_TURN_GAP        - Max turn gap for clustering",
         "",
         "Examples:",
-        "  codex-eval inspect --codex-home ~/.codex",
-        "  codex-eval parse --codex-home ~/.codex --output-dir artifacts",
-        "  codex-eval eval --codex-home ~/.codex --output-dir artifacts",
-        "  codex-eval report --codex-home ~/.codex --output-dir artifacts",
-        "  codex-eval eval --codex-home ~/.codex --output-dir artifacts --session-limit 25",
-        "  codex-eval eval --codex-home ~/.codex --output-dir artifacts --summary-only",
+        "  agent-eval inspect --source codex --home ~/.codex",
+        "  agent-eval inspect --source claude --home ~/.claude",
+        "  agent-eval eval --source codex --home ~/.codex --output-dir artifacts",
+        "  agent-eval eval --source claude --home ~/.claude --output-dir artifacts",
+        "  agent-eval eval --source claude --home ~/.claude --session-limit 25",
+        "  agent-eval eval --source codex --home ~/.codex --summary-only",
         "",
         "Exit codes:",
         "  0 success",
@@ -292,10 +319,12 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
 
   program
     .command("inspect")
-    .description("Discover canonical and optional local Codex artifact stores.")
+    .description(
+      "Discover canonical and optional local transcript stores for a supported source.",
+    )
     .action(async () => {
       throwIfAborted(signal);
-      const options = program.opts<GlobalOptions>();
+      const options = normalizeOptions(program.opts<GlobalOptions>());
 
       // Initialize config with CLI overrides
       await initializeConfig({
@@ -313,7 +342,7 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
     .description("Parse transcript files and emit raw turn artifacts.")
     .action(async () => {
       throwIfAborted(signal);
-      const options = program.opts<GlobalOptions>();
+      const options = normalizeOptions(program.opts<GlobalOptions>());
 
       await initializeConfig({
         cliOverrides: buildCliOverrides(options),
@@ -331,7 +360,7 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
     )
     .action(async () => {
       throwIfAborted(signal);
-      const options = program.opts<GlobalOptions>();
+      const options = normalizeOptions(program.opts<GlobalOptions>());
 
       await initializeConfig({
         cliOverrides: buildCliOverrides(options),
@@ -349,7 +378,7 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
     )
     .action(async () => {
       throwIfAborted(signal);
-      const options = program.opts<GlobalOptions>();
+      const options = normalizeOptions(program.opts<GlobalOptions>());
 
       await initializeConfig({
         cliOverrides: buildCliOverrides(options),
@@ -386,6 +415,29 @@ async function runMain(argv: string[], signal: AbortSignal): Promise<number> {
     process.stderr.write(`${message}\n`);
     return 1;
   }
+}
+
+function normalizeOptions(options: GlobalOptions): GlobalOptions {
+  const fallbackSource = getDefaultSource();
+  if (!isSourceProvider(options.source)) {
+    throw new ValidationError(
+      `Invalid source provider: ${options.source}. Expected one of: codex, claude.`,
+    );
+  }
+
+  const source = options.source;
+  const fallbackHome = getDefaultHome(fallbackSource);
+  const home =
+    !options.home ||
+    (options.home === fallbackHome && source !== fallbackSource)
+      ? getDefaultHome(source)
+      : options.home;
+
+  return {
+    ...options,
+    source,
+    home,
+  };
 }
 
 /**

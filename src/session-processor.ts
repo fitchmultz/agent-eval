@@ -1,6 +1,9 @@
 /**
  * Purpose: Processes individual sessions into summarized turns and incidents.
- * Entrypoint: `processSession()` for single-session evaluation.
+ * Responsibilities: Convert parsed sessions into raw turns, clustered incidents, and per-session metrics.
+ * Scope: Shared by all supported transcript sources after normalization.
+ * Usage: `processSession(parsedSession, homeDirectory)`.
+ * Invariants/Assumptions: Source-specific parsing is complete before processing begins.
  */
 import { clusterIncidents } from "./clustering.js";
 import { scoreCompliance } from "./compliance.js";
@@ -23,6 +26,7 @@ import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
  */
 export interface SessionMetrics {
   sessionId: string;
+  provider: ParsedSession["provider"];
   turnCount: number;
   labeledTurnCount: number;
   incidentCount: number;
@@ -134,6 +138,7 @@ function buildSessionMetrics(
 ): SessionMetrics {
   return {
     sessionId: session.sessionId,
+    provider: session.provider,
     turnCount: session.turns.length,
     labeledTurnCount,
     incidentCount: incidents.length,

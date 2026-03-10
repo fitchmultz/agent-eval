@@ -128,6 +128,7 @@ export function handleTurnContextEvent(
 export function buildParsedSession(
   context: ParserContext,
   path: string,
+  provider: ParsedSession["provider"],
 ): ParsedSession {
   if (hasTurnContent(context.currentTurn)) {
     context.turns.push(context.currentTurn);
@@ -135,6 +136,7 @@ export function buildParsedSession(
 
   const parsedSession: ParsedSession = {
     sessionId: context.sessionId,
+    provider,
     path,
     turns: context.turns,
   };

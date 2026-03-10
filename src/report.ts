@@ -1,7 +1,9 @@
 /**
- * Purpose: Converts evaluator metrics and incidents into a concise markdown report suitable for blog prep.
- * Entrypoint: `renderReport()` is used by the `report` and `eval` commands.
- * Notes: The report now emphasizes deterministic insight summaries over raw metric dumps.
+ * Purpose: Converts evaluator metrics and incidents into a concise source-neutral markdown report suitable for public sharing.
+ * Responsibilities: Build deterministic report sections from metrics and summary artifacts.
+ * Scope: Used by the `report` and `eval` commands for all supported sources.
+ * Usage: Call `renderReport()` or `renderSummaryReport()` with aggregated metrics.
+ * Invariants/Assumptions: Incident evidence stays redacted and truncated for public-safe reporting.
  */
 import {
   buildSummaryArtifact,
@@ -116,7 +118,7 @@ function renderInventoryLines(metrics: MetricsRecord): string {
   return metrics.inventory
     .map(
       (record) =>
-        `- ${record.required ? "required" : "optional"} ${record.kind}: ${record.discovered ? "present" : "missing"} at \`${record.path}\``,
+        `- ${record.provider ?? "codex"} ${record.required ? "required" : "optional"} ${record.kind}: ${record.discovered ? "present" : "missing"} at \`${record.path}\``,
     )
     .join("\n");
 }
@@ -173,13 +175,17 @@ export function renderSummaryReport(
   summary: ReturnType<typeof buildSummaryArtifact>,
 ): string {
   const sections = buildSummarySections(summary);
+  const providers = [
+    ...new Set(metrics.inventory.map((record) => record.provider ?? "codex")),
+  ];
 
   return [
-    "# Codex Evaluator Report",
+    "# Agent Evaluator Report",
     "",
     `- Evaluator version: \`${metrics.evaluatorVersion}\``,
     `- Schema version: \`${metrics.schemaVersion}\``,
     `- Generated at: \`${metrics.generatedAt}\``,
+    `- Sources: \`${providers.join(", ")}\``,
     `- Sessions: \`${metrics.sessionCount}\``,
     `- Turns: \`${metrics.turnCount}\``,
     `- Incidents: \`${metrics.incidentCount}\``,

@@ -24,6 +24,7 @@ function createSession(
     complianceScore: 80,
     complianceRules: [],
     ...overrides,
+    provider: overrides.provider ?? "codex",
   };
 }
 

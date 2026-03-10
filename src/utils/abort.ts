@@ -31,8 +31,10 @@ export function combineSignals(
   }
 
   if (validSignals.length === 1) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    return validSignals[0]!;
+    const [onlySignal] = validSignals;
+    if (onlySignal) {
+      return onlySignal;
+    }
   }
 
   const controller = new AbortController();

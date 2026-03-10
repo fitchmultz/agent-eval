@@ -1,9 +1,9 @@
 /**
  * Purpose: Environment variable names and helper functions for configuration.
- * Responsibilities: Define ENV_VARS constants, provide type-safe env accessors.
+ * Responsibilities: Define ENV_VARS constants and provide type-safe env accessors.
  * Scope: All environment variable names are prefixed with CODEX_EVAL_.
  * Usage: import { ENV_VARS, getEnvString, getEnvNumber } from "./env.js";
- * Invariants: All env var names are defined in ENV_VARS constant object.
+ * Invariants/Assumptions: Environment variables remain namespaced under `CODEX_EVAL_`.
  */
 
 /**
@@ -11,8 +11,10 @@
  * All variables are prefixed with CODEX_EVAL_ for namespacing.
  */
 export const ENV_VARS = {
-  /** Codex home directory */
-  CODEX_HOME: "CODEX_HOME",
+  /** Generic source home directory */
+  SOURCE_HOME: "SOURCE_HOME",
+  /** Source provider name */
+  SOURCE: "SOURCE",
   /** Output directory for artifacts */
   OUTPUT_DIR: "OUTPUT_DIR",
   /** Concurrency for full evaluation */
@@ -43,7 +45,7 @@ const ENV_PREFIX = "CODEX_EVAL_";
 /**
  * Gets the full environment variable name with prefix.
  * @param key - The environment variable key from ENV_VARS
- * @returns Full environment variable name (e.g., "CODEX_EVAL_CODEX_HOME")
+ * @returns Full environment variable name (e.g., "CODEX_EVAL_SOURCE_HOME")
  */
 export function getEnvVarName(key: EnvVarKey): string {
   return `${ENV_PREFIX}${ENV_VARS[key]}`;

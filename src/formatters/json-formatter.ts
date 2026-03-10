@@ -1,17 +1,22 @@
 /**
  * Purpose: JSON output formatting for CLI commands.
- * Entrypoint: Used by CLI to format JSON output consistently.
- * Notes: Extracted from CLI to separate presentation from business logic.
+ * Responsibilities: Serialize CLI command results with stable machine-readable keys.
+ * Scope: Used by the CLI for inspect/parse/eval output.
+ * Usage: Import formatter helpers instead of hand-building stdout payloads in the CLI.
+ * Invariants/Assumptions: Output remains JSON and includes evaluator/schema version fields.
  */
 
+import type { SourceProvider } from "../sources.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "../version.js";
 
 interface InspectOutput {
   evaluatorVersion: string;
   schemaVersion: string;
-  codexHome: string;
+  provider: SourceProvider;
+  homePath: string;
   sessionFileCount: number;
   inventory: Array<{
+    provider: SourceProvider;
     kind: string;
     path: string;
     discovered: boolean;
@@ -40,14 +45,16 @@ interface EvalOutput {
  * Formats the inspect command output as JSON.
  */
 export function formatInspectOutput(
-  codexHome: string,
+  provider: SourceProvider,
+  homePath: string,
   sessionFileCount: number,
   inventory: InspectOutput["inventory"],
 ): string {
   const output: InspectOutput = {
     evaluatorVersion: EVALUATOR_VERSION,
     schemaVersion: SCHEMA_VERSION,
-    codexHome,
+    provider,
+    homePath,
     sessionFileCount,
     inventory,
   };

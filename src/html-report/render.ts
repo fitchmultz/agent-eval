@@ -1,7 +1,9 @@
 /**
- * Purpose: Main render orchestrator for HTML reports.
- * Entrypoint: `renderHtmlReport()` generates the complete HTML document.
- * Notes: Orchestrates all card and table renderers to build the final report.
+ * Purpose: Main render orchestrator for source-neutral HTML reports.
+ * Responsibilities: Assemble the complete static HTML report document for supported transcript sources.
+ * Scope: Used by the presentation layer after deterministic metrics and summary generation.
+ * Usage: `renderHtmlReport(summary, metrics)`.
+ * Invariants/Assumptions: The HTML report remains static, portable, and dependency-free.
  */
 
 import type { MetricsRecord, SummaryArtifact } from "../schema.js";
@@ -39,6 +41,9 @@ export function renderHtmlReport(
   metrics: MetricsRecord,
 ): string {
   const styles = renderStyles();
+  const providers = [
+    ...new Set(metrics.inventory.map((record) => record.provider ?? "codex")),
+  ];
 
   return [
     "<!doctype html>",
@@ -46,17 +51,18 @@ export function renderHtmlReport(
     "<head>",
     '<meta charset="utf-8" />',
     '<meta name="viewport" content="width=device-width, initial-scale=1" />',
-    `<title>Codex Evaluator Report</title>`,
+    `<title>Agent Evaluator Report</title>`,
     `<style>${styles}</style>`,
     "</head>",
     "<body>",
     "<main>",
     "<header>",
-    "<h1>Codex Evaluator Report</h1>",
-    `<p class="lede">A deterministic, transcript-first evaluation summary for Codex session artifacts. The canonical JSONL and JSON outputs remain the source of truth, while this layer turns them into operator-facing insights: where friction clustered, what got verified, and which sessions deserve attention first.</p>`,
+    "<h1>Agent Evaluator Report</h1>",
+    `<p class="lede">A deterministic, transcript-first evaluation summary for developer-agent session artifacts. The canonical JSONL and JSON outputs remain the source of truth, while this layer turns them into operator-facing insights: where friction clustered, what got verified, and which sessions deserve attention first.</p>`,
     `<div class="meta-row">
       <span class="pill">evaluator ${escapeHtml(summary.evaluatorVersion)}</span>
       <span class="pill">schema ${escapeHtml(summary.schemaVersion)}</span>
+      <span class="pill">sources ${escapeHtml(providers.join(", "))}</span>
       <span class="pill">${escapeHtml(summary.generatedAt)}</span>
     </div>`,
     "</header>",

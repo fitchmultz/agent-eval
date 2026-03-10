@@ -4,6 +4,7 @@
  * Notes: All transcript parsing functionality is exported from here.
  */
 
+export { parseClaudeTranscriptFile } from "./claude-parser.js";
 // Event routing
 export {
   createSourceRef,

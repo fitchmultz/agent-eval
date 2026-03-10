@@ -20,6 +20,7 @@ function createMockSessionMetrics(
 ): SessionMetrics {
   return {
     sessionId: "session-1",
+    provider: overrides.provider ?? "codex",
     turnCount: 10,
     labeledTurnCount: 5,
     incidentCount: 0,

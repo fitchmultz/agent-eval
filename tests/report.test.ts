@@ -67,6 +67,7 @@ function createTestMetrics(overrides?: Partial<MetricsRecord>): MetricsRecord {
     sessions: [
       {
         sessionId: "session-1",
+        provider: "codex",
         turnCount: 5,
         labeledTurnCount: 1,
         incidentCount: 1,
@@ -105,6 +106,7 @@ function createTestMetrics(overrides?: Partial<MetricsRecord>): MetricsRecord {
       },
       {
         sessionId: "session-2",
+        provider: "codex",
         turnCount: 5,
         labeledTurnCount: 0,
         incidentCount: 0,
@@ -144,6 +146,7 @@ function createTestMetrics(overrides?: Partial<MetricsRecord>): MetricsRecord {
     ],
     inventory: [
       {
+        provider: "codex",
         kind: "session_jsonl",
         path: "/home/user/.codex/sessions",
         discovered: true,
@@ -151,6 +154,7 @@ function createTestMetrics(overrides?: Partial<MetricsRecord>): MetricsRecord {
         optional: false,
       },
       {
+        provider: "codex",
         kind: "state_sqlite",
         path: "/home/user/.codex/state_5.sqlite",
         discovered: false,
@@ -195,10 +199,7 @@ function createTestRawTurns(): RawTurnRecord[] {
         },
       ],
       sourceRefs: [
-        {
-          kind: "session_jsonl",
-          path: "/test.jsonl",
-        },
+        { provider: "codex", kind: "session_jsonl", path: "/test.jsonl" },
       ],
     },
   ];
@@ -228,10 +229,7 @@ function createTestIncidents(): IncidentRecord[] {
       firstSeenAt: "2026-03-06T19:00:00.000Z",
       lastSeenAt: "2026-03-06T19:00:00.000Z",
       sourceRefs: [
-        {
-          kind: "session_jsonl",
-          path: "/test.jsonl",
-        },
+        { provider: "codex", kind: "session_jsonl", path: "/test.jsonl" },
       ],
     },
   ];
@@ -296,7 +294,7 @@ describe("renderReport", () => {
 
     const report = renderReport(metrics, incidents, rawTurns);
 
-    expect(report).toContain("# Codex Evaluator Report");
+    expect(report).toContain("# Agent Evaluator Report");
     expect(report).toContain("## Headline Insights");
     expect(report).toContain("## Show-Off Stats");
     expect(report).toContain("## Shareable Scoreboard");
@@ -331,7 +329,7 @@ describe("renderReport", () => {
     const metrics = createEmptyMetrics();
     const report = renderReport(metrics, [], []);
 
-    expect(report).toContain("# Codex Evaluator Report");
+    expect(report).toContain("# Agent Evaluator Report");
     expect(report).toContain("No labels were detected");
     expect(report).toContain("- No session insights were available.");
     expect(report).toContain(
@@ -446,7 +444,7 @@ describe("renderSummaryReport", () => {
 
     const report = renderSummaryReport(metrics, summary);
 
-    expect(report).toContain("# Codex Evaluator Report");
+    expect(report).toContain("# Agent Evaluator Report");
     expect(report).toContain("## Headline Insights");
     expect(report).toContain("test incident");
   });

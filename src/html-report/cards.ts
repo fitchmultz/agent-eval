@@ -237,6 +237,7 @@ export function renderInventoryList(metrics: MetricsRecord): string {
     .map(
       (record) => `
       <li>
+        <span class="pill">${escapeHtml(record.provider ?? "codex")}</span>
         <span class="pill ${record.required ? "required" : "optional"}">${record.required ? "required" : "optional"}</span>
         <strong>${escapeHtml(record.kind)}</strong>
         <span>${record.discovered ? "present" : "missing"}</span>

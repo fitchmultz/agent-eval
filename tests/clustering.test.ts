@@ -22,7 +22,12 @@ function createMockTurn(overrides: Partial<RawTurnRecord> = {}): RawTurnRecord {
     toolCalls: [],
     labels: [],
     sourceRefs: [
-      { kind: "session_jsonl", path: "/tmp/session.jsonl", line: 1 },
+      {
+        provider: "codex",
+        kind: "session_jsonl",
+        path: "/tmp/session.jsonl",
+        line: 1,
+      },
     ],
     ...overrides,
   };
@@ -56,7 +61,12 @@ describe("clusterIncidents", () => {
             },
           ],
           sourceRefs: [
-            { kind: "session_jsonl", path: "/tmp/session.jsonl", line: 1 },
+            {
+              provider: "codex",
+              kind: "session_jsonl",
+              path: "/tmp/session.jsonl",
+              line: 1,
+            },
           ],
         },
         {
@@ -79,7 +89,12 @@ describe("clusterIncidents", () => {
             },
           ],
           sourceRefs: [
-            { kind: "session_jsonl", path: "/tmp/session.jsonl", line: 2 },
+            {
+              provider: "codex",
+              kind: "session_jsonl",
+              path: "/tmp/session.jsonl",
+              line: 2,
+            },
           ],
         },
       ],

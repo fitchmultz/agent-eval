@@ -4,6 +4,7 @@
  * Notes: Transcript JSONL is canonical input; all non-transcript sources are optional enrichment only.
  */
 import { z } from "zod";
+import { sourceProviderValues } from "./sources.js";
 
 export const labelTaxonomy = [
   "context_drift",
@@ -25,6 +26,7 @@ export const sessionArchetypeValues = [
   "interrupted_non_write",
   "analysis_only",
 ] as const;
+export { sourceProviderValues };
 export const sourceKindValues = [
   "session_jsonl",
   "state_sqlite",
@@ -32,6 +34,7 @@ export const sourceKindValues = [
   "tui_log",
   "codex_dev_db",
   "shell_snapshot",
+  "session_env",
 ] as const;
 export const toolCategoryValues = [
   "read",
@@ -60,12 +63,14 @@ export type LabelName = (typeof labelTaxonomy)[number];
 export type Severity = (typeof severityValues)[number];
 export type Confidence = (typeof confidenceValues)[number];
 export type SessionArchetype = (typeof sessionArchetypeValues)[number];
+export type SourceProvider = (typeof sourceProviderValues)[number];
 export type SourceKind = (typeof sourceKindValues)[number];
 export type ToolCategory = (typeof toolCategoryValues)[number];
 export type ComplianceRuleName = (typeof complianceRuleValues)[number];
 export type ComplianceStatus = (typeof complianceStatusValues)[number];
 
 export const sourceRefSchema = z.object({
+  provider: z.enum(sourceProviderValues),
   kind: z.enum(sourceKindValues),
   path: z.string().min(1),
   line: z.int().positive().optional(),
@@ -132,6 +137,7 @@ export const complianceRuleResultSchema = z.object({
 
 export const sessionMetricsSchema = z.object({
   sessionId: z.string().min(1),
+  provider: z.enum(sourceProviderValues),
   turnCount: z.int().nonnegative(),
   labeledTurnCount: z.int().nonnegative(),
   incidentCount: z.int().nonnegative(),
@@ -144,6 +150,7 @@ export const sessionMetricsSchema = z.object({
 });
 
 export const inventoryRecordSchema = z.object({
+  provider: z.enum(sourceProviderValues),
   kind: z.enum(sourceKindValues),
   path: z.string().min(1),
   discovered: z.boolean(),

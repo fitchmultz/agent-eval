@@ -1,6 +1,9 @@
 /**
- * Purpose: Orchestrates evaluation pipeline from discovery through output generation.
- * Entrypoint: `evaluateArtifacts()` for full evaluation, `evaluateArtifactsSummaryOnly()` for summary-only.
+ * Purpose: Orchestrates source-aware evaluation from discovery through output generation.
+ * Responsibilities: Discover transcripts, parse sessions, process metrics, and build report artifacts.
+ * Scope: Shared pipeline for supported developer-agent sources.
+ * Usage: `evaluateArtifacts({ source, home, outputDir })`.
+ * Invariants/Assumptions: Discovery and parsing are source-aware while scoring/reporting remain shared.
  */
 import {
   createSummaryInputs,
@@ -27,11 +30,13 @@ export type { EvaluationResult, SummaryOnlyEvaluationResult };
 export { writeEvaluationArtifacts, writeSummaryArtifacts };
 
 /**
- * Options for evaluating Codex session artifacts.
+ * Options for evaluating supported transcript artifacts.
  */
 export interface EvaluateOptions {
-  /** Path to the Codex home directory (typically ~/.codex) */
-  codexHome: string;
+  /** Source provider for the selected home */
+  source: import("./sources.js").SourceProvider;
+  /** Path to the source home directory (typically ~/.codex or ~/.claude) */
+  home: string;
   /** Directory where evaluation artifacts will be written */
   outputDir: string;
   /** Maximum number of most recent sessions to evaluate (undefined for all) */
@@ -71,26 +76,27 @@ function recalculateIncidentCounts(
 }
 
 /**
- * Performs a full evaluation of Codex session artifacts.
+ * Performs a full evaluation of transcript artifacts.
  *
  * This function orchestrates the complete evaluation pipeline:
- * 1. Discovers session files in the Codex home directory
+ * 1. Discovers session files in the selected source home directory
  * 2. Parses transcript files into normalized sessions
  * 3. Labels turns based on user message heuristics
  * 4. Clusters incidents from labeled turns
  * 5. Aggregates metrics and generates reports
  *
- * @param options - Evaluation options including codexHome, outputDir, and optional sessionLimit
+ * @param options - Evaluation options including source, home, outputDir, and optional sessionLimit
  * @param signal - Optional AbortSignal for cancellation
  * @returns Promise resolving to the full evaluation result with raw turns, incidents, metrics, and report
- * @throws {FileNotFoundError} If the codexHome directory does not exist
+ * @throws {FileNotFoundError} If the source home directory does not exist
  * @throws {TranscriptParseError} If strict mode is enabled and a transcript fails to parse
  * @throws {DOMException} with name "AbortError" if signal is aborted
  *
  * @example
  * ```typescript
  * const result = await evaluateArtifacts({
- *   codexHome: "~/.codex",
+ *   source: "claude",
+ *   home: "~/.claude",
  *   outputDir: "./artifacts",
  *   sessionLimit: 100
  * });
@@ -101,14 +107,15 @@ export async function evaluateArtifacts(
   options: EvaluateOptions,
   signal?: AbortSignal,
 ): Promise<EvaluationResult> {
+  const { home, source } = options;
   // Check for abort before starting
   throwIfAborted(signal);
 
-  const discoveryOptions: DiscoveryOptions = { signal };
-  const discovered = await discoverArtifacts(
-    options.codexHome,
-    discoveryOptions,
-  );
+  const discoveryOptions: DiscoveryOptions = {
+    provider: source,
+    signal,
+  };
+  const discovered = await discoverArtifacts(home, discoveryOptions);
 
   // Check for abort after discovery
   throwIfAborted(signal);
@@ -127,6 +134,7 @@ export async function evaluateArtifacts(
     full,
     async (sessionPath) => {
       const session = await parseTranscriptFile(sessionPath, {
+        sourceProvider: source,
         timeoutMs: parseTimeoutMs,
         signal,
       });
@@ -161,7 +169,7 @@ export async function evaluateArtifacts(
 }
 
 /**
- * Performs a summary-only evaluation of Codex session artifacts.
+ * Performs a summary-only evaluation of transcript artifacts.
  *
  * This is a lightweight alternative to `evaluateArtifacts()` that:
  * - Skips raw turn and incident JSONL emission
@@ -170,17 +178,18 @@ export async function evaluateArtifacts(
  *
  * Use this when you only need high-level insights without detailed incident data.
  *
- * @param options - Evaluation options including codexHome, outputDir, and optional sessionLimit
+ * @param options - Evaluation options including source, home, outputDir, and optional sessionLimit
  * @param signal - Optional AbortSignal for cancellation
  * @returns Promise resolving to summary metrics, summary artifact, and markdown report
- * @throws {FileNotFoundError} If the codexHome directory does not exist
+ * @throws {FileNotFoundError} If the source home directory does not exist
  * @throws {TranscriptParseError} If strict mode is enabled and a transcript fails to parse
  * @throws {DOMException} with name "AbortError" if signal is aborted
  *
  * @example
  * ```typescript
  * const result = await evaluateArtifactsSummaryOnly({
- *   codexHome: "~/.codex",
+ *   source: "codex",
+ *   home: "~/.codex",
  *   outputDir: "./artifacts"
  * });
  * console.log(result.report); // Markdown report
@@ -190,15 +199,16 @@ export async function evaluateArtifactsSummaryOnly(
   options: EvaluateOptions,
   signal?: AbortSignal,
 ): Promise<SummaryOnlyEvaluationResult> {
+  const { home, source } = options;
   // Check for abort before starting
   throwIfAborted(signal);
 
   const { summary: summaryConcurrency } = getConfig().concurrency;
-  const discoveryOptions: DiscoveryOptions = { signal };
-  const discovered = await discoverArtifacts(
-    options.codexHome,
-    discoveryOptions,
-  );
+  const discoveryOptions: DiscoveryOptions = {
+    provider: source,
+    signal,
+  };
+  const discovered = await discoverArtifacts(home, discoveryOptions);
 
   // Check for abort after discovery
   throwIfAborted(signal);
@@ -215,6 +225,7 @@ export async function evaluateArtifactsSummaryOnly(
     summaryConcurrency,
     async (sessionPath) => {
       const session = await parseTranscriptFile(sessionPath, {
+        sourceProvider: source,
         timeoutMs: parseTimeoutMs,
         signal,
       });

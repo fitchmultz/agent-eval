@@ -1,18 +1,22 @@
 /**
- * Purpose: Main orchestrator for transcript parsing with Zod schema validation.
- * Entrypoint: `parseTranscriptFile()` is used by the evaluator for canonical session reconstruction.
- * Notes: Delegates to specialized handlers for different event types and validates with Zod schemas.
+ * Purpose: Main transcript parsing dispatcher for supported developer-agent transcript formats.
+ * Responsibilities: Parse Codex transcript files directly and route Claude Code files to the Claude adapter.
+ * Scope: Shared entrypoint used by the evaluator to normalize transcript files into ParsedSession objects.
+ * Usage: Call `parseTranscriptFile(path, options)` and optionally set `sourceProvider` to skip path inference.
+ * Invariants/Assumptions: Codex transcript parsing remains Zod-validated; Claude Code uses a source-specific adapter.
  */
 
 import { basename } from "node:path";
 import { normalizeError, TranscriptParseError } from "../errors.js";
+import { detectSourceProviderFromPath } from "../sources.js";
 import {
   combineSignals,
   createTimeoutSignal,
   throwIfAborted,
 } from "../utils/abort.js";
+import { parseClaudeTranscriptFile } from "./claude-parser.js";
 import { createSourceRef, routeEvent } from "./event-router.js";
-import { createTranscriptLineReader } from "./file-reader.js";
+import { createTranscriptLineReader, getReaderStream } from "./file-reader.js";
 import { validateEventRecord } from "./schema.js";
 import { buildParsedSession, createTurn } from "./session-builder.js";
 import type {
@@ -111,14 +115,13 @@ export function parseEventLine(
  * Internal implementation of transcript parsing with abort signal support.
  * This function performs the actual parsing work.
  */
-async function doParseTranscriptFile(
+async function doParseCodexTranscriptFile(
   path: string,
   options: ParseOptions = {},
 ): Promise<ParsedSession> {
   const context = createParserContext(path);
   const reader = createTranscriptLineReader(path);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stream = (reader as any).input || (reader as any)._inputStream;
+  const stream = getReaderStream(reader);
 
   try {
     for await (const rawLine of reader) {
@@ -137,15 +140,15 @@ async function doParseTranscriptFile(
         continue;
       }
 
-      const sourceRef = createSourceRef(path, context.lineNumber);
+      const sourceRef = createSourceRef("codex", path, context.lineNumber);
       routeEvent(event, sourceRef, context);
     }
   } finally {
     reader.close();
-    stream?.close?.();
+    (stream as { destroy?: () => void } | undefined)?.destroy?.();
   }
 
-  return buildParsedSession(context, path);
+  return buildParsedSession(context, path, "codex");
 }
 
 /**
@@ -179,9 +182,21 @@ export async function parseTranscriptFile(
     : timeoutSignal;
 
   try {
-    return await doParseTranscriptFile(path, {
+    const sourceProvider =
+      options.sourceProvider ?? detectSourceProviderFromPath(path) ?? "codex";
+
+    if (sourceProvider === "claude") {
+      return await parseClaudeTranscriptFile(path, {
+        ...options,
+        signal: combinedSignal,
+        sourceProvider,
+      });
+    }
+
+    return await doParseCodexTranscriptFile(path, {
       ...options,
       signal: combinedSignal,
+      sourceProvider,
     });
   } finally {
     // Always clean up timeout

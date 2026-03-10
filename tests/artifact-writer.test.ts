@@ -43,7 +43,14 @@ describe("artifact-writer", () => {
         assistantMessagePreviews: ["test"],
         toolCalls: [],
         labels: [],
-        sourceRefs: [{ kind: "session_jsonl", path: "/test.jsonl", line: 1 }],
+        sourceRefs: [
+          {
+            provider: "codex",
+            kind: "session_jsonl",
+            path: "/test.jsonl",
+            line: 1,
+          },
+        ],
       },
     ] as RawTurnRecord[],
     incidents: [
@@ -66,7 +73,14 @@ describe("artifact-writer", () => {
         evidencePreviews: ["test"],
         severity: "medium",
         confidence: "high",
-        sourceRefs: [{ kind: "session_jsonl", path: "/test.jsonl", line: 1 }],
+        sourceRefs: [
+          {
+            provider: "codex",
+            kind: "session_jsonl",
+            path: "/test.jsonl",
+            line: 1,
+          },
+        ],
       },
     ] as IncidentRecord[],
     metrics: {
@@ -256,7 +270,12 @@ describe("artifact-writer", () => {
               },
             ],
             sourceRefs: [
-              { kind: "session_jsonl", path: "/test.jsonl", line: 1 },
+              {
+                provider: "codex",
+                kind: "session_jsonl",
+                path: "/test.jsonl",
+                line: 1,
+              },
             ],
           },
         ],
@@ -281,12 +300,18 @@ describe("artifact-writer", () => {
             severity: "medium",
             confidence: "high",
             sourceRefs: [
-              { kind: "session_jsonl", path: "/test.jsonl", line: 1 },
+              {
+                provider: "codex",
+                kind: "session_jsonl",
+                path: "/test.jsonl",
+                line: 1,
+              },
             ],
           },
         ],
         metrics: {
           sessionId: "session-1",
+          provider: "codex",
           turnCount: 1,
           labeledTurnCount: 1,
           incidentCount: 1,

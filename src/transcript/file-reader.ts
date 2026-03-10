@@ -1,7 +1,9 @@
 /**
  * Purpose: File I/O wrapper for transcript parsing.
- * Entrypoint: Used by parser to read JSONL transcript files.
- * Notes: Provides line-by-line reading with proper resource cleanup.
+ * Responsibilities: Provide line-by-line JSONL reading with typed stream access for cleanup.
+ * Scope: Shared by Codex and Claude transcript parsers.
+ * Usage: Create a reader with `createTranscriptLineReader()` and close its stream with `getReaderStream()`.
+ * Invariants/Assumptions: Underlying readline instances expose either `input` or `_inputStream`.
  */
 
 import { createReadStream } from "node:fs";
@@ -24,8 +26,11 @@ export function createTranscriptLineReader(path: string): readline.Interface {
  */
 export function getReaderStream(
   reader: readline.Interface,
-): NodeJS.ReadableStream {
-  // The reader has a private _inputStream property we need to access for cleanup
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (reader as any).input || (reader as any)._inputStream;
+): NodeJS.ReadableStream | undefined {
+  const readerWithStream = reader as readline.Interface & {
+    input?: NodeJS.ReadableStream;
+    _inputStream?: NodeJS.ReadableStream;
+  };
+
+  return readerWithStream.input ?? readerWithStream._inputStream;
 }

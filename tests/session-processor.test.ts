@@ -1,3 +1,10 @@
+/**
+ * Purpose: Verifies session processing from normalized transcripts into turns, incidents, and metrics.
+ * Responsibilities: Cover labeling, clustering, redaction, preview generation, and metric calculation.
+ * Scope: Uses synthetic parsed sessions so tests stay deterministic and public-safe.
+ * Usage: Executed by Vitest via `pnpm test`.
+ * Invariants/Assumptions: Parsed sessions must include an explicit source provider after normalization.
+ */
 import { describe, expect, it } from "vitest";
 import {
   processSession,
@@ -8,6 +15,7 @@ import type { ParsedSession } from "../src/transcript/index.js";
 describe("processSession", () => {
   const mockSession: ParsedSession = {
     sessionId: "test-session-123",
+    provider: "codex",
     parentSessionId: "parent-456",
     path: "/test/path.jsonl",
     startedAt: "2024-01-01T00:00:00Z",
@@ -32,7 +40,12 @@ describe("processSession", () => {
           },
         ],
         sourceRefs: [
-          { kind: "session_jsonl", path: "/test/path.jsonl", line: 1 },
+          {
+            provider: "codex",
+            kind: "session_jsonl",
+            path: "/test/path.jsonl",
+            line: 1,
+          },
         ],
       },
       {
@@ -52,7 +65,12 @@ describe("processSession", () => {
           },
         ],
         sourceRefs: [
-          { kind: "session_jsonl", path: "/test/path.jsonl", line: 10 },
+          {
+            provider: "codex",
+            kind: "session_jsonl",
+            path: "/test/path.jsonl",
+            line: 10,
+          },
         ],
       },
     ],
@@ -79,7 +97,12 @@ describe("processSession", () => {
           assistantMessages: [],
           toolCalls: [],
           sourceRefs: [
-            { kind: "session_jsonl", path: "/test/path.jsonl", line: 1 },
+            {
+              provider: "codex",
+              kind: "session_jsonl",
+              path: "/test/path.jsonl",
+              line: 1,
+            },
           ],
         },
       ],
@@ -117,7 +140,12 @@ describe("processSession", () => {
           assistantMessages: [],
           toolCalls: [],
           sourceRefs: [
-            { kind: "session_jsonl", path: "/test/path.jsonl", line: 1 },
+            {
+              provider: "codex",
+              kind: "session_jsonl",
+              path: "/test/path.jsonl",
+              line: 1,
+            },
           ],
         },
         {
@@ -129,7 +157,12 @@ describe("processSession", () => {
           assistantMessages: [],
           toolCalls: [],
           sourceRefs: [
-            { kind: "session_jsonl", path: "/test/path.jsonl", line: 2 },
+            {
+              provider: "codex",
+              kind: "session_jsonl",
+              path: "/test/path.jsonl",
+              line: 2,
+            },
           ],
         },
       ],
@@ -165,6 +198,7 @@ describe("processSession", () => {
   it("should handle empty sessions", async () => {
     const emptySession: ParsedSession = {
       sessionId: "empty-session",
+      provider: "codex",
       path: "/test/empty.jsonl",
       turns: [],
     };

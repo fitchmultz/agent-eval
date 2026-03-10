@@ -24,6 +24,7 @@ import {
 
 function createTestSourceRef(line = 1): SourceRef {
   return {
+    provider: "codex",
     kind: "session_jsonl",
     path: "/test/session.jsonl",
     line,
@@ -704,7 +705,11 @@ describe("buildParsedSession", () => {
     context.sessionId = "session-123";
     context.currentTurn.userMessages.push("Hello");
 
-    const session = buildParsedSession(context, "/path/to/session.jsonl");
+    const session = buildParsedSession(
+      context,
+      "/path/to/session.jsonl",
+      "codex",
+    );
 
     expect(session.sessionId).toBe("session-123");
     expect(session.path).toBe("/path/to/session.jsonl");
@@ -716,7 +721,11 @@ describe("buildParsedSession", () => {
     context.parentSessionId = "parent-123";
     context.currentTurn.userMessages.push("Hello");
 
-    const session = buildParsedSession(context, "/path/to/session.jsonl");
+    const session = buildParsedSession(
+      context,
+      "/path/to/session.jsonl",
+      "codex",
+    );
 
     expect(session.parentSessionId).toBe("parent-123");
   });
@@ -725,7 +734,11 @@ describe("buildParsedSession", () => {
     const context = createTestContext();
     context.currentTurn.userMessages.push("Hello");
 
-    const session = buildParsedSession(context, "/path/to/session.jsonl");
+    const session = buildParsedSession(
+      context,
+      "/path/to/session.jsonl",
+      "codex",
+    );
 
     expect(session.parentSessionId).toBeUndefined();
   });
@@ -735,7 +748,11 @@ describe("buildParsedSession", () => {
     context.sessionStartedAt = "2026-03-06T10:00:00.000Z";
     context.currentTurn.userMessages.push("Hello");
 
-    const session = buildParsedSession(context, "/path/to/session.jsonl");
+    const session = buildParsedSession(
+      context,
+      "/path/to/session.jsonl",
+      "codex",
+    );
 
     expect(session.startedAt).toBe("2026-03-06T10:00:00.000Z");
   });
@@ -745,7 +762,11 @@ describe("buildParsedSession", () => {
     context.sessionCwd = "/workspace/project";
     context.currentTurn.userMessages.push("Hello");
 
-    const session = buildParsedSession(context, "/path/to/session.jsonl");
+    const session = buildParsedSession(
+      context,
+      "/path/to/session.jsonl",
+      "codex",
+    );
 
     expect(session.cwd).toBe("/workspace/project");
   });
@@ -754,7 +775,11 @@ describe("buildParsedSession", () => {
     const context = createTestContext();
     context.currentTurn.userMessages.push("Message");
 
-    const session = buildParsedSession(context, "/path/to/session.jsonl");
+    const session = buildParsedSession(
+      context,
+      "/path/to/session.jsonl",
+      "codex",
+    );
 
     expect(session.turns).toHaveLength(1);
     expect(session.turns[0]?.userMessages).toEqual(["Message"]);
@@ -763,7 +788,11 @@ describe("buildParsedSession", () => {
   it("does not add empty current turn", () => {
     const context = createTestContext();
 
-    const session = buildParsedSession(context, "/path/to/session.jsonl");
+    const session = buildParsedSession(
+      context,
+      "/path/to/session.jsonl",
+      "codex",
+    );
 
     expect(session.turns).toHaveLength(0);
   });
@@ -776,7 +805,11 @@ describe("buildParsedSession", () => {
     );
     context.currentTurn.userMessages.push("Third");
 
-    const session = buildParsedSession(context, "/path/to/session.jsonl");
+    const session = buildParsedSession(
+      context,
+      "/path/to/session.jsonl",
+      "codex",
+    );
 
     expect(session.turns).toHaveLength(3);
     expect(session.turns[0]?.userMessages).toEqual(["First"]);

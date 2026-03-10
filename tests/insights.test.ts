@@ -49,6 +49,7 @@ describe("buildSummaryArtifact", () => {
     const sessions: MetricsRecord["sessions"] = [
       {
         sessionId: "older-failing-session",
+        provider: "codex",
         turnCount: 10,
         labeledTurnCount: 1,
         incidentCount: 1,
@@ -63,6 +64,7 @@ describe("buildSummaryArtifact", () => {
       },
       ...Array.from({ length: 100 }, (_, index) => ({
         sessionId: `recent-session-${index + 1}`,
+        provider: "codex" as const,
         turnCount: 10,
         labeledTurnCount: 0,
         incidentCount: 0,

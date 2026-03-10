@@ -40,7 +40,14 @@ describe("aggregateMetrics", () => {
                 },
               ]
             : [],
-        sourceRefs: [{ kind: "session_jsonl", path: "/test.jsonl", line: 1 }],
+        sourceRefs: [
+          {
+            provider: "codex",
+            kind: "session_jsonl",
+            path: "/test.jsonl",
+            line: 1,
+          },
+        ],
       },
     ],
     incidents:
@@ -66,13 +73,19 @@ describe("aggregateMetrics", () => {
               severity: "medium",
               confidence: "high",
               sourceRefs: [
-                { kind: "session_jsonl", path: "/test.jsonl", line: 1 },
+                {
+                  provider: "codex",
+                  kind: "session_jsonl",
+                  path: "/test.jsonl",
+                  line: 1,
+                },
               ],
             },
           ]
         : [],
     metrics: {
       sessionId: id,
+      provider: "codex",
       turnCount: 1,
       labeledTurnCount: labelCount > 0 ? 1 : 0,
       incidentCount: labelCount > 0 ? 1 : 0,
@@ -87,6 +100,7 @@ describe("aggregateMetrics", () => {
 
   const mockInventory: InventoryRecord[] = [
     {
+      provider: "codex",
       kind: "session_jsonl",
       path: "/test/session.jsonl",
       discovered: true,
@@ -194,11 +208,19 @@ describe("countLabel", () => {
       labels: [
         { label, severity: "medium", confidence: "high", rationale: "test" },
       ],
-      sourceRefs: [{ kind: "session_jsonl", path: "/test.jsonl", line: 1 }],
+      sourceRefs: [
+        {
+          provider: "codex",
+          kind: "session_jsonl",
+          path: "/test.jsonl",
+          line: 1,
+        },
+      ],
     })),
     incidents: [],
     metrics: {
       sessionId: "test",
+      provider: "codex",
       turnCount: count,
       labeledTurnCount: count,
       incidentCount: 0,
@@ -251,11 +273,19 @@ describe("countWriteTurns", () => {
         },
       ],
       labels: [],
-      sourceRefs: [{ kind: "session_jsonl", path: "/test.jsonl", line: 1 }],
+      sourceRefs: [
+        {
+          provider: "codex",
+          kind: "session_jsonl",
+          path: "/test.jsonl",
+          line: 1,
+        },
+      ],
     })),
     incidents: [],
     metrics: {
       sessionId: "test",
+      provider: "codex",
       turnCount: writeTurnCount,
       labeledTurnCount: 0,
       incidentCount: 0,
@@ -302,13 +332,19 @@ describe("countWriteTurns", () => {
             ],
             labels: [],
             sourceRefs: [
-              { kind: "session_jsonl", path: "/test.jsonl", line: 1 },
+              {
+                provider: "codex",
+                kind: "session_jsonl",
+                path: "/test.jsonl",
+                line: 1,
+              },
             ],
           },
         ],
         incidents: [],
         metrics: {
           sessionId: "test",
+          provider: "codex",
           turnCount: 1,
           labeledTurnCount: 0,
           incidentCount: 0,

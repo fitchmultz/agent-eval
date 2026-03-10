@@ -9,12 +9,15 @@ import { isRecord } from "./utils/type-guards.js";
 
 /**
  * Tool names that perform write operations on files.
- * These tools modify code, configuration, or file content.
+ * These tools modify code, configuration, or file content across supported agents.
  */
 export const WRITE_TOOL_NAMES = [
   "apply_patch",
   "mcp__RepoPrompt__apply_edits",
   "mcp__RepoPrompt__file_actions",
+  "Edit",
+  "MultiEdit",
+  "Write",
 ] as const;
 
 /**
@@ -143,6 +146,7 @@ export function extractCommandText(
     // This helps identify malformed tool call arguments during development
     const errorMessage = error instanceof Error ? error.message : String(error);
     // Only log in development/debug mode to avoid noise in production
+    // biome-ignore lint/complexity/useLiteralKeys: Environment access uses index signatures in Node typings.
     if (process.env["DEBUG"]) {
       process.stderr.write(
         `[tool-classification] JSON parse error: ${errorMessage}\n`,

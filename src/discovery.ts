@@ -1,24 +1,29 @@
 /**
- * Purpose: Discovers canonical transcript files and optional local enrichment stores under a Codex home directory.
- * Entrypoint: `discoverArtifacts()` is called by CLI commands before parsing or evaluation begins.
- * Notes: Transcript JSONL is the only required input for v1; everything else is inventory metadata.
- *        Supports timeout and cancellation via AbortSignal.
+ * Purpose: Discovers canonical transcript files and optional local enrichment stores under a supported agent home directory.
+ * Responsibilities: Source-aware inventory building for Codex and Claude Code transcript stores.
+ * Scope: Called by CLI commands before parsing or evaluation begins.
+ * Usage: `discoverArtifacts(homePath, { provider })` to inventory one source home.
+ * Invariants/Assumptions: Transcript JSONL remains the only required canonical input for each provider.
  */
 import { join } from "node:path";
+import { ValidationError } from "./errors.js";
 import {
   type ListOptions,
   listFilesRecursively,
   pathExists,
 } from "./filesystem.js";
-import type { InventoryRecord } from "./schema.js";
+import type { InventoryRecord, SourceProvider } from "./schema.js";
+import { detectSourceProviderFromPath } from "./sources.js";
 import { createTimeoutPromise, throwIfAborted } from "./utils/abort.js";
 
 /**
- * Result of discovering Codex artifacts in a home directory.
+ * Result of discovering source artifacts in a home directory.
  */
 export interface DiscoveredArtifacts {
-  /** Path to the Codex home directory that was scanned */
-  codexHome: string;
+  /** Source provider that was scanned */
+  provider: SourceProvider;
+  /** Path to the source home directory that was scanned */
+  homePath: string;
   /** Inventory records for all expected and discovered artifact types */
   inventory: InventoryRecord[];
   /** Full paths to all discovered session JSONL files */
@@ -26,12 +31,14 @@ export interface DiscoveredArtifacts {
 }
 
 function buildInventoryRecord(
+  provider: SourceProvider,
   kind: InventoryRecord["kind"],
   path: string,
   discovered: boolean,
   required: boolean,
 ): InventoryRecord {
   return {
+    provider,
     kind,
     path,
     discovered,
@@ -49,6 +56,8 @@ const DEFAULT_DISCOVERY_TIMEOUT_MS = 60000;
  * Options for artifact discovery operations.
  */
 export interface DiscoveryOptions extends ListOptions {
+  /** Explicit source provider for the selected home path. */
+  provider: SourceProvider;
   /** Maximum time for discovery (milliseconds). Default: 60000 (60 seconds) */
   timeoutMs?: number | undefined;
   /** Signal to abort the operation */
@@ -57,7 +66,7 @@ export interface DiscoveryOptions extends ListOptions {
 
 /**
  * Discovers canonical transcript files and optional local enrichment stores
- * under a Codex home directory.
+ * under a supported agent home directory.
  *
  * This function scans for:
  * - Required: Session JSONL files (sessions directory)
@@ -65,7 +74,7 @@ export interface DiscoveryOptions extends ListOptions {
  *
  * Supports timeout and cancellation via AbortSignal.
  *
- * @param codexHome - Path to the Codex home directory (typically ~/.codex)
+ * @param homePath - Path to the source home directory (typically ~/.codex or ~/.claude)
  * @param options - Optional configuration for timeout and abort signal
  * @returns Promise resolving to discovered artifacts including session files and inventory
  * @throws {FileNotFoundError} If required paths cannot be accessed
@@ -75,7 +84,7 @@ export interface DiscoveryOptions extends ListOptions {
  *
  * @example
  * ```typescript
- * const discovered = await discoverArtifacts("~/.codex", { timeoutMs: 30000 });
+ * const discovered = await discoverArtifacts("~/.claude", { provider: "claude" });
  * console.log(`Found ${discovered.sessionFiles.length} sessions`);
  * for (const item of discovered.inventory) {
  *   console.log(`${item.kind}: ${item.discovered ? "present" : "missing"}`);
@@ -83,16 +92,16 @@ export interface DiscoveryOptions extends ListOptions {
  * ```
  */
 export async function discoverArtifacts(
-  codexHome: string,
+  homePath: string,
   options?: DiscoveryOptions,
 ): Promise<DiscoveredArtifacts> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_DISCOVERY_TIMEOUT_MS;
 
   // Race between actual work and timeout
-  const discoveryPromise = doDiscoverArtifacts(codexHome, options);
+  const discoveryPromise = doDiscoverArtifacts(homePath, options);
   const timeoutPromise = createTimeoutPromise(
     timeoutMs,
-    `Discovery timeout for ${codexHome}`,
+    `Discovery timeout for ${homePath}`,
   );
 
   return Promise.race([discoveryPromise, timeoutPromise]);
@@ -102,15 +111,28 @@ export async function discoverArtifacts(
  * Internal implementation of artifact discovery.
  */
 async function doDiscoverArtifacts(
-  codexHome: string,
+  homePath: string,
   options?: DiscoveryOptions,
 ): Promise<DiscoveredArtifacts> {
-  const sessionsPath = join(codexHome, "sessions");
-  const stateSqlitePath = join(codexHome, "state_5.sqlite");
-  const historyPath = join(codexHome, "history.jsonl");
-  const tuiLogPath = join(codexHome, "log", "codex-tui.log");
-  const codexDevDbPath = join(codexHome, "sqlite", "codex-dev.db");
-  const shellSnapshotsPath = join(codexHome, "shell_snapshots");
+  const provider = options?.provider ?? detectSourceProviderFromPath(homePath);
+  if (!provider) {
+    throw new ValidationError(
+      `Unable to determine transcript source for ${homePath}. Pass an explicit provider.`,
+    );
+  }
+  const sessionsPath =
+    provider === "claude"
+      ? join(homePath, "projects")
+      : join(homePath, "sessions");
+  const stateSqlitePath = join(homePath, "state_5.sqlite");
+  const historyPath = join(homePath, "history.jsonl");
+  const tuiLogPath = join(homePath, "log", "codex-tui.log");
+  const codexDevDbPath = join(homePath, "sqlite", "codex-dev.db");
+  const shellSnapshotsPath =
+    provider === "claude"
+      ? join(homePath, "shell-snapshots")
+      : join(homePath, "shell_snapshots");
+  const sessionEnvPath = join(homePath, "session-env");
 
   // Check for abort
   throwIfAborted(options?.signal);
@@ -135,45 +157,68 @@ async function doDiscoverArtifacts(
 
   const inventory: InventoryRecord[] = [
     buildInventoryRecord(
+      provider,
       "session_jsonl",
       sessionsPath,
       sessionsPathExists,
       true,
     ),
+    ...(provider === "codex"
+      ? [
+          buildInventoryRecord(
+            provider,
+            "state_sqlite",
+            stateSqlitePath,
+            await pathExists(stateSqlitePath),
+            false,
+          ),
+        ]
+      : []),
     buildInventoryRecord(
-      "state_sqlite",
-      stateSqlitePath,
-      await pathExists(stateSqlitePath),
-      false,
-    ),
-    buildInventoryRecord(
+      provider,
       "history_jsonl",
       historyPath,
       await pathExists(historyPath),
       false,
     ),
     buildInventoryRecord(
-      "tui_log",
-      tuiLogPath,
-      await pathExists(tuiLogPath),
-      false,
-    ),
-    buildInventoryRecord(
-      "codex_dev_db",
-      codexDevDbPath,
-      await pathExists(codexDevDbPath),
-      false,
-    ),
-    buildInventoryRecord(
+      provider,
       "shell_snapshot",
       shellSnapshotsPath,
       await pathExists(shellSnapshotsPath),
       false,
     ),
+    ...(provider === "codex"
+      ? [
+          buildInventoryRecord(
+            provider,
+            "tui_log",
+            tuiLogPath,
+            await pathExists(tuiLogPath),
+            false,
+          ),
+          buildInventoryRecord(
+            provider,
+            "codex_dev_db",
+            codexDevDbPath,
+            await pathExists(codexDevDbPath),
+            false,
+          ),
+        ]
+      : [
+          buildInventoryRecord(
+            provider,
+            "session_env",
+            sessionEnvPath,
+            await pathExists(sessionEnvPath),
+            false,
+          ),
+        ]),
   ];
 
   return {
-    codexHome,
+    provider,
+    homePath,
     inventory,
     sessionFiles,
   };

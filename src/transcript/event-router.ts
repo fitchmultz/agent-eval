@@ -4,6 +4,7 @@
  * Notes: Routes JSONL events to specialized handlers based on event type.
  */
 
+import type { SourceProvider } from "../schema.js";
 import { handleMessageResponse } from "./message-extractor.js";
 import {
   handleSessionMetaEvent,
@@ -51,8 +52,13 @@ export function handleResponseItemEvent(
 /**
  * Creates a source reference for the current line.
  */
-export function createSourceRef(path: string, line: number): SourceRef {
+export function createSourceRef(
+  provider: SourceProvider,
+  path: string,
+  line: number,
+): SourceRef {
   return {
+    provider,
     kind: "session_jsonl",
     path,
     line,

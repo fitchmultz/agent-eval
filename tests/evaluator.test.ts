@@ -99,7 +99,9 @@ describe("evaluator", () => {
         assistantMessagePreviews: [],
         toolCalls: [],
         labels: [],
-        sourceRefs: [{ kind: "session_jsonl", path: "/path/1.jsonl" }],
+        sourceRefs: [
+          { provider: "codex", kind: "session_jsonl", path: "/path/1.jsonl" },
+        ],
       };
 
       mockDiscoverArtifacts.mockResolvedValue({
@@ -143,7 +145,8 @@ describe("evaluator", () => {
       mockRenderReport.mockReturnValue("# Report");
 
       const result = await evaluateArtifacts({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
       });
 
@@ -170,7 +173,9 @@ describe("evaluator", () => {
         assistantMessagePreviews: [],
         toolCalls: [],
         labels: [],
-        sourceRefs: [{ kind: "session_jsonl", path: "/path/1.jsonl" }],
+        sourceRefs: [
+          { provider: "codex", kind: "session_jsonl", path: "/path/1.jsonl" },
+        ],
       };
 
       mockDiscoverArtifacts.mockResolvedValue({
@@ -214,7 +219,8 @@ describe("evaluator", () => {
       mockRenderReport.mockReturnValue("# Report");
 
       const result = await evaluateArtifacts({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
         sessionLimit: 2,
       });
@@ -244,7 +250,8 @@ describe("evaluator", () => {
       mockRenderReport.mockReturnValue("# Report");
 
       const result = await evaluateArtifacts({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
       });
 
@@ -265,7 +272,9 @@ describe("evaluator", () => {
         assistantMessagePreviews: [],
         toolCalls: [],
         labels: [],
-        sourceRefs: [{ kind: "session_jsonl", path: "/path/1.jsonl" }],
+        sourceRefs: [
+          { provider: "codex", kind: "session_jsonl", path: "/path/1.jsonl" },
+        ],
       };
 
       mockDiscoverArtifacts.mockResolvedValue({
@@ -309,7 +318,8 @@ describe("evaluator", () => {
       mockRenderReport.mockReturnValue("# Report");
 
       const result = await evaluateArtifacts({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
         sessionLimit: 10,
       });
@@ -339,7 +349,9 @@ describe("evaluator", () => {
             rationale: "test",
           },
         ],
-        sourceRefs: [{ kind: "session_jsonl", path: "/path/1.jsonl" }],
+        sourceRefs: [
+          { provider: "codex", kind: "session_jsonl", path: "/path/1.jsonl" },
+        ],
       };
 
       const mockIncident: IncidentRecord = {
@@ -361,7 +373,9 @@ describe("evaluator", () => {
         evidencePreviews: ["test"],
         severity: "low",
         confidence: "high",
-        sourceRefs: [{ kind: "session_jsonl", path: "/path/1.jsonl" }],
+        sourceRefs: [
+          { provider: "codex", kind: "session_jsonl", path: "/path/1.jsonl" },
+        ],
       };
 
       mockDiscoverArtifacts.mockResolvedValue({
@@ -418,7 +432,8 @@ describe("evaluator", () => {
       mockRenderReport.mockReturnValue("# Report");
 
       const result = await evaluateArtifacts({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
       });
 
@@ -438,7 +453,9 @@ describe("evaluator", () => {
         assistantMessagePreviews: [],
         toolCalls: [],
         labels: [],
-        sourceRefs: [{ kind: "session_jsonl", path: "/path/1.jsonl" }],
+        sourceRefs: [
+          { provider: "codex", kind: "session_jsonl", path: "/path/1.jsonl" },
+        ],
       };
 
       mockDiscoverArtifacts.mockResolvedValue({
@@ -495,7 +512,8 @@ describe("evaluator", () => {
       mockRenderReport.mockReturnValue("# Report");
 
       const result = await evaluateArtifacts({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
       });
 
@@ -515,7 +533,9 @@ describe("evaluator", () => {
         assistantMessagePreviews: [],
         toolCalls: [],
         labels: [],
-        sourceRefs: [{ kind: "session_jsonl", path: "/path/1.jsonl" }],
+        sourceRefs: [
+          { provider: "codex", kind: "session_jsonl", path: "/path/1.jsonl" },
+        ],
       };
 
       mockDiscoverArtifacts.mockResolvedValue({
@@ -572,7 +592,8 @@ describe("evaluator", () => {
       mockRenderReport.mockReturnValue("# Report");
 
       const result = await evaluateArtifacts({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
       });
 
@@ -598,7 +619,9 @@ describe("evaluator", () => {
         assistantMessagePreviews: [],
         toolCalls: [],
         labels: [],
-        sourceRefs: [{ kind: "session_jsonl", path: "/path/1.jsonl" }],
+        sourceRefs: [
+          { provider: "codex", kind: "session_jsonl", path: "/path/1.jsonl" },
+        ],
       };
 
       mockDiscoverArtifacts.mockResolvedValue({
@@ -642,7 +665,8 @@ describe("evaluator", () => {
       mockRenderReport.mockReturnValue("# Report");
 
       await evaluateArtifacts({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
       });
 
@@ -656,7 +680,8 @@ describe("evaluator", () => {
 
       await expect(
         evaluateArtifacts({
-          codexHome: "~/.codex",
+          source: "codex",
+          home: "~/.codex",
           outputDir: "./output",
         }),
       ).rejects.toThrow("Discovery failed");
@@ -681,7 +706,9 @@ describe("evaluator", () => {
             rationale: "test",
           },
         ],
-        sourceRefs: [{ kind: "session_jsonl", path: "/path/1.jsonl" }],
+        sourceRefs: [
+          { provider: "codex", kind: "session_jsonl", path: "/path/1.jsonl" },
+        ],
       };
 
       const mockIncident: IncidentRecord = {
@@ -703,7 +730,9 @@ describe("evaluator", () => {
         evidencePreviews: ["error occurred"],
         severity: "low",
         confidence: "high",
-        sourceRefs: [{ kind: "session_jsonl", path: "/path/1.jsonl" }],
+        sourceRefs: [
+          { provider: "codex", kind: "session_jsonl", path: "/path/1.jsonl" },
+        ],
       };
 
       mockDiscoverArtifacts.mockResolvedValue({
@@ -747,7 +776,8 @@ describe("evaluator", () => {
       mockRenderReport.mockReturnValue("# Report");
 
       const result = await evaluateArtifacts({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
       });
 
@@ -797,7 +827,8 @@ describe("evaluator", () => {
       mockRenderReport.mockReturnValue("# Custom Report\n\nMetrics summary");
 
       const result = await evaluateArtifacts({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
       });
 
@@ -886,7 +917,8 @@ describe("evaluator", () => {
       mockRenderSummaryReport.mockReturnValue("# Summary Report");
 
       const result = await evaluateArtifactsSummaryOnly({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
       });
 
@@ -988,7 +1020,8 @@ describe("evaluator", () => {
       );
 
       const result = await evaluateArtifactsSummaryOnly({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
       });
 
@@ -1078,7 +1111,8 @@ describe("evaluator", () => {
       mockRenderSummaryReport.mockReturnValue("# Summary Report");
 
       await evaluateArtifactsSummaryOnly({
-        codexHome: "~/.codex",
+        source: "codex",
+        home: "~/.codex",
         outputDir: "./output",
       });
 

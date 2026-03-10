@@ -1,10 +1,15 @@
 /**
  * Purpose: Type definitions for transcript parsing.
- * Entrypoint: Used by all transcript parsing modules.
- * Notes: Centralized type definitions to avoid circular dependencies.
+ * Responsibilities: Define normalized parsed-session shapes shared by source-specific parsers.
+ * Scope: Used by all transcript parsing modules and downstream evaluation code.
+ * Usage: Import parsed transcript types from this module instead of redefining source-specific variants.
+ * Invariants/Assumptions: Parsed sessions normalize Codex and Claude Code into the same turn/tool/message model.
  */
 
-import type { SourceRef as SchemaSourceRef } from "../schema.js";
+import type {
+  SourceRef as SchemaSourceRef,
+  SourceProvider,
+} from "../schema.js";
 
 // Re-export for convenience
 export type SourceRef = SchemaSourceRef;
@@ -32,6 +37,7 @@ export interface ParsedTurn {
 
 export interface ParsedSession {
   sessionId: string;
+  provider: SourceProvider;
   parentSessionId?: string;
   path: string;
   startedAt?: string;
@@ -49,6 +55,8 @@ export interface JsonlEventRecord {
  * Options for parsing transcript files.
  */
 export interface ParseOptions {
+  /** Explicit source provider. When omitted, the parser infers it from the transcript path. */
+  sourceProvider?: SourceProvider;
   /** If true, throw on parse errors instead of skipping malformed lines. */
   strict?: boolean;
   /** Callback invoked when a line fails to parse (only called in non-strict mode). */

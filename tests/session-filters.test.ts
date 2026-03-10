@@ -17,6 +17,7 @@ function createSessionMetrics(
 ): SessionMetrics {
   return {
     sessionId: "test-session",
+    provider: "codex",
     turnCount: 10,
     labeledTurnCount: 2,
     incidentCount: 0,

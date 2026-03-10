@@ -64,6 +64,7 @@ const metrics: MetricsRecord = {
   sessions: [
     {
       sessionId: "session-1",
+      provider: "codex",
       turnCount: 4,
       labeledTurnCount: 2,
       incidentCount: 1,
@@ -76,6 +77,7 @@ const metrics: MetricsRecord = {
     },
     {
       sessionId: "session-2",
+      provider: "codex",
       turnCount: 4,
       labeledTurnCount: 1,
       incidentCount: 1,
@@ -89,6 +91,7 @@ const metrics: MetricsRecord = {
   ],
   inventory: [
     {
+      provider: "codex",
       kind: "session_jsonl",
       path: "~/.codex/sessions",
       discovered: true,
@@ -118,7 +121,13 @@ const incidents: IncidentRecord[] = [
     evidencePreviews: ["Please verify after the patch."],
     severity: "medium",
     confidence: "high",
-    sourceRefs: [{ kind: "session_jsonl", path: "~/.codex/sessions/a.jsonl" }],
+    sourceRefs: [
+      {
+        provider: "codex",
+        kind: "session_jsonl",
+        path: "~/.codex/sessions/a.jsonl",
+      },
+    ],
   },
   {
     evaluatorVersion: "0.1.0",
@@ -139,7 +148,13 @@ const incidents: IncidentRecord[] = [
     evidencePreviews: ["Goals: keep the parser deterministic."],
     severity: "low",
     confidence: "high",
-    sourceRefs: [{ kind: "session_jsonl", path: "~/.codex/sessions/b.jsonl" }],
+    sourceRefs: [
+      {
+        provider: "codex",
+        kind: "session_jsonl",
+        path: "~/.codex/sessions/b.jsonl",
+      },
+    ],
   },
 ];
 
@@ -163,7 +178,13 @@ const rawTurns: RawTurnRecord[] = [
         rationale: "request",
       },
     ],
-    sourceRefs: [{ kind: "session_jsonl", path: "~/.codex/sessions/a.jsonl" }],
+    sourceRefs: [
+      {
+        provider: "codex",
+        kind: "session_jsonl",
+        path: "~/.codex/sessions/a.jsonl",
+      },
+    ],
   },
   {
     evaluatorVersion: "0.1.0",
@@ -184,7 +205,13 @@ const rawTurns: RawTurnRecord[] = [
         rationale: "re-anchor",
       },
     ],
-    sourceRefs: [{ kind: "session_jsonl", path: "~/.codex/sessions/b.jsonl" }],
+    sourceRefs: [
+      {
+        provider: "codex",
+        kind: "session_jsonl",
+        path: "~/.codex/sessions/b.jsonl",
+      },
+    ],
   },
 ];
 
@@ -221,7 +248,7 @@ describe("createPresentationArtifacts", () => {
       "verification",
     );
     expect(presentation.summary.topIncidents[0]?.turnSpan).toBe(2);
-    expect(presentation.reportHtml).toContain("Codex Evaluator Report");
+    expect(presentation.reportHtml).toContain("Agent Evaluator Report");
     expect(presentation.reportHtml).toContain("label-counts.svg");
     expect(presentation.reportHtml).toContain("Sessions To Review First");
     expect(presentation.reportHtml).toContain("Shareable Scoreboard");

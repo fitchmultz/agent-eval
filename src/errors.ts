@@ -23,6 +23,7 @@ function hasErrorCode(error: unknown): error is ErrorWithCode {
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
+    // biome-ignore lint/complexity/useLiteralKeys: Index-signature access preserves exact typing.
     typeof (error as Record<string, unknown>)["code"] === "string"
   );
 }

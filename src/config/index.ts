@@ -27,7 +27,7 @@ import {
   loadEnvConfig,
   mergeConfigs,
 } from "./loader.js";
-import { ConfigValidationError, validateConfig } from "./validation.js";
+import { validateConfig } from "./validation.js";
 
 export {
   ENV_VARS,

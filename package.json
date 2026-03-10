@@ -1,15 +1,31 @@
 {
   "name": "agent-eval",
   "version": "0.1.0",
-  "private": true,
-  "description": "Local evaluator for Codex session and log artifacts.",
+  "private": false,
+  "license": "MIT",
+  "description": "Transcript-first evaluator for developer AI agents, including Codex and Claude Code sessions.",
   "type": "module",
   "packageManager": "pnpm@10.30.3",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fitchmultz/agent-eval.git"
+  },
+  "homepage": "https://github.com/fitchmultz/agent-eval",
+  "bugs": {
+    "url": "https://github.com/fitchmultz/agent-eval/issues"
+  },
+  "keywords": [
+    "ai-evals",
+    "claude-code",
+    "codex",
+    "developer-tools",
+    "transcripts"
+  ],
   "engines": {
     "node": ">=25.8.0"
   },
   "bin": {
-    "codex-eval": "./dist/cli.js"
+    "agent-eval": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

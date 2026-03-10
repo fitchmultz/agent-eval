@@ -31,6 +31,7 @@ const baseMetrics: MetricsRecord = {
   sessions: [
     {
       sessionId: "session-1",
+      provider: "codex",
       turnCount: 4,
       labeledTurnCount: 2,
       incidentCount: 1,
@@ -44,6 +45,7 @@ const baseMetrics: MetricsRecord = {
   ],
   inventory: [
     {
+      provider: "codex",
       kind: "session_jsonl",
       path: "~/.codex/sessions",
       discovered: true,
@@ -114,8 +116,8 @@ describe("renderHtmlReport", () => {
   it("includes the report title", () => {
     const html = renderHtmlReport(baseSummary, baseMetrics);
 
-    expect(html).toContain("Codex Evaluator Report");
-    expect(html).toContain("<title>Codex Evaluator Report</title>");
+    expect(html).toContain("Agent Evaluator Report");
+    expect(html).toContain("<title>Agent Evaluator Report</title>");
   });
 
   it("includes inline CSS styles", () => {
@@ -172,6 +174,7 @@ describe("renderHtmlReport", () => {
       ...baseMetrics,
       inventory: [
         {
+          provider: "codex",
           kind: "session_jsonl",
           path: "<img src=x onerror=alert(1)>",
           discovered: true,

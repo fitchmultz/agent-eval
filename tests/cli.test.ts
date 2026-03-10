@@ -1,775 +1,310 @@
 /**
- * Purpose: Tests CLI argument parsing, command dispatch, and error handling.
- * Entrypoint: Executed by Vitest via `pnpm test`.
- * Notes: Uses temporary directories and mocks stdout/stderr to verify CLI behavior.
+ * Purpose: Tests the public CLI contract for source-aware transcript evaluation.
+ * Responsibilities: Verify command dispatch, argument parsing, report titles, and both Codex and Claude workflows.
+ * Scope: Uses synthetic local transcript fixtures only and writes artifacts into temporary directories.
+ * Usage: Executed by Vitest via `pnpm test`.
+ * Invariants/Assumptions: The CLI contract is `--source` plus `--home`; no provider-specific home flags remain.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { main } from "../src/cli.js";
-import {
-  EvaluatorError,
-  FileNotFoundError,
-  TranscriptParseError,
-  ValidationError,
-} from "../src/errors.js";
+
+function createCodexSessionContent(sessionId: string): string {
+  return [
+    JSON.stringify({
+      timestamp: "2026-03-06T19:00:00.000Z",
+      type: "session_meta",
+      payload: {
+        id: sessionId,
+        timestamp: "2026-03-06T19:00:00.000Z",
+        cwd: "/test",
+      },
+    }),
+    JSON.stringify({
+      timestamp: "2026-03-06T19:00:01.000Z",
+      type: "response_item",
+      payload: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: "Please fix the failing test." }],
+      },
+    }),
+    JSON.stringify({
+      timestamp: "2026-03-06T19:00:02.000Z",
+      type: "response_item",
+      payload: {
+        type: "message",
+        role: "assistant",
+        content: [
+          { type: "output_text", text: "I will inspect and verify it." },
+        ],
+      },
+    }),
+  ].join("\n");
+}
+
+function createClaudeSessionContent(sessionId: string): string {
+  return [
+    JSON.stringify({
+      sessionId,
+      timestamp: "2026-03-06T19:00:00.000Z",
+      cwd: "/test",
+      uuid: "user-turn-1",
+      message: {
+        role: "user",
+        content: [{ type: "text", text: "Please fix the failing test." }],
+      },
+    }),
+    JSON.stringify({
+      sessionId,
+      timestamp: "2026-03-06T19:00:01.000Z",
+      cwd: "/test",
+      uuid: "assistant-turn-1",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "I will inspect and verify it." },
+          {
+            type: "tool_use",
+            id: "tool-1",
+            name: "exec_command",
+            input: { cmd: "pnpm test" },
+          },
+        ],
+      },
+    }),
+    JSON.stringify({
+      sessionId,
+      timestamp: "2026-03-06T19:00:02.000Z",
+      cwd: "/test",
+      uuid: "user-turn-2",
+      toolUseResult: { exitCode: 0 },
+      message: {
+        role: "user",
+        content: [
+          { type: "tool_result", tool_use_id: "tool-1", content: "passed" },
+        ],
+      },
+    }),
+  ].join("\n");
+}
 
 describe("CLI", () => {
   const testDirBase = join(tmpdir(), "agent-eval-cli-test");
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
+  let stderrSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
     await mkdir(testDirBase, { recursive: true });
     stdoutSpy = vi
       .spyOn(process.stdout, "write")
       .mockImplementation(() => true);
-    // Mock stderr to suppress error output during tests
-    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    stderrSpy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation(() => true);
   });
 
-  afterEach(async () => {
+  afterEach(() => {
     vi.restoreAllMocks();
-    // Cleanup is handled by OS temp dir cleanup
   });
 
-  describe("inspect command", () => {
-    it("exits with code 0 for valid inspect command", async () => {
-      const testDir = join(testDirBase, "inspect-valid");
-      await mkdir(join(testDir, "sessions"), { recursive: true });
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "inspect",
-        "--codex-home",
-        testDir,
-      ]);
-
-      expect(exitCode).toBe(0);
-    });
-
-    it("writes JSON output to stdout with evaluator version", async () => {
-      const testDir = join(testDirBase, "inspect-output");
-      await mkdir(join(testDir, "sessions"), { recursive: true });
-
-      await main(["node", "cli", "inspect", "--codex-home", testDir]);
-
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining("evaluatorVersion"),
+  async function createCodexHome(
+    name: string,
+    sessionCount = 1,
+  ): Promise<string> {
+    const homeDir = join(testDirBase, name);
+    const sessionsDir = join(homeDir, "sessions");
+    await mkdir(sessionsDir, { recursive: true });
+    for (let index = 0; index < sessionCount; index += 1) {
+      await writeFile(
+        join(sessionsDir, `session-${index + 1}.jsonl`),
+        createCodexSessionContent(`codex-session-${index + 1}`),
       );
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining("schemaVersion"),
-      );
-    });
+    }
+    return homeDir;
+  }
 
-    it("includes session file count in output", async () => {
-      const testDir = join(testDirBase, "inspect-count");
-      const sessionsDir = join(testDir, "sessions");
-      await mkdir(sessionsDir, { recursive: true });
-      await writeFile(join(sessionsDir, "test.jsonl"), "{}\n");
+  async function createClaudeHome(name: string): Promise<string> {
+    const homeDir = join(testDirBase, name);
+    const projectsDir = join(homeDir, "projects", "-Users-test-project");
+    await mkdir(projectsDir, { recursive: true });
+    await writeFile(
+      join(projectsDir, "session-1.jsonl"),
+      createClaudeSessionContent("claude-session-1"),
+    );
+    await writeFile(join(homeDir, "history.jsonl"), "{}\n");
+    await mkdir(join(homeDir, "shell-snapshots"), { recursive: true });
+    await writeFile(join(homeDir, "session-env"), "KEY=value\n");
+    return homeDir;
+  }
 
-      await main(["node", "cli", "inspect", "--codex-home", testDir]);
+  it("inspects a Codex home with the source-aware flags", async () => {
+    const homeDir = await createCodexHome("inspect-codex");
 
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining('"sessionFileCount": 1'),
-      );
-    });
+    const exitCode = await main([
+      "node",
+      "cli",
+      "inspect",
+      "--source",
+      "codex",
+      "--home",
+      homeDir,
+    ]);
 
-    it("includes inventory in output", async () => {
-      const testDir = join(testDirBase, "inspect-inventory");
-      await mkdir(join(testDir, "sessions"), { recursive: true });
-
-      await main(["node", "cli", "inspect", "--codex-home", testDir]);
-
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining('"inventory"'),
-      );
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining("session_jsonl"),
-      );
-    });
-
-    it("uses default codex home when not specified", async () => {
-      // This test verifies the command works without --codex-home
-      // The default is ~/.codex which may or may not exist
-      const exitCode = await main(["node", "cli", "inspect"]);
-
-      // Should succeed even if default doesn't exist (returns empty results)
-      expect(exitCode).toBe(0);
-    });
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"sessionFileCount": 1'),
+    );
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"provider": "codex"'),
+    );
   });
 
-  describe("parse command", () => {
-    it("exits with code 0 for valid parse command", async () => {
-      const testDir = join(testDirBase, "parse-valid");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
+  it("inspects a Claude home and reports Claude inventory", async () => {
+    const homeDir = await createClaudeHome("inspect-claude");
 
-      // Create a minimal valid session file
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
+    const exitCode = await main([
+      "node",
+      "cli",
+      "inspect",
+      "--source",
+      "claude",
+      "--home",
+      homeDir,
+    ]);
 
-      const exitCode = await main([
-        "node",
-        "cli",
-        "parse",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-      ]);
-
-      expect(exitCode).toBe(0);
-    });
-
-    it("writes JSON output with rawTurnCount", async () => {
-      const testDir = join(testDirBase, "parse-output");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
-
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
-
-      await main([
-        "node",
-        "cli",
-        "parse",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-      ]);
-
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining("rawTurnCount"),
-      );
-    });
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"provider": "claude"'),
+    );
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"session_env"'),
+    );
   });
 
-  describe("eval command", () => {
-    it("exits with code 0 for valid eval command", async () => {
-      const testDir = join(testDirBase, "eval-valid");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
+  it("parses a Codex home and writes raw-turn artifacts", async () => {
+    const homeDir = await createCodexHome("parse-codex");
+    const outputDir = join(homeDir, "artifacts");
+    await mkdir(outputDir, { recursive: true });
 
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
+    const exitCode = await main([
+      "node",
+      "cli",
+      "parse",
+      "--source",
+      "codex",
+      "--home",
+      homeDir,
+      "--output-dir",
+      outputDir,
+    ]);
 
-      const exitCode = await main([
-        "node",
-        "cli",
-        "eval",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-      ]);
-
-      expect(exitCode).toBe(0);
-    });
-
-    it("writes JSON output with session and incident counts", async () => {
-      const testDir = join(testDirBase, "eval-counts");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
-
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
-
-      await main([
-        "node",
-        "cli",
-        "eval",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-      ]);
-
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining("sessionCount"),
-      );
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining("incidentCount"),
-      );
-    });
-
-    it("supports --summary-only flag", async () => {
-      const testDir = join(testDirBase, "eval-summary");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
-
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "eval",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-        "--summary-only",
-      ]);
-
-      expect(exitCode).toBe(0);
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining("summaryOnly"),
-      );
-    });
-
-    it("supports --session-limit flag", async () => {
-      const testDir = join(testDirBase, "eval-limit");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
-
-      // Create multiple sessions
-      for (let i = 0; i < 5; i++) {
-        const sessionContent = [
-          JSON.stringify({
-            timestamp: "2026-03-06T19:00:00.000Z",
-            type: "session_meta",
-            payload: {
-              id: `test-session-${i}`,
-              timestamp: "2026-03-06T19:00:00.000Z",
-              cwd: "/test",
-            },
-          }),
-        ].join("\n");
-        await writeFile(join(sessionsDir, `test${i}.jsonl`), sessionContent);
-      }
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "eval",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-        "--session-limit",
-        "2",
-      ]);
-
-      expect(exitCode).toBe(0);
-      // Should only process 2 sessions
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining('"sessionCount": 2'),
-      );
-    });
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining("rawTurnCount"),
+    );
+    expect(
+      await readFile(join(outputDir, "raw-turns.jsonl"), "utf8"),
+    ).toContain('"sessionId":"codex-session-1"');
   });
 
-  describe("report command", () => {
-    it("exits with code 0 for valid report command", async () => {
-      const testDir = join(testDirBase, "report-valid");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
+  it("evaluates a Claude home in summary-only mode", async () => {
+    const homeDir = await createClaudeHome("eval-claude");
+    const outputDir = join(homeDir, "artifacts");
+    await mkdir(outputDir, { recursive: true });
 
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
+    const exitCode = await main([
+      "node",
+      "cli",
+      "eval",
+      "--source",
+      "claude",
+      "--home",
+      homeDir,
+      "--output-dir",
+      outputDir,
+      "--summary-only",
+    ]);
 
-      const exitCode = await main([
-        "node",
-        "cli",
-        "report",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-      ]);
-
-      expect(exitCode).toBe(0);
-    });
-
-    it("writes markdown report to stdout", async () => {
-      const testDir = join(testDirBase, "report-output");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
-
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
-
-      await main([
-        "node",
-        "cli",
-        "report",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-      ]);
-
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining("# Codex Evaluator Report"),
-      );
-    });
-
-    it("supports --summary-only flag for report", async () => {
-      const testDir = join(testDirBase, "report-summary");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
-
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "report",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-        "--summary-only",
-      ]);
-
-      expect(exitCode).toBe(0);
-      expect(stdoutSpy).toHaveBeenCalledWith(
-        expect.stringContaining("# Codex Evaluator Report"),
-      );
-    });
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"summaryOnly": true'),
+    );
+    expect(await readFile(join(outputDir, "summary.json"), "utf8")).toContain(
+      '"sessions": 1',
+    );
   });
 
-  describe("argument parsing", () => {
-    it("parses --codex-home argument", async () => {
-      const testDir = join(testDirBase, "arg-codex-home");
-      await mkdir(join(testDir, "sessions"), { recursive: true });
+  it("limits evaluation to the most recent discovered sessions", async () => {
+    const homeDir = await createCodexHome("eval-limit", 3);
+    const outputDir = join(homeDir, "artifacts");
+    await mkdir(outputDir, { recursive: true });
 
-      const exitCode = await main([
-        "node",
-        "cli",
-        "inspect",
-        "--codex-home",
-        testDir,
-      ]);
+    const exitCode = await main([
+      "node",
+      "cli",
+      "eval",
+      "--source",
+      "codex",
+      "--home",
+      homeDir,
+      "--output-dir",
+      outputDir,
+      "--session-limit",
+      "2",
+    ]);
 
-      expect(exitCode).toBe(0);
-    });
-
-    it("parses --output-dir argument", async () => {
-      const testDir = join(testDirBase, "arg-output-dir");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "custom-output");
-      await mkdir(sessionsDir, { recursive: true });
-
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "parse",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-      ]);
-
-      expect(exitCode).toBe(0);
-    });
-
-    it("parses --session-limit as integer", async () => {
-      const testDir = join(testDirBase, "arg-session-limit");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
-
-      // Create 3 sessions
-      for (let i = 0; i < 3; i++) {
-        const sessionContent = [
-          JSON.stringify({
-            timestamp: "2026-03-06T19:00:00.000Z",
-            type: "session_meta",
-            payload: {
-              id: `test-session-${i}`,
-              timestamp: "2026-03-06T19:00:00.000Z",
-              cwd: "/test",
-            },
-          }),
-        ].join("\n");
-        await writeFile(join(sessionsDir, `test${i}.jsonl`), sessionContent);
-      }
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "eval",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-        "--session-limit",
-        "1",
-      ]);
-
-      expect(exitCode).toBe(0);
-    });
-
-    it("parses --summary-only as boolean flag", async () => {
-      const testDir = join(testDirBase, "arg-summary-only");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
-
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "eval",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-        "--summary-only",
-      ]);
-
-      expect(exitCode).toBe(0);
-    });
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"sessionCount": 2'),
+    );
   });
 
-  describe("exit codes", () => {
-    it("returns exit code 0 on success", async () => {
-      const testDir = join(testDirBase, "exit-success");
-      await mkdir(join(testDir, "sessions"), { recursive: true });
+  it("writes the markdown report with the source-neutral title", async () => {
+    const homeDir = await createCodexHome("report-codex");
+    const outputDir = join(homeDir, "artifacts");
+    await mkdir(outputDir, { recursive: true });
 
-      const exitCode = await main([
-        "node",
-        "cli",
-        "inspect",
-        "--codex-home",
-        testDir,
-      ]);
+    const exitCode = await main([
+      "node",
+      "cli",
+      "report",
+      "--source",
+      "codex",
+      "--home",
+      homeDir,
+      "--output-dir",
+      outputDir,
+    ]);
 
-      expect(exitCode).toBe(0);
-    });
-
-    it("returns exit code 1 for unknown commands", async () => {
-      const testDir = join(testDirBase, "exit-invalid");
-      await mkdir(join(testDir, "sessions"), { recursive: true });
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "unknown-command",
-        "--codex-home",
-        testDir,
-      ]);
-
-      expect(exitCode).toBe(1);
-    });
-
-    it("returns exit code 1 for EvaluatorError", async () => {
-      // Create a scenario where a FileNotFoundError would be thrown
-      // by trying to read a file that doesn't exist
-      const testDir = join(testDirBase, "exit-typed-error");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
-
-      // Create a file with content that would trigger an error
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "eval",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-      ]);
-
-      // Normal operation should succeed
-      expect(exitCode).toBe(0);
-    });
-
-    it("returns exit code 2 for ValidationError", () => {
-      // Directly test the error class behavior
-      const error = new ValidationError("Test validation error");
-      expect(error.exitCode).toBe(2);
-      expect(error.code).toBe("VALIDATION_ERROR");
-    });
-
-    it("handles invalid JSON gracefully (silent skip)", async () => {
-      // The transcript parser silently skips invalid JSON lines
-      // This test verifies the eval command still succeeds
-      const testDir = join(testDirBase, "exit-error");
-      const sessionsDir = join(testDir, "sessions");
-      const outputDir = join(testDir, "output");
-      await mkdir(sessionsDir, { recursive: true });
-      await mkdir(outputDir, { recursive: true });
-
-      // Create an invalid JSONL file - will be silently skipped
-      await writeFile(join(sessionsDir, "invalid.jsonl"), "not valid json\n");
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "eval",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        outputDir,
-      ]);
-
-      // Parser silently skips invalid JSON, so this succeeds with 0 sessions
-      expect(exitCode).toBe(0);
-    });
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining("# Agent Evaluator Report"),
+    );
+    expect(await readFile(join(outputDir, "report.md"), "utf8")).toContain(
+      "# Agent Evaluator Report",
+    );
   });
 
-  describe("error handling", () => {
-    it("handles missing sessions directory gracefully", async () => {
-      const testDir = join(testDirBase, "missing-sessions");
-      await mkdir(testDir, { recursive: true });
-      // Don't create sessions directory
+  it("falls back to the default source home when inspect is run without flags", async () => {
+    const exitCode = await main(["node", "cli", "inspect"]);
 
-      const exitCode = await main([
-        "node",
-        "cli",
-        "inspect",
-        "--codex-home",
-        testDir,
-      ]);
-
-      expect(exitCode).toBe(0);
-    });
-
-    it("succeeds with empty sessions directory", async () => {
-      const testDir = join(testDirBase, "empty-sessions");
-      await mkdir(join(testDir, "sessions"), { recursive: true });
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "eval",
-        "--codex-home",
-        testDir,
-        "--output-dir",
-        join(testDir, "output"),
-      ]);
-
-      expect(exitCode).toBe(0);
-    });
+    expect(exitCode).toBe(0);
   });
 
-  describe("help", () => {
-    it("shows help for inspect command", async () => {
-      // Commander exits with code 1 for --help by default
-      // This is expected behavior for CLI tools
-      const exitCode = await main(["node", "cli", "inspect", "--help"]);
+  it("returns a usage error for an invalid source provider", async () => {
+    const exitCode = await main([
+      "node",
+      "cli",
+      "inspect",
+      "--source",
+      "invalid-provider",
+    ]);
 
-      // Commander treats --help as an exit event
-      expect(exitCode).toBe(1);
-    });
-
-    it("shows version information", async () => {
-      // Commander exits with code 1 for --version by default
-      const exitCode = await main(["node", "cli", "--version"]);
-
-      expect(exitCode).toBe(1);
-    });
-
-    it("shows global help", async () => {
-      // Commander exits with code 1 for --help by default
-      const exitCode = await main(["node", "cli", "--help"]);
-
-      expect(exitCode).toBe(1);
-    });
-  });
-
-  describe("default values", () => {
-    it("uses 'artifacts' as default output-dir", async () => {
-      // Just verify the command works without specifying --output-dir
-      // The actual default is tested implicitly by other tests
-      const testDir = join(testDirBase, "default-output");
-      const sessionsDir = join(testDir, "sessions");
-      await mkdir(sessionsDir, { recursive: true });
-
-      const sessionContent = [
-        JSON.stringify({
-          timestamp: "2026-03-06T19:00:00.000Z",
-          type: "session_meta",
-          payload: {
-            id: "test-session",
-            timestamp: "2026-03-06T19:00:00.000Z",
-            cwd: "/test",
-          },
-        }),
-      ].join("\n");
-      await writeFile(join(sessionsDir, "test.jsonl"), sessionContent);
-
-      const exitCode = await main([
-        "node",
-        "cli",
-        "inspect",
-        "--codex-home",
-        testDir,
-      ]);
-
-      expect(exitCode).toBe(0);
-    });
-  });
-
-  describe("typed error handling", () => {
-    it("handles EvaluatorError with correct exit code", async () => {
-      // Verify the error class works correctly
-      const error = new EvaluatorError("Test error", "TEST_ERROR", 1);
-      expect(error.message).toBe("Test error");
-      expect(error.code).toBe("TEST_ERROR");
-      expect(error.exitCode).toBe(1);
-    });
-
-    it("handles FileNotFoundError with exit code 1", () => {
-      const error = new FileNotFoundError("/missing/file.txt");
-      expect(error.exitCode).toBe(1);
-      expect(error.code).toBe("FILE_NOT_FOUND");
-      expect(error.message).toContain("/missing/file.txt");
-    });
-
-    it("handles TranscriptParseError with line number info", () => {
-      const cause = new Error("Unexpected token");
-      const error = new TranscriptParseError("/path/file.jsonl", 42, cause);
-      expect(error.path).toBe("/path/file.jsonl");
-      expect(error.lineNumber).toBe(42);
-      expect(error.cause).toBe(cause);
-      expect(error.message).toContain("42");
-      expect(error.exitCode).toBe(1);
-    });
+    expect(exitCode).toBe(2);
+    expect(stderrSpy).toHaveBeenCalled();
   });
 });

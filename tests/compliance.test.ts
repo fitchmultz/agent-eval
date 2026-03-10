@@ -24,6 +24,7 @@ function createMockSession(
 ): ParsedSession {
   return {
     sessionId: "session-1",
+    provider: overrides.provider ?? "codex",
     path: "/tmp/session.jsonl",
     turns: [],
     ...overrides,
@@ -34,6 +35,7 @@ describe("scoreCompliance", () => {
   it("fails verification-related rules when a write has no follow-up verification", () => {
     const scorecard = scoreCompliance({
       sessionId: "session-1",
+      provider: "codex",
       path: "/tmp/session.jsonl",
       turns: [
         {
@@ -64,6 +66,7 @@ describe("scoreCompliance", () => {
   it("passes when context, planning, and verification happen around writes", () => {
     const scorecard = scoreCompliance({
       sessionId: "session-2",
+      provider: "codex",
       path: "/tmp/session.jsonl",
       turns: [
         {
