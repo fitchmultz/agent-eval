@@ -1,10 +1,13 @@
 /**
- * Purpose: Composes deterministic core summary data with optional presentation-oriented decorations.
- * Entrypoint: `buildSummaryArtifact()` is the public summary facade consumed by the evaluator and renderers.
- * Notes: Core math lives in summary-core.ts and focused modules; UI-friendly extras live in summary-decorations.ts.
+ * Purpose: Build the canonical public summary artifact used across reports, charts, and tests.
+ * Responsibilities: Re-export stable summary helpers and compose core math with presentation-oriented decorations.
+ * Scope: Public summary facade for shared evaluator outputs.
+ * Usage: Call `buildSummaryArtifact(metrics, buildSummaryInputsFromArtifacts(rawTurns, incidents))`.
+ * Invariants/Assumptions: This module is the only supported summary facade; core math stays isolated in focused summary modules.
  */
 import type { MetricsRecord, SummaryArtifact } from "./schema.js";
 import {
+  buildSummaryInputsFromArtifacts,
   collectSessionLabelCounts,
   countLabel,
   countWriteTurns,
@@ -13,10 +16,7 @@ import {
   safeRate,
 } from "./summary/index.js";
 import type { SummaryInputs } from "./summary/types.js";
-import {
-  buildSummaryCore,
-  buildSummaryInputsFromArtifacts,
-} from "./summary-core.js";
+import { buildSummaryCore } from "./summary-core.js";
 import { buildSummaryDecorations } from "./summary-decorations.js";
 
 export {
@@ -29,23 +29,18 @@ export {
   getLabelWeight,
 } from "./friction-scoring.js";
 export { insertTopIncident } from "./incident-selection.js";
-// Re-export from focused modules
 export {
   archetypeLabel,
   createArchetypeNote,
   determineArchetype,
 } from "./session-archetype.js";
 export { buildTopSessions, buildVictoryLaps } from "./session-ranking.js";
-
-// Re-export types from summary/types.ts
 export type {
   ScoreSnapshot,
   SessionInsightRow,
   SummaryCoreData,
   SummaryInputs,
 } from "./summary/types.js";
-
-// Re-export utilities from summary-core
 export {
   buildSummaryInputsFromArtifacts,
   collectSessionLabelCounts,

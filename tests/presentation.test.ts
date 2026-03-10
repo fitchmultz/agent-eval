@@ -1,12 +1,18 @@
 /**
- * Purpose: Verifies derived presentation artifacts stay aligned with canonical metrics and remain safe to publish.
- * Entrypoint: Executed by Vitest via `pnpm test`.
- * Notes: Uses synthetic incidents and metrics so the pretty-output layer stays deterministic and public-safe.
+ * Purpose: Verify reports and presentation outputs are derived from one canonical summary model.
+ * Responsibilities: Build a summary once, then assert the markdown, HTML, and SVG outputs stay aligned with it.
+ * Scope: Deterministic presentation contract for public-safe evaluator outputs.
+ * Usage: Executed by Vitest via `pnpm test`.
+ * Invariants/Assumptions: Synthetic incidents and metrics are enough because these tests exercise pure derived-output functions.
  */
 import { describe, expect, it } from "vitest";
 
-import { createPresentationArtifacts } from "../src/presentation.js";
-import { renderReport } from "../src/report.js";
+import {
+  buildSummaryArtifact,
+  buildSummaryInputsFromArtifacts,
+} from "../src/insights.js";
+import { buildPresentationArtifacts } from "../src/presentation.js";
+import { renderReport, renderSummaryReport } from "../src/report.js";
 import type {
   IncidentRecord,
   MetricsRecord,
@@ -215,39 +221,27 @@ const rawTurns: RawTurnRecord[] = [
   },
 ];
 
-describe("createPresentationArtifacts", () => {
-  it("builds summary json, html, and svg artifacts from canonical metrics", () => {
-    const presentation = createPresentationArtifacts(
+describe("presentation", () => {
+  it("builds html and svg artifacts from a pre-built canonical summary", () => {
+    const summary = buildSummaryArtifact(
       metrics,
-      incidents,
-      rawTurns,
+      buildSummaryInputsFromArtifacts(rawTurns, incidents),
     );
+    const presentation = buildPresentationArtifacts(metrics, summary);
 
-    expect(presentation.summary.incidents).toBe(2);
-    expect(presentation.summary.labels[0]?.label).toBe("verification_request");
-    expect(presentation.summary.topSessions[0]?.archetype).toBe(
-      "verified_delivery",
-    );
-    expect(presentation.summary.topSessions[0]?.archetypeLabel).toBe(
-      "Clean Ship",
-    );
-    expect(presentation.summary.rates.verificationRequestsPer100Turns).toBe(
-      37.5,
-    );
-    expect(presentation.summary.bragCards[0]?.title).toBe("Proof-Backed Ships");
-    expect(presentation.summary.comparativeSlices[0]?.label).toBe(
-      "Selected Corpus",
-    );
-    expect(presentation.summary.scoreCards[0]?.title).toBe("Proof Score");
-    expect(presentation.summary.scoreCards[0]?.score).toBe(100);
-    expect(presentation.summary.achievementBadges).toContain(
-      "Low-Drama Operator",
-    );
-    expect(presentation.summary.victoryLaps[0]?.sessionId).toBe("session-1");
-    expect(presentation.summary.opportunities[0]?.title).toContain(
-      "verification",
-    );
-    expect(presentation.summary.topIncidents[0]?.turnSpan).toBe(2);
+    expect(summary.incidents).toBe(2);
+    expect(summary.labels[0]?.label).toBe("verification_request");
+    expect(summary.topSessions[0]?.archetype).toBe("verified_delivery");
+    expect(summary.topSessions[0]?.archetypeLabel).toBe("Clean Ship");
+    expect(summary.rates.verificationRequestsPer100Turns).toBe(37.5);
+    expect(summary.bragCards[0]?.title).toBe("Proof-Backed Ships");
+    expect(summary.comparativeSlices[0]?.label).toBe("Selected Corpus");
+    expect(summary.scoreCards[0]?.title).toBe("Proof Score");
+    expect(summary.scoreCards[0]?.score).toBe(100);
+    expect(summary.achievementBadges).toContain("Low-Drama Operator");
+    expect(summary.victoryLaps[0]?.sessionId).toBe("session-1");
+    expect(summary.opportunities[0]?.title).toContain("verification");
+    expect(summary.topIncidents[0]?.turnSpan).toBe(2);
     expect(presentation.reportHtml).toContain("Agent Evaluator Report");
     expect(presentation.reportHtml).toContain("label-counts.svg");
     expect(presentation.reportHtml).toContain("Sessions To Review First");
@@ -260,18 +254,24 @@ describe("createPresentationArtifacts", () => {
     expect(presentation.severityChartSvg).toContain("Incident Severity");
   });
 
-  it("keeps the markdown report aligned with the deterministic summary model", () => {
-    const markdown = renderReport(metrics, incidents, rawTurns);
+  it("keeps markdown rendering aligned for both summary-first and convenience entrypoints", () => {
+    const summary = buildSummaryArtifact(
+      metrics,
+      buildSummaryInputsFromArtifacts(rawTurns, incidents),
+    );
+    const canonicalMarkdown = renderSummaryReport(metrics, summary);
+    const convenienceMarkdown = renderReport(metrics, incidents, rawTurns);
 
-    expect(markdown).toContain("## Headline Insights");
-    expect(markdown).toContain("## Show-Off Stats");
-    expect(markdown).toContain("## Shareable Scoreboard");
-    expect(markdown).toContain("## Recent Momentum");
-    expect(markdown).toContain("## Badges");
-    expect(markdown).toContain("## Comparative Slices");
-    expect(markdown).toContain("## Sessions To Review First");
-    expect(markdown).toContain("## Victory Lap Sessions");
-    expect(markdown).toContain("## Deterministic Opportunities");
-    expect(markdown).toContain("Clean Ship");
+    expect(canonicalMarkdown).toBe(convenienceMarkdown);
+    expect(canonicalMarkdown).toContain("## Headline Insights");
+    expect(canonicalMarkdown).toContain("## Show-Off Stats");
+    expect(canonicalMarkdown).toContain("## Shareable Scoreboard");
+    expect(canonicalMarkdown).toContain("## Recent Momentum");
+    expect(canonicalMarkdown).toContain("## Badges");
+    expect(canonicalMarkdown).toContain("## Comparative Slices");
+    expect(canonicalMarkdown).toContain("## Sessions To Review First");
+    expect(canonicalMarkdown).toContain("## Victory Lap Sessions");
+    expect(canonicalMarkdown).toContain("## Deterministic Opportunities");
+    expect(canonicalMarkdown).toContain("Clean Ship");
   });
 });

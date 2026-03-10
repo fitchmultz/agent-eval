@@ -1,6 +1,6 @@
 /**
  * Purpose: Centralized configuration system with file loading, env vars, and validation.
- * Responsibilities: Default configuration, config loading, env var support, validation.
+ * Responsibilities: Default configuration, config loading, runtime overrides, and validation.
  * Entrypoint: getConfig() returns current configuration; initializeConfig() loads from file/env.
  * Usage:
  *   - Import: import { getConfig, setConfig, initializeConfig } from "./config/index.js";
@@ -31,9 +31,7 @@ import { validateConfig } from "./validation.js";
 
 export {
   ENV_VARS,
-  getEnvBoolean,
   getEnvNumber,
-  getEnvString,
 } from "./env.js";
 export {
   type DeepPartial,
@@ -112,9 +110,6 @@ const DEFAULT_CONFIG: EvaluatorConfig = {
 
 /** Current configuration, starts with defaults */
 let currentConfig: EvaluatorConfig = { ...DEFAULT_CONFIG };
-/** Whether configuration has been initialized from file/env */
-let isInitialized = false;
-
 /**
  * Gets the current configuration.
  * @returns The current EvaluatorConfig
@@ -162,7 +157,6 @@ export function setConfig(
  */
 export function resetConfig(): void {
   currentConfig = { ...DEFAULT_CONFIG };
-  isInitialized = false;
 }
 
 /**
@@ -236,24 +230,5 @@ export async function initializeConfig(
     validateConfig(mergedConfig);
   }
 
-  // Apply to current config
   currentConfig = mergedConfig as EvaluatorConfig;
-  isInitialized = true;
-}
-
-/**
- * Checks if configuration has been initialized from file/env.
- * @returns true if initializeConfig() has been called
- */
-export function isConfigInitialized(): boolean {
-  return isInitialized;
-}
-
-/**
- * Gets the default configuration values.
- * Useful for documentation or displaying defaults.
- * @returns A copy of the default configuration
- */
-export function getDefaultConfig(): EvaluatorConfig {
-  return { ...DEFAULT_CONFIG };
 }

@@ -1,15 +1,21 @@
 /**
- * Purpose: Converts evaluator metrics and incidents into a concise source-neutral markdown report suitable for public sharing.
+ * Purpose: Converts evaluator metrics and summary data into a concise source-neutral markdown report suitable for public sharing.
  * Responsibilities: Build deterministic report sections from metrics and summary artifacts.
  * Scope: Used by the `report` and `eval` commands for all supported sources.
- * Usage: Call `renderReport()` or `renderSummaryReport()` with aggregated metrics.
+ * Usage: Call `renderSummaryReport()` with a summary artifact, or `renderReport()` as a convenience wrapper.
  * Invariants/Assumptions: Incident evidence stays redacted and truncated for public-safe reporting.
  */
+
 import {
   buildSummaryArtifact,
   buildSummaryInputsFromArtifacts,
 } from "./insights.js";
-import type { IncidentRecord, MetricsRecord, RawTurnRecord } from "./schema.js";
+import type {
+  IncidentRecord,
+  MetricsRecord,
+  RawTurnRecord,
+  SummaryArtifact,
+} from "./schema.js";
 import { buildSummarySections } from "./summary-sections.js";
 
 function renderLines<T>(
@@ -24,9 +30,7 @@ function renderLines<T>(
   return items.map(renderItem).join("\n");
 }
 
-function renderLabelLines(
-  summary: ReturnType<typeof buildSummaryArtifact>,
-): string {
+function renderLabelLines(summary: SummaryArtifact): string {
   return renderLines(
     summary.labels,
     "- No labels were detected.",
@@ -34,9 +38,7 @@ function renderLabelLines(
   );
 }
 
-function renderRateLines(
-  summary: ReturnType<typeof buildSummaryArtifact>,
-): string {
+function renderRateLines(summary: SummaryArtifact): string {
   return [
     `- Incidents / 100 turns: ${summary.rates.incidentsPer100Turns}`,
     `- Writes / 100 turns: ${summary.rates.writesPer100Turns}`,
@@ -56,9 +58,7 @@ function renderComplianceLines(metrics: MetricsRecord): string {
     .join("\n");
 }
 
-function renderSessionLines(
-  summary: ReturnType<typeof buildSummaryArtifact>,
-): string {
+function renderSessionLines(summary: SummaryArtifact): string {
   return renderLines(
     summary.topSessions,
     "- No session insights were available.",
@@ -67,9 +67,7 @@ function renderSessionLines(
   );
 }
 
-function renderVictoryLapLines(
-  summary: ReturnType<typeof buildSummaryArtifact>,
-): string {
+function renderVictoryLapLines(summary: SummaryArtifact): string {
   return renderLines(
     summary.victoryLaps,
     "- No clean verified delivery sessions were available in this slice.",
@@ -78,9 +76,7 @@ function renderVictoryLapLines(
   );
 }
 
-function renderComparativeSliceLines(
-  summary: ReturnType<typeof buildSummaryArtifact>,
-): string {
+function renderComparativeSliceLines(summary: SummaryArtifact): string {
   return summary.comparativeSlices
     .map(
       (slice) =>
@@ -89,9 +85,7 @@ function renderComparativeSliceLines(
     .join("\n");
 }
 
-function renderOpportunityLines(
-  summary: ReturnType<typeof buildSummaryArtifact>,
-): string {
+function renderOpportunityLines(summary: SummaryArtifact): string {
   return renderLines(
     summary.opportunities,
     "- No deterministic improvement opportunities were identified.",
@@ -99,9 +93,7 @@ function renderOpportunityLines(
   );
 }
 
-function renderIncidentLines(
-  summary: ReturnType<typeof buildSummaryArtifact>,
-): string {
+function renderIncidentLines(summary: SummaryArtifact): string {
   return renderLines(
     summary.topIncidents,
     "- No labeled incidents detected.",
@@ -118,28 +110,14 @@ function renderInventoryLines(metrics: MetricsRecord): string {
   return metrics.inventory
     .map(
       (record) =>
-        `- ${record.provider ?? "codex"} ${record.required ? "required" : "optional"} ${record.kind}: ${record.discovered ? "present" : "missing"} at \`${record.path}\``,
+        `- ${record.provider} ${record.required ? "required" : "optional"} ${record.kind}: ${record.discovered ? "present" : "missing"} at \`${record.path}\``,
     )
     .join("\n");
 }
 
 /**
- * Renders a complete markdown report from evaluation results.
- *
- * This is the primary report generation function that:
- * 1. Builds a summary artifact from the metrics and raw data
- * 2. Renders all report sections including headline insights, incidents, sessions
- *
- * @param metrics - Aggregated metrics from the evaluation
- * @param incidents - Clustered incidents detected during evaluation
- * @param rawTurns - All parsed and labeled turns from the sessions
- * @returns Markdown-formatted report string
- *
- * @example
- * ```typescript
- * const report = renderReport(metrics, incidents, rawTurns);
- * await writeFile("report.md", report);
- * ```
+ * Convenience wrapper that derives the summary artifact from raw turns and incidents
+ * before delegating to the canonical summary-based renderer.
  */
 export function renderReport(
   metrics: MetricsRecord,
@@ -155,28 +133,14 @@ export function renderReport(
 
 /**
  * Renders a markdown report from a pre-built summary artifact.
- *
- * Use this when you already have a summary artifact and want to
- * regenerate just the markdown report without reprocessing the data.
- *
- * @param metrics - Aggregated metrics from the evaluation
- * @param summary - Pre-built summary artifact from buildSummaryArtifact()
- * @returns Markdown-formatted report string
- *
- * @example
- * ```typescript
- * const summary = buildSummaryArtifact(metrics, inputs);
- * const report = renderSummaryReport(metrics, summary);
- * console.log(report);
- * ```
  */
 export function renderSummaryReport(
   metrics: MetricsRecord,
-  summary: ReturnType<typeof buildSummaryArtifact>,
+  summary: SummaryArtifact,
 ): string {
   const sections = buildSummarySections(summary);
   const providers = [
-    ...new Set(metrics.inventory.map((record) => record.provider ?? "codex")),
+    ...new Set(metrics.inventory.map((record) => record.provider)),
   ];
 
   return [

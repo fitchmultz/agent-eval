@@ -3,7 +3,7 @@
  * Responsibilities: Validate config structure, provide helpful error messages.
  * Scope: Validates all EvaluatorConfig fields with sensible constraints.
  * Usage: import { validateConfig, ConfigValidationError } from "./validation.js";
- * Invariants: All numeric fields must be positive integers.
+ * Invariants/Assumptions: All numeric fields must be positive integers.
  */
 
 import { z } from "zod";
@@ -107,33 +107,4 @@ export function validateConfig(
   }
 
   return result.data;
-}
-
-/**
- * Validates a specific section of configuration.
- * Useful for partial updates.
- * @param section - Section name to validate
- * @param value - Section value to validate
- * @returns true if valid
- * @throws {ConfigValidationError} If validation fails
- */
-export function validateConfigSection<K extends keyof EvaluatorConfig>(
-  section: K,
-  value: unknown,
-): asserts value is EvaluatorConfig[K] {
-  const schemas: Record<keyof EvaluatorConfig, z.ZodType> = {
-    concurrency: concurrencySchema,
-    clustering: clusteringSchema,
-    previews: previewsSchema,
-    scoring: scoringSchema,
-  };
-
-  const result = schemas[section].safeParse(value);
-
-  if (!result.success) {
-    const errors = result.error.issues.map(
-      (err) => `${section}.${err.path.join(".")}: ${err.message}`,
-    );
-    throw new ConfigValidationError(errors);
-  }
 }

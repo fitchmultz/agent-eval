@@ -1,20 +1,15 @@
 /**
- * Purpose: Writes evaluation artifacts to filesystem.
- * Entrypoint: `writeEvaluationArtifacts()` and `writeSummaryArtifacts()`.
+ * Purpose: Persist canonical parse and evaluation artifacts to the filesystem.
+ * Responsibilities: Write normalized raw turns, incidents, metrics, summary data, markdown, HTML, and SVG outputs.
+ * Scope: Final output stage for parse, eval, and report CLI commands.
+ * Usage: Call `writeParseArtifacts()` for parse-only runs or `writeArtifacts()` for full evaluation bundles.
+ * Invariants/Assumptions: Artifact content is fully computed before this module runs; this module only serializes and writes files.
  */
+
 import { join } from "node:path";
-import { PREVIEWS } from "./constants/index.js";
+
 import { writeJsonLinesFile, writeTextFile } from "./filesystem.js";
-import {
-  collectSessionLabelCounts,
-  createEmptySeverityCounts,
-  insertTopIncident,
-  type SummaryInputs,
-} from "./insights.js";
-import {
-  createPresentationArtifacts,
-  createPresentationArtifactsFromSummary,
-} from "./presentation.js";
+import type { PresentationArtifacts } from "./presentation.js";
 import type {
   IncidentRecord,
   MetricsRecord,
@@ -23,40 +18,48 @@ import type {
 } from "./schema.js";
 
 /**
- * Result of a full evaluation.
+ * Canonical evaluation result used by the CLI and artifact writer.
  */
-export interface EvaluationResult {
-  rawTurns: RawTurnRecord[];
-  incidents: IncidentRecord[];
-  metrics: MetricsRecord;
-  report: string;
-}
-
-/**
- * Result of a summary-only evaluation.
- */
-export interface SummaryOnlyEvaluationResult {
+export interface EvaluationArtifacts {
   metrics: MetricsRecord;
   summary: SummaryArtifact;
   report: string;
+  presentation: PresentationArtifacts;
+  rawTurns?: RawTurnRecord[] | undefined;
+  incidents?: IncidentRecord[] | undefined;
 }
 
 /**
- * Shared artifacts that both evaluation modes produce.
+ * Writes parse-only artifacts.
  */
-interface SharedArtifactWriteResult {
-  metrics: MetricsRecord;
-  report: string;
-  summary: SummaryArtifact;
-}
-
-/**
- * Writes shared artifacts (metrics, report, summary, charts).
- */
-async function writeSharedArtifacts(
-  result: SharedArtifactWriteResult,
+export async function writeParseArtifacts(
+  rawTurns: readonly RawTurnRecord[],
   outputDir: string,
 ): Promise<void> {
+  await writeJsonLinesFile(join(outputDir, "raw-turns.jsonl"), rawTurns);
+}
+
+/**
+ * Writes evaluation artifacts, including shared presentation outputs and optional raw data.
+ */
+export async function writeArtifacts(
+  result: EvaluationArtifacts,
+  outputDir: string,
+): Promise<void> {
+  if (result.rawTurns) {
+    await writeJsonLinesFile(
+      join(outputDir, "raw-turns.jsonl"),
+      result.rawTurns,
+    );
+  }
+
+  if (result.incidents) {
+    await writeJsonLinesFile(
+      join(outputDir, "incidents.jsonl"),
+      result.incidents,
+    );
+  }
+
   await writeTextFile(
     join(outputDir, "metrics.json"),
     `${JSON.stringify(result.metrics, null, 2)}\n`,
@@ -66,111 +69,20 @@ async function writeSharedArtifacts(
     `${JSON.stringify(result.summary, null, 2)}\n`,
   );
   await writeTextFile(join(outputDir, "report.md"), result.report);
-  const presentation = createPresentationArtifactsFromSummary(
-    result.metrics,
-    result.summary,
+  await writeTextFile(
+    join(outputDir, "report.html"),
+    result.presentation.reportHtml,
   );
-  await writeTextFile(join(outputDir, "report.html"), presentation.reportHtml);
   await writeTextFile(
     join(outputDir, "label-counts.svg"),
-    presentation.labelChartSvg,
+    result.presentation.labelChartSvg,
   );
   await writeTextFile(
     join(outputDir, "compliance-summary.svg"),
-    presentation.complianceChartSvg,
+    result.presentation.complianceChartSvg,
   );
   await writeTextFile(
     join(outputDir, "severity-breakdown.svg"),
-    presentation.severityChartSvg,
+    result.presentation.severityChartSvg,
   );
-}
-
-/**
- * Writes all artifacts from a full evaluation.
- * @param result - The full evaluation result
- * @param outputDir - Directory to write artifacts to
- */
-export async function writeEvaluationArtifacts(
-  result: EvaluationResult,
-  outputDir: string,
-): Promise<void> {
-  await writeJsonLinesFile(join(outputDir, "raw-turns.jsonl"), result.rawTurns);
-  await writeJsonLinesFile(
-    join(outputDir, "incidents.jsonl"),
-    result.incidents,
-  );
-  const presentation = createPresentationArtifacts(
-    result.metrics,
-    result.incidents,
-    result.rawTurns,
-  );
-  await writeSharedArtifacts(
-    {
-      metrics: result.metrics,
-      report: result.report,
-      summary: presentation.summary,
-    },
-    outputDir,
-  );
-}
-
-/**
- * Writes artifacts from a summary-only evaluation.
- * @param result - The summary-only evaluation result
- * @param outputDir - Directory to write artifacts to
- */
-export async function writeSummaryArtifacts(
-  result: SummaryOnlyEvaluationResult,
-  outputDir: string,
-): Promise<void> {
-  await writeSharedArtifacts(
-    {
-      metrics: result.metrics,
-      report: result.report,
-      summary: result.summary,
-    },
-    outputDir,
-  );
-}
-
-/**
- * Creates summary inputs from processed sessions for building summary artifact.
- * This is a helper for the evaluator's summary-only path.
- */
-export function createSummaryInputs(
-  sessions: ReadonlyArray<{
-    sessionId: string;
-    turns: ReadonlyArray<RawTurnRecord>;
-    incidents: ReadonlyArray<IncidentRecord>;
-  }>,
-  writeTurnCount: number,
-): SummaryInputs {
-  const allTurns = sessions.flatMap((s) => s.turns);
-  const sessionLabelCounts = collectSessionLabelCounts(allTurns);
-  const severityCounts = createEmptySeverityCounts();
-  let topIncidents: SummaryArtifact["topIncidents"] = [];
-
-  for (const incident of sessions.flatMap((s) => s.incidents)) {
-    severityCounts[incident.severity] += 1;
-    topIncidents = insertTopIncident(
-      topIncidents,
-      {
-        incidentId: incident.incidentId,
-        sessionId: incident.sessionId,
-        summary: incident.summary,
-        severity: incident.severity,
-        confidence: incident.confidence,
-        turnSpan: incident.turnIndices.length,
-        evidencePreview: incident.evidencePreviews[0],
-      },
-      PREVIEWS.MAX_TOP_INCIDENTS,
-    );
-  }
-
-  return {
-    sessionLabelCounts,
-    topIncidents,
-    severityCounts,
-    writeTurnCount,
-  };
 }

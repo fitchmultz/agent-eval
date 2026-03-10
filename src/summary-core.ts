@@ -1,7 +1,9 @@
 /**
- * Purpose: Computes deterministic core summary data like rankings, rates, slices, and incident selection.
- * Entrypoint: `buildSummaryCore()` and `buildSummaryInputsFromArtifacts()` feed the higher-level summary facade.
- * Notes: This is a thin orchestrator that delegates to specialized modules in src/summary/
+ * Purpose: Compute the deterministic core summary data shared by every evaluator output.
+ * Responsibilities: Turn metrics and aggregated inputs into stable rates, rankings, slices, and opportunities.
+ * Scope: Internal summary math used by the public facade in insights.ts.
+ * Usage: Called through `buildSummaryArtifact()` in normal evaluator flows.
+ * Invariants/Assumptions: This module owns canonical summary math only; decorative cards and report rendering live elsewhere.
  */
 
 import { buildComparativeSlices } from "./comparative-slices.js";
@@ -14,23 +16,6 @@ import {
 import { buildTopSessions, buildVictoryLaps } from "./session-ranking.js";
 import { countLabel, safeRate } from "./summary/index.js";
 import type { SummaryCoreData, SummaryInputs } from "./summary/types.js";
-
-// Re-export for backward compatibility during transition
-export {
-  buildComparativeSlices,
-  buildScoreSnapshot,
-} from "./comparative-slices.js";
-export {
-  buildSummaryInputsFromArtifacts,
-  countLabel,
-  safeRate,
-} from "./summary/index.js";
-export type {
-  ScoreSnapshot,
-  SessionInsightRow,
-  SummaryCoreData,
-  SummaryInputs,
-} from "./summary/types.js";
 
 const VALID_LABELS: LabelName[] = [
   "context_drift",

@@ -1,8 +1,8 @@
 /**
- * Purpose: Environment variable names and helper functions for configuration.
- * Responsibilities: Define ENV_VARS constants and provide type-safe env accessors.
+ * Purpose: Environment variable names and number-parsing helpers for configuration.
+ * Responsibilities: Define ENV_VARS constants and provide typed access for config loading.
  * Scope: All environment variable names are prefixed with CODEX_EVAL_.
- * Usage: import { ENV_VARS, getEnvString, getEnvNumber } from "./env.js";
+ * Usage: import { ENV_VARS, getEnvNumber } from "./env.js";
  * Invariants/Assumptions: Environment variables remain namespaced under `CODEX_EVAL_`.
  */
 
@@ -39,30 +39,9 @@ export const ENV_VARS = {
   FRICTION_THRESHOLD: "FRICTION_THRESHOLD",
 } as const;
 
-/** Environment variable name prefix */
-const ENV_PREFIX = "CODEX_EVAL_";
-
-/**
- * Gets the full environment variable name with prefix.
- * @param key - The environment variable key from ENV_VARS
- * @returns Full environment variable name (e.g., "CODEX_EVAL_SOURCE_HOME")
- */
-export function getEnvVarName(key: EnvVarKey): string {
-  return `${ENV_PREFIX}${ENV_VARS[key]}`;
-}
-
 /** Type of environment variable keys */
 export type EnvVarKey = keyof typeof ENV_VARS;
-
-/**
- * Gets a string value from environment variables with a default fallback.
- * @param key - The environment variable key from ENV_VARS
- * @param defaultValue - Value to return if env var is not set
- * @returns The environment variable value or default
- */
-export function getEnvString(key: EnvVarKey, defaultValue: string): string {
-  return process.env[getEnvVarName(key)] ?? defaultValue;
-}
+const ENV_PREFIX = "CODEX_EVAL_";
 
 /**
  * Gets a number value from environment variables with a default fallback.
@@ -72,22 +51,8 @@ export function getEnvString(key: EnvVarKey, defaultValue: string): string {
  * @returns The parsed number or default
  */
 export function getEnvNumber(key: EnvVarKey, defaultValue: number): number {
-  const value = process.env[getEnvVarName(key)];
+  const value = process.env[`${ENV_PREFIX}${ENV_VARS[key]}`];
   if (!value) return defaultValue;
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? defaultValue : parsed;
-}
-
-/**
- * Gets a boolean value from environment variables with a default fallback.
- * Values 'true', '1', 'yes' are considered true (case-insensitive).
- * @param key - The environment variable key from ENV_VARS
- * @param defaultValue - Value to return if env var is not set
- * @returns The parsed boolean or default
- */
-export function getEnvBoolean(key: EnvVarKey, defaultValue: boolean): boolean {
-  const value = process.env[getEnvVarName(key)];
-  if (!value) return defaultValue;
-  const normalized = value.toLowerCase().trim();
-  return normalized === "true" || normalized === "1" || normalized === "yes";
 }
