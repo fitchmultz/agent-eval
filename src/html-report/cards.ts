@@ -13,11 +13,77 @@ import {
   escapeHtml,
 } from "./templates.js";
 
+const WRITE_DISCIPLINE_RULES = new Set([
+  "scope_confirmed_before_major_write",
+  "cwd_or_repo_echoed_before_write",
+  "short_plan_before_large_change",
+  "verification_after_code_changes",
+]);
+
+function hasApplicableDiscipline(summary: SummaryArtifact): boolean {
+  return summary.compliance.some(
+    (rule) =>
+      WRITE_DISCIPLINE_RULES.has(rule.rule) &&
+      rule.passCount + rule.failCount > 0,
+  );
+}
+
+function formatVerificationDisplay(summary: SummaryArtifact): {
+  value: string;
+  detail: string;
+  tone: "neutral" | "good" | "warn";
+} {
+  if (summary.delivery.sessionsWithWrites === 0) {
+    return {
+      value: "N/A",
+      detail: "No write sessions were observed in this slice.",
+      tone: "neutral",
+    };
+  }
+
+  return {
+    value: `${summary.delivery.writeVerificationRate}%`,
+    detail: `${summary.delivery.verifiedWriteSessions}/${summary.delivery.sessionsWithWrites} write sessions`,
+    tone: summary.delivery.writeVerificationRate >= 100 ? "good" : "warn",
+  };
+}
+
+function formatScoreCardDisplay(
+  summary: SummaryArtifact,
+  card: SummaryArtifact["scoreCards"][number],
+): { score: number | string; detail: string; tone: typeof card.tone } {
+  if (
+    card.title === "Proof Score" &&
+    summary.delivery.sessionsWithWrites === 0
+  ) {
+    return {
+      score: "N/A",
+      detail: "No write sessions were observed in this slice.",
+      tone: "neutral",
+    };
+  }
+
+  if (card.title === "Discipline Score" && !hasApplicableDiscipline(summary)) {
+    return {
+      score: "N/A",
+      detail: "No write-related compliance rules were exercised in this slice.",
+      tone: "neutral",
+    };
+  }
+
+  return {
+    score: card.score,
+    detail: card.detail,
+    tone: card.tone,
+  };
+}
+
 /**
  * Renders the summary metric cards section.
  */
 export function renderSummaryCards(summary: SummaryArtifact): string {
   const sections = buildSummarySections(summary);
+  const verificationDisplay = formatVerificationDisplay(summary);
   const cards = [
     {
       label: "Sessions",
@@ -33,9 +99,9 @@ export function renderSummaryCards(summary: SummaryArtifact): string {
     },
     {
       label: "Verified Write Rate",
-      value: `${summary.delivery.writeVerificationRate}%`,
-      detail: `${summary.delivery.verifiedWriteSessions}/${summary.delivery.sessionsWithWrites} write sessions`,
-      tone: summary.delivery.writeVerificationRate >= 100 ? "good" : "warn",
+      value: verificationDisplay.value,
+      detail: verificationDisplay.detail,
+      tone: verificationDisplay.tone,
     },
     ...sections.headlineInsights.map((card) => ({
       label: card.title,
@@ -87,9 +153,15 @@ export function renderScoreCards(summary: SummaryArtifact): string {
   }
 
   return summary.scoreCards
-    .map((card) =>
-      createScoreCard(card.title, card.score, card.detail, card.tone),
-    )
+    .map((card) => {
+      const display = formatScoreCardDisplay(summary, card);
+      return createScoreCard(
+        card.title,
+        display.score,
+        display.detail,
+        display.tone,
+      );
+    })
     .join("");
 }
 
@@ -168,7 +240,6 @@ export function renderSessionCards(summary: SummaryArtifact): string {
       (session) => `
       <article class="session-card">
         <div class="incident-meta">
-          <span class="pill">${escapeHtml(session.archetype)}</span>
           <span class="pill">${escapeHtml(session.archetypeLabel)}</span>
           <span class="pill">friction ${session.frictionScore}</span>
           <span class="pill">score ${session.complianceScore}</span>
@@ -233,11 +304,21 @@ export function renderOpportunityList(summary: SummaryArtifact): string {
  * Renders the inventory list section.
  */
 export function renderInventoryList(metrics: MetricsRecord): string {
-  return metrics.inventory
+  const visibleInventory = metrics.inventory.filter(
+    (record) => record.discovered || record.required,
+  );
+
+  if (visibleInventory.length === 0) {
+    return createEmptyState(
+      "No inventory records were available for this slice.",
+    );
+  }
+
+  return visibleInventory
     .map(
       (record) => `
       <li>
-        <span class="pill">${escapeHtml(record.provider ?? "codex")}</span>
+        <span class="pill">${escapeHtml(record.provider)}</span>
         <span class="pill ${record.required ? "required" : "optional"}">${record.required ? "required" : "optional"}</span>
         <strong>${escapeHtml(record.kind)}</strong>
         <span>${record.discovered ? "present" : "missing"}</span>

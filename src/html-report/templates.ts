@@ -46,14 +46,17 @@ export function createMetricCard(
  */
 export function createScoreCard(
   title: string,
-  score: number,
+  score: number | string,
   detail: string,
   tone: string,
 ): string {
+  const scoreLabel = typeof score === "number" ? `${score}` : score;
+  const suffix =
+    typeof score === "number" ? '<span class="metric-suffix">/100</span>' : "";
   return `
     <article class="metric-card tone-${escapeHtml(tone)} score-card">
       <div class="metric-label">${escapeHtml(title)}</div>
-      <div class="metric-value">${score}<span class="metric-suffix">/100</span></div>
+      <div class="metric-value">${escapeHtml(scoreLabel)}${suffix}</div>
       <div class="metric-detail">${escapeHtml(detail)}</div>
     </article>`;
 }

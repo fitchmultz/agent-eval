@@ -63,7 +63,7 @@ function renderSessionLines(summary: SummaryArtifact): string {
     summary.topSessions,
     "- No session insights were available.",
     (session) =>
-      `- ${session.sessionId}: ${session.archetypeLabel} (${session.archetype}), friction ${session.frictionScore}, score ${session.complianceScore}, dominant labels ${session.dominantLabels.join(", ") || "none"}`,
+      `- ${session.sessionId}: ${session.archetypeLabel}, friction ${session.frictionScore}, score ${session.complianceScore}, dominant labels ${session.dominantLabels.join(", ") || "none"}`,
   );
 }
 
@@ -76,11 +76,68 @@ function renderVictoryLapLines(summary: SummaryArtifact): string {
   );
 }
 
+function hasApplicableDiscipline(summary: SummaryArtifact): boolean {
+  return summary.compliance.some(
+    (rule) =>
+      rule.rule !== "no_unverified_ending" &&
+      rule.passCount + rule.failCount > 0,
+  );
+}
+
+function renderScoreCardLine(
+  summary: SummaryArtifact,
+  card: SummaryArtifact["scoreCards"][number],
+): string {
+  if (
+    card.title === "Proof Score" &&
+    summary.delivery.sessionsWithWrites === 0
+  ) {
+    return `- ${card.title}: N/A (${`No write sessions were observed in this slice.`})`;
+  }
+
+  if (card.title === "Discipline Score" && !hasApplicableDiscipline(summary)) {
+    return `- ${card.title}: N/A (${`No write-related compliance rules were exercised in this slice.`})`;
+  }
+
+  return `- ${card.title}: ${card.score}/100 (${card.detail})`;
+}
+
+function formatComparativeSliceValue(
+  summary: SummaryArtifact,
+  slice: SummaryArtifact["comparativeSlices"][number],
+  field: "proofScore" | "disciplineScore" | "writeVerificationRate",
+): string {
+  if (slice.key !== "selected_corpus") {
+    return field === "writeVerificationRate"
+      ? `${slice[field]}%`
+      : `${slice[field]}`;
+  }
+
+  if (
+    field === "writeVerificationRate" &&
+    summary.delivery.sessionsWithWrites === 0
+  ) {
+    return "N/A";
+  }
+
+  if (field === "proofScore" && summary.delivery.sessionsWithWrites === 0) {
+    return "N/A";
+  }
+
+  if (field === "disciplineScore" && !hasApplicableDiscipline(summary)) {
+    return "N/A";
+  }
+
+  return field === "writeVerificationRate"
+    ? `${slice[field]}%`
+    : `${slice[field]}`;
+}
+
 function renderComparativeSliceLines(summary: SummaryArtifact): string {
   return summary.comparativeSlices
     .map(
       (slice) =>
-        `- ${slice.label}: sessions ${slice.sessionCount}, proof ${slice.proofScore}, flow ${slice.flowScore}, discipline ${slice.disciplineScore}, write verification ${slice.writeVerificationRate}%, incidents/100 turns ${slice.incidentsPer100Turns}`,
+        `- ${slice.label}: sessions ${slice.sessionCount}, proof ${formatComparativeSliceValue(summary, slice, "proofScore")}, flow ${slice.flowScore}, discipline ${formatComparativeSliceValue(summary, slice, "disciplineScore")}, write verification ${formatComparativeSliceValue(summary, slice, "writeVerificationRate")}, incidents/100 turns ${slice.incidentsPer100Turns}`,
     )
     .join("\n");
 }
@@ -108,6 +165,7 @@ function renderIncidentLines(summary: SummaryArtifact): string {
 
 function renderInventoryLines(metrics: MetricsRecord): string {
   return metrics.inventory
+    .filter((record) => record.discovered || record.required)
     .map(
       (record) =>
         `- ${record.provider} ${record.required ? "required" : "optional"} ${record.kind}: ${record.discovered ? "present" : "missing"} at \`${record.path}\``,
@@ -168,9 +226,7 @@ export function renderSummaryReport(
     "",
     "## Shareable Scoreboard",
     "",
-    ...summary.scoreCards.map(
-      (card) => `- ${card.title}: ${card.score}/100 (${card.detail})`,
-    ),
+    ...summary.scoreCards.map((card) => renderScoreCardLine(summary, card)),
     "",
     "## Recent Momentum",
     "",

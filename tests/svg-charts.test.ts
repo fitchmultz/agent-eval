@@ -170,6 +170,7 @@ describe("renderLabelChart", () => {
 
     expect(svg).toContain("Label Counts");
     expect(svg).toContain("<svg");
+    expect(svg).toContain("No labels were detected");
   });
 });
 
@@ -199,6 +200,7 @@ describe("renderComplianceChart", () => {
 
     expect(svg).toContain("Compliance Pass Counts");
     expect(svg).toContain("<svg");
+    expect(svg).toContain("No passing compliance checks");
   });
 });
 
@@ -238,6 +240,7 @@ describe("renderSeverityChart", () => {
     const svg = renderSeverityChart(emptySummary);
 
     expect(svg).toContain("Incident Severity");
+    expect(svg).toContain("No incidents were recorded");
     expect(svg).toContain("<svg");
   });
 });

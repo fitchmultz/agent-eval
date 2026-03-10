@@ -547,6 +547,7 @@ describe("summary-sections", () => {
       expect(frictionCard).toBeDefined();
       expect(frictionCard?.value).toBe("high-friction-session");
       expect(frictionCard?.detail).toContain("15 friction points");
+      expect(frictionCard?.detail).toContain("High Friction Recovery");
     });
 
     it("sets danger tone for high friction session", () => {

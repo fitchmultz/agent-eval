@@ -42,7 +42,7 @@ export function renderHtmlReport(
 ): string {
   const styles = renderStyles();
   const providers = [
-    ...new Set(metrics.inventory.map((record) => record.provider ?? "codex")),
+    ...new Set(metrics.inventory.map((record) => record.provider)),
   ];
 
   return [

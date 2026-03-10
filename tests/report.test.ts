@@ -339,6 +339,7 @@ describe("renderReport", () => {
       "- No deterministic improvement opportunities were identified.",
     );
     expect(report).toContain("- No labeled incidents detected.");
+    expect(report).toContain("Selected Corpus: sessions 0, proof N/A");
   });
 
   it("includes label counts correctly", () => {
@@ -371,7 +372,7 @@ describe("renderReport", () => {
     const report = renderReport(metrics, incidents, rawTurns);
 
     expect(report).toContain("required session_jsonl: present");
-    expect(report).toContain("optional state_sqlite: missing");
+    expect(report).not.toContain("optional state_sqlite: missing");
   });
 
   it("includes operational rates", () => {
@@ -469,8 +470,23 @@ describe("renderSummaryReport", () => {
 
     const report = renderSummaryReport(metrics, summary);
 
-    // Score cards should be in format: title: score/100
-    expect(report).toMatch(/:\s*\d+\/100/);
+    expect(report).toContain("Proof Score:");
+    expect(report).toContain("/100");
+  });
+
+  it("renders N/A for inapplicable pretty scores", () => {
+    const metrics = createEmptyMetrics();
+    const summary = buildSummaryArtifact(metrics, {
+      sessionLabelCounts: new Map(),
+      topIncidents: [],
+      severityCounts: { info: 0, low: 0, medium: 0, high: 0 },
+      writeTurnCount: 0,
+    });
+
+    const report = renderSummaryReport(metrics, summary);
+
+    expect(report).toContain("Proof Score: N/A");
+    expect(report).toContain("Discipline Score: N/A");
   });
 
   it("renders brag cards", () => {

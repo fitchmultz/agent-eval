@@ -30,6 +30,18 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
+function createEmptyChart(title: string, message: string): string {
+  const width = CHARTS.WIDTH;
+  const height = 140;
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">`,
+    `<rect width="${width}" height="${height}" fill="#FFFDF8" />`,
+    `<text x="12" y="30" font-size="22" font-weight="700" fill="#10263B">${escapeHtml(title)}</text>`,
+    `<text x="12" y="82" font-size="15" fill="#5B6F82">${escapeHtml(message)}</text>`,
+    "</svg>",
+  ].join("");
+}
+
 /**
  * Renders a horizontal bar chart as an SVG string.
  *
@@ -41,16 +53,23 @@ export function renderBarChart(
   title: string,
   data: readonly BarDatum[],
 ): string {
+  const nonZeroData = data.filter((entry) => entry.value > 0);
+  const visibleData = nonZeroData.length > 0 ? nonZeroData : data;
+
+  if (visibleData.length === 0) {
+    return createEmptyChart(title, "No values were available for this slice.");
+  }
+
   const width = CHARTS.WIDTH;
   const rowHeight = CHARTS.ROW_HEIGHT;
   const topPadding = CHARTS.TOP_PADDING;
   const leftPadding = CHARTS.LEFT_PADDING;
   const rightPadding = CHARTS.RIGHT_PADDING;
   const chartWidth = width - leftPadding - rightPadding;
-  const height = topPadding + data.length * rowHeight + 24;
-  const maxValue = Math.max(1, ...data.map((entry) => entry.value));
+  const height = topPadding + visibleData.length * rowHeight + 24;
+  const maxValue = Math.max(1, ...visibleData.map((entry) => entry.value));
 
-  const rows = data
+  const rows = visibleData
     .map((entry, index) => {
       const y = topPadding + index * rowHeight;
       const barWidth = Math.round((entry.value / maxValue) * chartWidth);
@@ -79,6 +98,13 @@ export function renderBarChart(
  * @returns SVG string
  */
 export function renderLabelChart(summary: SummaryArtifact): string {
+  if (summary.labels.length === 0) {
+    return createEmptyChart(
+      "Label Counts",
+      "No labels were detected in this slice.",
+    );
+  }
+
   return renderBarChart(
     "Label Counts",
     summary.labels.map((entry, index) => ({
@@ -96,6 +122,13 @@ export function renderLabelChart(summary: SummaryArtifact): string {
  * @returns SVG string
  */
 export function renderComplianceChart(summary: SummaryArtifact): string {
+  if (!summary.compliance.some((entry) => entry.passCount > 0)) {
+    return createEmptyChart(
+      "Compliance Pass Counts",
+      "No passing compliance checks were recorded in this slice.",
+    );
+  }
+
   return renderBarChart(
     "Compliance Pass Counts",
     summary.compliance.map((entry) => ({
@@ -113,6 +146,13 @@ export function renderComplianceChart(summary: SummaryArtifact): string {
  * @returns SVG string
  */
 export function renderSeverityChart(summary: SummaryArtifact): string {
+  if (!summary.severities.some((entry) => entry.count > 0)) {
+    return createEmptyChart(
+      "Incident Severity",
+      "No incidents were recorded in this slice.",
+    );
+  }
+
   return renderBarChart(
     "Incident Severity",
     summary.severities.map((entry) => ({

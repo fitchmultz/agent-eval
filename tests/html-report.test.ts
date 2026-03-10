@@ -311,6 +311,56 @@ describe("renderHtmlReport", () => {
     expect(html).toContain("/100");
   });
 
+  it("renders N/A instead of misleading score badges when no writes or applicable rules exist", () => {
+    const html = renderHtmlReport(
+      {
+        ...baseSummary,
+        delivery: {
+          sessionsWithWrites: 0,
+          verifiedWriteSessions: 0,
+          writeVerificationRate: 0,
+        },
+        compliance: baseSummary.compliance.map((rule) => ({
+          ...rule,
+          passCount: 0,
+          failCount: 0,
+          notApplicableCount: 1,
+        })),
+        scoreCards: [
+          {
+            title: "Proof Score",
+            score: 0,
+            detail: "placeholder",
+            tone: "danger",
+          },
+          {
+            title: "Discipline Score",
+            score: 0,
+            detail: "placeholder",
+            tone: "danger",
+          },
+        ],
+      },
+      {
+        ...baseMetrics,
+        sessions: [],
+        complianceSummary: baseMetrics.complianceSummary.map((rule) => ({
+          ...rule,
+          passCount: 0,
+          failCount: 0,
+          notApplicableCount: 1,
+        })),
+      },
+    );
+
+    expect(html).toContain("Verified Write Rate");
+    expect(html).toContain(">N/A<");
+    expect(html).toContain("No write sessions were observed in this slice.");
+    expect(html).toContain(
+      "No write-related compliance rules were exercised in this slice.",
+    );
+  });
+
   it("renders top incidents when present", () => {
     const summaryWithIncidents: SummaryArtifact = {
       ...baseSummary,
@@ -359,6 +409,27 @@ describe("renderHtmlReport", () => {
     expect(html).toContain("Clean Ship");
     expect(html).toContain("Well executed session");
     expect(html).toContain("verification_request");
+    expect(html).not.toContain("verified_delivery");
+  });
+
+  it("filters inventory noise down to discovered items and missing required inputs", () => {
+    const html = renderHtmlReport(baseSummary, {
+      ...baseMetrics,
+      inventory: [
+        ...baseMetrics.inventory,
+        {
+          provider: "codex",
+          kind: "state_sqlite",
+          path: "~/.codex/state_5.sqlite",
+          discovered: false,
+          required: false,
+          optional: true,
+        },
+      ],
+    });
+
+    expect(html).toContain("session_jsonl");
+    expect(html).not.toContain("state_5.sqlite");
   });
 
   it("renders victory laps when present", () => {

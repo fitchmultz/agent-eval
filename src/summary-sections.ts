@@ -62,7 +62,10 @@ function buildHeadlineInsights(
   return [
     {
       title: "Write Verification",
-      value: `${summary.delivery.verifiedWriteSessions}/${summary.delivery.sessionsWithWrites}`,
+      value:
+        summary.delivery.sessionsWithWrites > 0
+          ? `${summary.delivery.verifiedWriteSessions}/${summary.delivery.sessionsWithWrites}`
+          : "N/A",
       detail:
         summary.delivery.sessionsWithWrites > 0
           ? `${summary.delivery.writeVerificationRate}% of write sessions ended with a passing verification signal.`
@@ -90,7 +93,7 @@ function buildHeadlineInsights(
       title: "Highest Friction Session",
       value: highestFriction ? highestFriction.sessionId : "none",
       detail: highestFriction
-        ? `${highestFriction.frictionScore} friction points, archetype ${highestFriction.archetype}.`
+        ? `${highestFriction.frictionScore} friction points, profile ${highestFriction.archetypeLabel}.`
         : "No sessions were available.",
       tone:
         highestFriction &&
