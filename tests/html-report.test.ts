@@ -353,7 +353,7 @@ describe("renderHtmlReport", () => {
       },
     );
 
-    expect(html).toContain("Verified Write Rate");
+    expect(html).toContain("Write Verification");
     expect(html).toContain(">N/A<");
     expect(html).toContain("No write sessions were observed in this slice.");
     expect(html).toContain(

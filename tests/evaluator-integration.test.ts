@@ -212,4 +212,28 @@ describe("evaluateArtifacts integration", () => {
     expect(result.report).toContain("Sources: `claude`");
     expect(result.presentation.reportHtml).toContain("Agent Evaluator Report");
   });
+
+  it("normalizes equivalent Codex and Claude workflows to the same turn count", async () => {
+    const codexHome = await createCodexHome("codex-compare");
+    const claudeHome = await createClaudeHome("claude-compare");
+
+    const [codexResult, claudeResult] = await Promise.all([
+      evaluateArtifacts({
+        source: "codex",
+        home: codexHome,
+      }),
+      evaluateArtifacts({
+        source: "claude",
+        home: claudeHome,
+      }),
+    ]);
+
+    expect(codexResult.summary.sessions).toBe(1);
+    expect(claudeResult.summary.sessions).toBe(1);
+    expect(codexResult.summary.turns).toBe(1);
+    expect(claudeResult.summary.turns).toBe(codexResult.summary.turns);
+    expect(claudeResult.rawTurns).toHaveLength(
+      codexResult.rawTurns?.length ?? 0,
+    );
+  });
 });

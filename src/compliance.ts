@@ -30,25 +30,42 @@ export interface ComplianceScorecard {
   writeCount: number;
 }
 
-function hasPreWriteContext(
+function hasRepoExplorationSignal(turn: ParsedTurn): boolean {
+  return turn.toolCalls.some((toolCall) => {
+    const commandText = extractCommandText(toolCall);
+    return (
+      typeof commandText === "string" &&
+      /\b(pwd|git status|ls|find|rg|fd|tree)\b/.test(commandText)
+    );
+  });
+}
+
+function hasScopeAcknowledgement(turn: ParsedTurn): boolean {
+  return turn.assistantMessages.some(
+    (message) =>
+      /\b(i('| a)?ll|i will|plan|inspect|check|verify|fix|update|review|search|trace|debug|investigate)\b/i.test(
+        message,
+      ) || message.trim().length >= CONTEXT_CONFIRMATION.MIN_MESSAGE_LENGTH,
+  );
+}
+
+function hasScopeConfirmationBeforeWrite(
   turns: readonly ParsedTurn[],
   firstWriteIndex: number,
 ): boolean {
   const priorTurns = turns.slice(0, firstWriteIndex + 1);
   return priorTurns.some(
-    (turn) =>
-      turn.assistantMessages.some(
-        (message) =>
-          message.trim().length >= CONTEXT_CONFIRMATION.MIN_MESSAGE_LENGTH,
-      ) ||
-      turn.toolCalls.some((toolCall) => {
-        const commandText = extractCommandText(toolCall);
-        return (
-          typeof commandText === "string" &&
-          /\b(pwd|git status|ls|find|rg)\b/.test(commandText)
-        );
-      }),
+    (turn) => hasScopeAcknowledgement(turn) || hasRepoExplorationSignal(turn),
   );
+}
+
+function hasRepoOrCwdConfirmationBeforeWrite(
+  turns: readonly ParsedTurn[],
+  firstWriteIndex: number,
+): boolean {
+  return turns
+    .slice(0, firstWriteIndex + 1)
+    .some((turn) => hasRepoExplorationSignal(turn));
 }
 
 function hasPreWritePlan(
@@ -141,8 +158,8 @@ export function scoreCompliance(session: ParsedSession): ComplianceScorecard {
       ),
       createRule(
         "no_unverified_ending",
-        "pass",
-        "Session ended without code changes that required verification.",
+        "not_applicable",
+        "No high-confidence write tools were observed.",
       ),
     );
     return {
@@ -159,12 +176,16 @@ export function scoreCompliance(session: ParsedSession): ComplianceScorecard {
   rules.push(
     createRule(
       "scope_confirmed_before_major_write",
-      hasPreWriteContext(session.turns, firstWriteTurnIndex) ? "pass" : "fail",
+      hasScopeConfirmationBeforeWrite(session.turns, firstWriteTurnIndex)
+        ? "pass"
+        : "fail",
       "Checks whether the agent acknowledged scope or explored context before writing.",
     ),
     createRule(
       "cwd_or_repo_echoed_before_write",
-      hasPreWriteContext(session.turns, firstWriteTurnIndex) ? "pass" : "fail",
+      hasRepoOrCwdConfirmationBeforeWrite(session.turns, firstWriteTurnIndex)
+        ? "pass"
+        : "fail",
       "Checks for early repository or cwd confirmation signals before writing.",
     ),
     createRule(

@@ -28,26 +28,6 @@ function hasApplicableDiscipline(summary: SummaryArtifact): boolean {
   );
 }
 
-function formatVerificationDisplay(summary: SummaryArtifact): {
-  value: string;
-  detail: string;
-  tone: "neutral" | "good" | "warn";
-} {
-  if (summary.delivery.sessionsWithWrites === 0) {
-    return {
-      value: "N/A",
-      detail: "No write sessions were observed in this slice.",
-      tone: "neutral",
-    };
-  }
-
-  return {
-    value: `${summary.delivery.writeVerificationRate}%`,
-    detail: `${summary.delivery.verifiedWriteSessions}/${summary.delivery.sessionsWithWrites} write sessions`,
-    tone: summary.delivery.writeVerificationRate >= 100 ? "good" : "warn",
-  };
-}
-
 function formatScoreCardDisplay(
   summary: SummaryArtifact,
   card: SummaryArtifact["scoreCards"][number],
@@ -83,7 +63,6 @@ function formatScoreCardDisplay(
  */
 export function renderSummaryCards(summary: SummaryArtifact): string {
   const sections = buildSummarySections(summary);
-  const verificationDisplay = formatVerificationDisplay(summary);
   const cards = [
     {
       label: "Sessions",
@@ -96,12 +75,6 @@ export function renderSummaryCards(summary: SummaryArtifact): string {
       value: `${summary.rates.incidentsPer100Turns}`,
       detail: "Aggregate friction density",
       tone: "neutral",
-    },
-    {
-      label: "Verified Write Rate",
-      value: verificationDisplay.value,
-      detail: verificationDisplay.detail,
-      tone: verificationDisplay.tone,
     },
     ...sections.headlineInsights.map((card) => ({
       label: card.title,

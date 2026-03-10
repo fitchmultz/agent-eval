@@ -1,16 +1,16 @@
 /**
  * Purpose: Parses Claude Code JSONL session transcripts into the evaluator's normalized ParsedSession model.
- * Responsibilities: Read Claude Code records, extract user/assistant messages, normalize tool calls, and preserve source refs.
+ * Responsibilities: Merge Claude message records into interaction-level turns, normalize tool calls, and preserve source refs.
  * Scope: Used only for Claude project-session JSONL transcripts; optional Claude enrichment stores are discovery-only.
  * Usage: `parseClaudeTranscriptFile(path, options)` is called via the shared `parseTranscriptFile()` dispatcher.
- * Invariants/Assumptions: Each Claude JSONL line is an independent event record and tool results may arrive on later lines.
+ * Invariants/Assumptions: Normalized turns represent a user request plus the assistant/tool work cycle, not raw Claude event granularity.
  */
 
 import { normalizeError, TranscriptParseError } from "../errors.js";
 import type { SourceProvider, SourceRef } from "../schema.js";
 import { createSourceRef } from "./event-router.js";
 import { createTranscriptLineReader, getReaderStream } from "./file-reader.js";
-import { createTurn } from "./session-builder.js";
+import { createTurn, hasTurnContent } from "./session-builder.js";
 import { asRecord, asString, getValue, isRecord } from "./type-guards.js";
 import type {
   ParsedSession,
@@ -36,6 +36,7 @@ interface ClaudeParseState {
   startedAt?: string;
   cwd?: string;
   turns: ParsedTurn[];
+  currentTurn: ParsedTurn;
   nextTurnIndex: number;
   pendingToolCalls: Map<string, ParsedToolCall>;
 }
@@ -49,6 +50,7 @@ function createInitialState(path: string): ClaudeParseState {
   return {
     sessionId: filename,
     turns: [],
+    currentTurn: createTurn(0),
     nextTurnIndex: 0,
     pendingToolCalls: new Map(),
   };
@@ -101,7 +103,16 @@ function parseClaudeEventLine(
 }
 
 function addSourceRef(turn: ParsedTurn, sourceRef: SourceRef): void {
-  turn.sourceRefs.push(sourceRef);
+  const alreadyAttached = turn.sourceRefs.some(
+    (candidate) =>
+      candidate.provider === sourceRef.provider &&
+      candidate.kind === sourceRef.kind &&
+      candidate.path === sourceRef.path &&
+      candidate.line === sourceRef.line,
+  );
+  if (!alreadyAttached) {
+    turn.sourceRefs.push(sourceRef);
+  }
 }
 
 function appendMessageText(messages: string[], value: unknown): void {
@@ -122,6 +133,22 @@ function normalizeToolInput(input: unknown): string | undefined {
   }
 }
 
+function stringifyToolResult(toolUseResult: unknown): string | undefined {
+  if (toolUseResult === undefined) {
+    return undefined;
+  }
+
+  if (typeof toolUseResult === "string") {
+    return toolUseResult;
+  }
+
+  try {
+    return JSON.stringify(toolUseResult);
+  } catch {
+    return String(toolUseResult);
+  }
+}
+
 function attachToolResult(
   pendingToolCalls: Map<string, ParsedToolCall>,
   toolUseId: string | undefined,
@@ -136,31 +163,48 @@ function attachToolResult(
     return;
   }
 
-  toolCall.outputText =
-    toolUseResult === undefined ? undefined : JSON.stringify(toolUseResult);
+  toolCall.outputText = stringifyToolResult(toolUseResult);
   toolCall.status = "completed";
 }
 
-function extractClaudeMessageContent(
-  state: ClaudeParseState,
+interface ClaudeMessageParts {
+  assistantMessages: string[];
+  userMessages: string[];
+  toolResults: Array<{ toolUseId: string | undefined; value: unknown }>;
+  toolUses: Array<{
+    id: string | undefined;
+    input: unknown;
+    name: string;
+  }>;
+}
+
+function createEmptyMessageParts(): ClaudeMessageParts {
+  return {
+    assistantMessages: [],
+    userMessages: [],
+    toolResults: [],
+    toolUses: [],
+  };
+}
+
+function parseClaudeMessageParts(
   role: "user" | "assistant",
   message: Record<string, unknown>,
-  turn: ParsedTurn,
-  sourceRef: SourceRef,
   toolUseResult: unknown,
-): void {
+): ClaudeMessageParts {
+  const parts = createEmptyMessageParts();
   const content = getValue(message, "content");
 
   if (typeof content === "string") {
     appendMessageText(
-      role === "user" ? turn.userMessages : turn.assistantMessages,
+      role === "user" ? parts.userMessages : parts.assistantMessages,
       content,
     );
-    return;
+    return parts;
   }
 
   if (!Array.isArray(content)) {
-    return;
+    return parts;
   }
 
   for (const item of content) {
@@ -172,105 +216,155 @@ function extractClaudeMessageContent(
     const itemType = asString(getValue(record, "type"));
     if (itemType === "text") {
       appendMessageText(
-        role === "user" ? turn.userMessages : turn.assistantMessages,
+        role === "user" ? parts.userMessages : parts.assistantMessages,
         getValue(record, "text"),
       );
       continue;
     }
 
     if (itemType === "thinking" && role === "assistant") {
-      appendMessageText(turn.assistantMessages, getValue(record, "thinking"));
+      appendMessageText(parts.assistantMessages, getValue(record, "thinking"));
       continue;
     }
 
     if (itemType === "tool_use" && role === "assistant") {
-      const toolUseId =
-        asString(getValue(record, "id")) ?? `${turn.turnId}-tool`;
-      const toolName = asString(getValue(record, "name")) ?? "unknown_tool";
-      const parsedToolCall: ParsedToolCall = {
-        callId: toolUseId,
-        toolName,
-        categoryHint: "other",
-        argumentsText: normalizeToolInput(getValue(record, "input")),
-        status: "unknown",
-        timestamp: turn.startedAt,
-      };
-      turn.toolCalls.push(parsedToolCall);
-      addSourceRef(turn, sourceRef);
-      state.pendingToolCalls.set(toolUseId, parsedToolCall);
+      parts.toolUses.push({
+        id: asString(getValue(record, "id")),
+        input: getValue(record, "input"),
+        name: asString(getValue(record, "name")) ?? "unknown_tool",
+      });
       continue;
     }
 
     if (itemType === "tool_result" && role === "user") {
-      attachToolResult(
-        state.pendingToolCalls,
-        asString(getValue(record, "tool_use_id")),
-        toolUseResult ?? getValue(record, "content"),
-      );
+      parts.toolResults.push({
+        toolUseId: asString(getValue(record, "tool_use_id")),
+        value: toolUseResult ?? getValue(record, "content"),
+      });
     }
   }
+
+  return parts;
 }
 
-function buildClaudeTurn(
+function setTurnMetadata(
+  turn: ParsedTurn,
+  record: ClaudeEventRecord,
+  sourceRef: SourceRef,
+): void {
+  if (!turn.turnId && record.uuid) {
+    turn.turnId = record.uuid;
+  }
+  if (!turn.startedAt && record.timestamp) {
+    turn.startedAt = record.timestamp;
+  }
+  if (!turn.cwd && record.cwd) {
+    turn.cwd = record.cwd;
+  }
+  addSourceRef(turn, sourceRef);
+}
+
+function flushCurrentClaudeTurn(state: ClaudeParseState): void {
+  if (!hasTurnContent(state.currentTurn)) {
+    return;
+  }
+
+  state.turns.push(state.currentTurn);
+  state.nextTurnIndex += 1;
+  state.currentTurn = createTurn(state.nextTurnIndex);
+}
+
+function appendAssistantActivity(
   state: ClaudeParseState,
   record: ClaudeEventRecord,
   sourceRef: SourceRef,
-): ParsedTurn | undefined {
+  parts: ClaudeMessageParts,
+): void {
+  setTurnMetadata(state.currentTurn, record, sourceRef);
+
+  for (const message of parts.assistantMessages) {
+    appendMessageText(state.currentTurn.assistantMessages, message);
+  }
+
+  for (const toolUse of parts.toolUses) {
+    const toolUseId =
+      toolUse.id ??
+      `${state.currentTurn.turnId ?? `turn-${state.nextTurnIndex}`}-tool-${state.currentTurn.toolCalls.length + 1}`;
+    const parsedToolCall: ParsedToolCall = {
+      callId: toolUseId,
+      toolName: toolUse.name,
+      categoryHint: "other",
+      argumentsText: normalizeToolInput(toolUse.input),
+      status: "unknown",
+      timestamp: state.currentTurn.startedAt,
+    };
+    state.currentTurn.toolCalls.push(parsedToolCall);
+    state.pendingToolCalls.set(toolUseId, parsedToolCall);
+  }
+
+  if (
+    parts.assistantMessages.length === 0 &&
+    parts.toolUses.length === 0 &&
+    record.error
+  ) {
+    state.currentTurn.assistantMessages.push(record.error);
+  }
+}
+
+function appendToolResults(
+  state: ClaudeParseState,
+  record: ClaudeEventRecord,
+  sourceRef: SourceRef,
+  parts: ClaudeMessageParts,
+): void {
+  if (parts.toolResults.length === 0) {
+    return;
+  }
+
+  setTurnMetadata(state.currentTurn, record, sourceRef);
+  for (const toolResult of parts.toolResults) {
+    attachToolResult(
+      state.pendingToolCalls,
+      toolResult.toolUseId,
+      toolResult.value,
+    );
+  }
+}
+
+function applyClaudeRecord(
+  state: ClaudeParseState,
+  record: ClaudeEventRecord,
+  sourceRef: SourceRef,
+): void {
   const message = record.message;
   const role = message ? asString(getValue(message, "role")) : undefined;
 
   if (!message || (role !== "user" && role !== "assistant")) {
-    return undefined;
+    return;
   }
 
-  const turn = createTurn(state.nextTurnIndex);
-  if (record.uuid) {
-    turn.turnId = record.uuid;
-  }
-  if (record.timestamp) {
-    turn.startedAt = record.timestamp;
-  }
-  const turnCwd = record.cwd ?? state.cwd;
-  if (turnCwd) {
-    turn.cwd = turnCwd;
-  }
-  addSourceRef(turn, sourceRef);
+  const parts = parseClaudeMessageParts(role, message, record.toolUseResult);
 
-  extractClaudeMessageContent(
-    state,
-    role,
-    message,
-    turn,
-    sourceRef,
-    record.toolUseResult,
-  );
-
-  if (
-    role === "assistant" &&
-    turn.assistantMessages.length === 0 &&
-    typeof record.toolUseResult === "string"
-  ) {
-    turn.assistantMessages.push(record.toolUseResult);
+  if (role === "assistant") {
+    appendAssistantActivity(state, record, sourceRef, parts);
+    return;
   }
 
-  if (
-    role === "assistant" &&
-    record.error &&
-    turn.assistantMessages.length === 0
-  ) {
-    turn.assistantMessages.push(record.error);
+  appendToolResults(state, record, sourceRef, parts);
+
+  const hasUserAuthoredText = parts.userMessages.length > 0;
+  if (!hasUserAuthoredText) {
+    return;
   }
 
-  if (
-    turn.userMessages.length === 0 &&
-    turn.assistantMessages.length === 0 &&
-    turn.toolCalls.length === 0
-  ) {
-    return undefined;
+  if (hasTurnContent(state.currentTurn)) {
+    flushCurrentClaudeTurn(state);
   }
 
-  state.nextTurnIndex += 1;
-  return turn;
+  setTurnMetadata(state.currentTurn, record, sourceRef);
+  for (const messageText of parts.userMessages) {
+    appendMessageText(state.currentTurn.userMessages, messageText);
+  }
 }
 
 export async function parseClaudeTranscriptFile(
@@ -313,15 +407,14 @@ export async function parseClaudeTranscriptFile(
       }
 
       const sourceRef = createSourceRef(provider, path, lineNumber);
-      const turn = buildClaudeTurn(state, record, sourceRef);
-      if (turn) {
-        state.turns.push(turn);
-      }
+      applyClaudeRecord(state, record, sourceRef);
     }
   } finally {
     reader.close();
     (stream as { destroy?: () => void } | undefined)?.destroy?.();
   }
+
+  flushCurrentClaudeTurn(state);
 
   const parsedSession: ParsedSession = {
     sessionId: state.sessionId,

@@ -3,7 +3,7 @@
  * Entrypoint: Executed by Vitest via `pnpm test`.
  * Notes: Uses a synthetic transcript fixture with no private local machine data.
  */
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import { TranscriptParseError } from "../src/errors.js";
 import {
+  parseClaudeTranscriptFile,
   parseEventLine,
   parseTranscriptFile,
 } from "../src/transcript/index.js";
@@ -294,5 +295,223 @@ describe("parseEventLine", () => {
       expect(parseError.lineNumber).toBe(42);
       expect(parseError.message).toContain("/path/to/transcript.jsonl:42");
     }
+  });
+});
+
+describe("parseClaudeTranscriptFile", () => {
+  async function writeClaudeTranscript(
+    name: string,
+    records: unknown[],
+  ): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), "agent-eval-claude-transcript-"));
+    const projectsDir = join(root, "projects", "-Users-test-project");
+    await mkdir(projectsDir, { recursive: true });
+    await writeFile(
+      join(projectsDir, `${name}.jsonl`),
+      `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,
+      "utf8",
+    );
+    return join(projectsDir, `${name}.jsonl`);
+  }
+
+  it("merges a user prompt, assistant tool use, and tool result into one turn", async () => {
+    const sessionPath = await writeClaudeTranscript("single-turn", [
+      {
+        sessionId: "claude-session-1",
+        timestamp: "2026-03-06T19:00:00.000Z",
+        cwd: "/workspace/demo",
+        uuid: "user-1",
+        message: {
+          role: "user",
+          content: [
+            { type: "text", text: "Please run the tests and report back." },
+          ],
+        },
+      },
+      {
+        sessionId: "claude-session-1",
+        timestamp: "2026-03-06T19:00:01.000Z",
+        cwd: "/workspace/demo",
+        uuid: "assistant-1",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "text", text: "I will run the tests now." },
+            {
+              type: "tool_use",
+              id: "tool-1",
+              name: "exec_command",
+              input: { cmd: "pnpm test" },
+            },
+          ],
+        },
+      },
+      {
+        sessionId: "claude-session-1",
+        timestamp: "2026-03-06T19:00:02.000Z",
+        cwd: "/workspace/demo",
+        uuid: "tool-result-1",
+        toolUseResult: { exitCode: 0, stdout: "passed" },
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "tool-1", content: "passed" },
+          ],
+        },
+      },
+    ]);
+
+    const session = await parseClaudeTranscriptFile(sessionPath);
+
+    expect(session.turns).toHaveLength(1);
+    expect(session.turns[0]?.userMessages).toEqual([
+      "Please run the tests and report back.",
+    ]);
+    expect(session.turns[0]?.assistantMessages).toContain(
+      "I will run the tests now.",
+    );
+    expect(session.turns[0]?.toolCalls).toHaveLength(1);
+    expect(session.turns[0]?.toolCalls[0]?.outputText).toContain(
+      '"exitCode":0',
+    );
+  });
+
+  it("starts a new turn only for a new user-authored prompt", async () => {
+    const sessionPath = await writeClaudeTranscript("multi-turn", [
+      {
+        sessionId: "claude-session-2",
+        timestamp: "2026-03-06T19:00:00.000Z",
+        cwd: "/workspace/demo",
+        uuid: "user-1",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Inspect the repo first." }],
+        },
+      },
+      {
+        sessionId: "claude-session-2",
+        timestamp: "2026-03-06T19:00:01.000Z",
+        cwd: "/workspace/demo",
+        uuid: "assistant-1",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "I will inspect it now." }],
+        },
+      },
+      {
+        sessionId: "claude-session-2",
+        timestamp: "2026-03-06T19:00:02.000Z",
+        cwd: "/workspace/demo",
+        uuid: "user-2",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Now fix the failing test." }],
+        },
+      },
+    ]);
+
+    const session = await parseClaudeTranscriptFile(sessionPath);
+
+    expect(session.turns).toHaveLength(2);
+    expect(session.turns[0]?.userMessages[0]).toBe("Inspect the repo first.");
+    expect(session.turns[1]?.userMessages[0]).toBe("Now fix the failing test.");
+  });
+
+  it("keeps assistant-first Claude sessions in a valid first turn", async () => {
+    const sessionPath = await writeClaudeTranscript("assistant-first", [
+      {
+        sessionId: "claude-session-3",
+        timestamp: "2026-03-06T19:00:00.000Z",
+        cwd: "/workspace/demo",
+        uuid: "assistant-1",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "text", text: "I started by inspecting the repo." },
+          ],
+        },
+      },
+      {
+        sessionId: "claude-session-3",
+        timestamp: "2026-03-06T19:00:01.000Z",
+        cwd: "/workspace/demo",
+        uuid: "user-1",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Continue and fix the bug." }],
+        },
+      },
+    ]);
+
+    const session = await parseClaudeTranscriptFile(sessionPath);
+
+    expect(session.turns).toHaveLength(2);
+    expect(session.turns[0]?.assistantMessages[0]).toBe(
+      "I started by inspecting the repo.",
+    );
+    expect(session.turns[1]?.userMessages[0]).toBe("Continue and fix the bug.");
+  });
+
+  it("does not create an extra turn for tool-result-only user records", async () => {
+    const sessionPath = await writeClaudeTranscript("tool-result-only", [
+      {
+        sessionId: "claude-session-4",
+        timestamp: "2026-03-06T19:00:00.000Z",
+        cwd: "/workspace/demo",
+        uuid: "user-1",
+        message: {
+          role: "user",
+          content: [
+            { type: "text", text: "Check status and tell me what you find." },
+          ],
+        },
+      },
+      {
+        sessionId: "claude-session-4",
+        timestamp: "2026-03-06T19:00:01.000Z",
+        cwd: "/workspace/demo",
+        uuid: "assistant-1",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              id: "tool-1",
+              name: "exec_command",
+              input: { cmd: "git status" },
+            },
+          ],
+        },
+      },
+      {
+        sessionId: "claude-session-4",
+        timestamp: "2026-03-06T19:00:02.000Z",
+        cwd: "/workspace/demo",
+        uuid: "tool-result-1",
+        toolUseResult: { exitCode: 0, stdout: "clean" },
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "tool-1", content: "clean" },
+          ],
+        },
+      },
+      {
+        sessionId: "claude-session-4",
+        timestamp: "2026-03-06T19:00:03.000Z",
+        cwd: "/workspace/demo",
+        uuid: "assistant-2",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "The repo is clean." }],
+        },
+      },
+    ]);
+
+    const session = await parseClaudeTranscriptFile(sessionPath);
+
+    expect(session.turns).toHaveLength(1);
+    expect(session.turns[0]?.assistantMessages).toContain("The repo is clean.");
+    expect(session.turns[0]?.toolCalls[0]?.outputText).toContain("clean");
   });
 });

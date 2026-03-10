@@ -123,9 +123,9 @@ describe("scoreCompliance", () => {
       expect(scorecard.verificationPassedCount).toBe(0);
       expect(scorecard.verificationFailedCount).toBe(0);
 
-      // All rules should be not_applicable or pass for no-write sessions
+      // All write-gated rules should be not_applicable for no-write sessions.
       for (const rule of scorecard.rules) {
-        expect(["pass", "not_applicable"]).toContain(rule.status);
+        expect(rule.status).toBe("not_applicable");
       }
     });
 
@@ -243,8 +243,9 @@ describe("scoreCompliance", () => {
         }),
       );
 
-      // 100 - (3 failing rules * 20) = 40
-      expect(scorecard.score).toBe(40);
+      // Scope confirmation now passes on explicit assistant acknowledgement,
+      // so only repo confirmation and planning should fail here.
+      expect(scorecard.score).toBe(60);
       expect(scorecard.writeCount).toBe(1);
       expect(scorecard.verificationPassedCount).toBe(1);
     });
@@ -330,9 +331,80 @@ describe("scoreCompliance", () => {
 
       // Context confirmation should pass
       const contextRule = scorecard.rules.find(
-        (r) => r.rule === "scope_confirmed_before_major_write",
+        (r) => r.rule === "cwd_or_repo_echoed_before_write",
       );
       expect(contextRule?.status).toBe("pass");
+    });
+
+    it("separates scope confirmation from repo confirmation", () => {
+      const scorecard = scoreCompliance(
+        createMockSession({
+          turns: [
+            createMockTurn({
+              turnIndex: 0,
+              userMessages: ["Fix the bug"],
+              assistantMessages: [
+                "I will inspect the problem, make the fix, and verify afterward.",
+              ],
+              toolCalls: [
+                {
+                  callId: "call-1",
+                  toolName: "apply_patch",
+                  categoryHint: "custom_tool_call",
+                  status: "completed",
+                },
+                {
+                  callId: "call-2",
+                  toolName: "exec_command",
+                  categoryHint: "function_call",
+                  argumentsText: '{"cmd":"npm test"}',
+                  outputText: "Tests passed",
+                  status: "completed",
+                },
+              ],
+            }),
+          ],
+        }),
+      );
+
+      expect(
+        scorecard.rules.find(
+          (rule) => rule.rule === "scope_confirmed_before_major_write",
+        )?.status,
+      ).toBe("pass");
+      expect(
+        scorecard.rules.find(
+          (rule) => rule.rule === "cwd_or_repo_echoed_before_write",
+        )?.status,
+      ).toBe("fail");
+    });
+
+    it("marks no_unverified_ending as not_applicable when no writes occurred", () => {
+      const scorecard = scoreCompliance(
+        createMockSession({
+          turns: [
+            createMockTurn({
+              turnIndex: 0,
+              userMessages: ["Run tests only"],
+              toolCalls: [
+                {
+                  callId: "call-1",
+                  toolName: "exec_command",
+                  categoryHint: "function_call",
+                  argumentsText: '{"cmd":"pnpm test"}',
+                  outputText: "Tests passed",
+                  status: "completed",
+                },
+              ],
+            }),
+          ],
+        }),
+      );
+
+      expect(
+        scorecard.rules.find((rule) => rule.rule === "no_unverified_ending")
+          ?.status,
+      ).toBe("not_applicable");
     });
 
     it("detects planning via update_plan tool", () => {
