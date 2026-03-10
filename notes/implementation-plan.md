@@ -1,6 +1,6 @@
 # Implementation Plan
 
-This plan now tracks the implemented architecture and the next strictly logical expansions.
+This plan now tracks the implemented source-aware architecture and the next strictly logical expansions.
 
 ## Implemented Architecture
 
@@ -22,6 +22,7 @@ The evaluator currently has four stable layers:
 ## Canonical Inputs
 
 - `~/.codex/sessions/**/*.jsonl`
+- `~/.claude/projects/**/*.jsonl`
 
 These remain the only required inputs for deterministic v1 evaluation.
 
@@ -32,6 +33,9 @@ These remain the only required inputs for deterministic v1 evaluation.
 - `~/.codex/log/codex-tui.log`
 - `~/.codex/sqlite/codex-dev.db`
 - `~/.codex/shell_snapshots/*.sh`
+- `~/.claude/history.jsonl`
+- `~/.claude/shell-snapshots/*`
+- `~/.claude/session-env`
 
 These are still inventoried, but not required and not deeply joined into scoring.
 
@@ -92,7 +96,8 @@ Per session:
 
 Important options:
 
-- `--codex-home`
+- `--source`
+- `--home`
 - `--output-dir`
 - `--session-limit`
 - `--summary-only`
@@ -121,6 +126,7 @@ Derived:
 - the oversized insight layer was split into focused modules
 - report and presentation now share section-level derived data
 - planning docs were aligned with the implemented model
+- source-specific discovery and parsing were split from the shared evaluator core
 
 ## Next Logical Expansions
 

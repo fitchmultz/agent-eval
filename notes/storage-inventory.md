@@ -2,6 +2,8 @@
 
 Date grounded with `date`: `Fri Mar 6 11:46:22 MST 2026`
 
+This is an early Codex-specific discovery note from the initial exploration pass. It is kept as reference material, not as the current product contract. The implemented evaluator is now source-aware and also supports Claude Code homes.
+
 ## Summary
 
 Observed local Codex artifacts under `/Users/mitchfultz/.codex` strongly suggest a two-tier design:

@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-`agent-eval` is a local, deterministic evaluator for developer-agent transcripts. I originally built it around Codex session artifacts, then performed a full cutover to a source-aware architecture so the same evaluator can ingest Claude Code and Codex transcripts through provider-specific adapters and a shared normalized model.
+`agent-eval` is a local, deterministic evaluator for developer-agent transcripts. It uses a source-aware architecture so the same evaluator can ingest Claude Code and Codex transcripts through provider-specific adapters and a shared normalized model.
 
 That decision matters because most teams adopting coding agents do not need another demo. They need a repeatable way to understand how work is actually happening: where friction clusters, how often changes are verified, whether delivery discipline is improving, and how to share results without exposing raw session data.
 

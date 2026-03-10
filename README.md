@@ -66,6 +66,12 @@ pnpm build
 node dist/cli.js inspect --source claude --home ~/.claude
 ```
 
+Example local config:
+
+```bash
+cp .agent-evalrc.example .agent-evalrc
+```
+
 Quick local review loop:
 
 ```bash
@@ -131,3 +137,5 @@ The portfolio-facing writeup lives in `docs/case-study.md` and explains the prob
 ```bash
 make ci
 ```
+
+`make ci` is intentionally non-mutating. Use `make bootstrap` for first-time dependency setup and `make fix` when you want formatting rewrites.

@@ -1,4 +1,4 @@
-install:
+bootstrap:
 	pnpm install
 
 update:
@@ -6,6 +6,8 @@ update:
 
 format:
 	pnpm format
+
+fix: format
 
 lint:
 	pnpm lint
@@ -19,7 +21,7 @@ test:
 build:
 	pnpm build
 
-ci: install format lint typecheck build test
+ci: lint typecheck test build
 
 clean:
-	rm -rf dist node_modules
+	rm -rf dist node_modules coverage

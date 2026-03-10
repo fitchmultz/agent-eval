@@ -1,10 +1,25 @@
 /**
- * Tests for the configuration system.
+ * Purpose: Tests the configuration system, including defaults, mutation helpers, and config-file discovery.
+ * Responsibilities: Verify shared config state behavior and the source-aware config filenames loaded from disk.
+ * Scope: Uses temporary directories and synthetic config files only.
+ * Usage: Executed by Vitest via `pnpm test`.
+ * Invariants/Assumptions: Only `.agent-evalrc`, `.agent-evalrc.json`, and `agent-eval.config.json` are recognized.
  */
-import { describe, expect, it } from "vitest";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { getConfig, resetConfig, setConfig } from "../src/config/index.js";
+import { loadConfigFile } from "../src/config/loader.js";
+
+const testDirBase = join(tmpdir(), "agent-eval-config-test");
 
 describe("config", () => {
+  afterEach(async () => {
+    await rm(testDirBase, { recursive: true, force: true });
+    resetConfig();
+  });
+
   describe("getConfig", () => {
     it("returns default configuration values", () => {
       const config = getConfig();
@@ -139,6 +154,68 @@ describe("config", () => {
       expect(config2.concurrency.full).toBe(99);
 
       resetConfig();
+    });
+  });
+
+  describe("loadConfigFile", () => {
+    it("loads .agent-evalrc when present", async () => {
+      const cwd = join(testDirBase, "rc");
+      await mkdir(cwd, { recursive: true });
+      await writeFile(
+        join(cwd, ".agent-evalrc"),
+        JSON.stringify({ clustering: { maxTurnGap: 7 } }),
+      );
+
+      const config = await loadConfigFile(cwd);
+
+      expect(config.clustering?.maxTurnGap).toBe(7);
+    });
+
+    it("loads .agent-evalrc.json when present", async () => {
+      const cwd = join(testDirBase, "rc-json");
+      await mkdir(cwd, { recursive: true });
+      await writeFile(
+        join(cwd, ".agent-evalrc.json"),
+        JSON.stringify({ previews: { maxMessageItems: 4 } }),
+      );
+
+      const config = await loadConfigFile(cwd);
+
+      expect(config.previews?.maxMessageItems).toBe(4);
+    });
+
+    it("loads agent-eval.config.json when present", async () => {
+      const cwd = join(testDirBase, "config-json");
+      await mkdir(cwd, { recursive: true });
+      await writeFile(
+        join(cwd, "agent-eval.config.json"),
+        JSON.stringify({ concurrency: { full: 12 } }),
+      );
+
+      const config = await loadConfigFile(cwd);
+
+      expect(config.concurrency?.full).toBe(12);
+    });
+
+    it("ignores stale codex-era config filenames", async () => {
+      const cwd = join(testDirBase, "stale-names");
+      await mkdir(cwd, { recursive: true });
+      await writeFile(
+        join(cwd, ".codex-evalrc"),
+        JSON.stringify({ clustering: { maxTurnGap: 9 } }),
+      );
+      await writeFile(
+        join(cwd, ".codex-evalrc.json"),
+        JSON.stringify({ previews: { maxMessageItems: 9 } }),
+      );
+      await writeFile(
+        join(cwd, "codex-eval.config.json"),
+        JSON.stringify({ concurrency: { full: 99 } }),
+      );
+
+      const config = await loadConfigFile(cwd);
+
+      expect(config).toEqual({});
     });
   });
 });

@@ -4,7 +4,7 @@ This document now reflects the schema the repo actually implements for v1, plus 
 
 ## Implemented V1 Model
 
-The evaluator currently normalizes local Codex artifacts into three primary output records plus one derived summary layer:
+The evaluator currently normalizes supported developer-agent transcript artifacts into three primary output records plus one derived summary layer:
 
 - `RawTurnRecord`
   - one normalized turn-level record per reconstructed transcript turn

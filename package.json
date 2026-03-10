@@ -1,7 +1,7 @@
 {
   "name": "agent-eval",
   "version": "0.1.0",
-  "private": false,
+  "private": true,
   "license": "MIT",
   "description": "Transcript-first evaluator for developer AI agents, including Codex and Claude Code sessions.",
   "type": "module",

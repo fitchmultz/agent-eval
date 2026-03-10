@@ -1,7 +1,9 @@
 .scratchpad.md
 artifacts/
+coverage/
+dist/
 
 # Configuration files (local only)
-.codex-evalrc
-.codex-evalrc.json
-codex-eval.config.json
+.agent-evalrc
+.agent-evalrc.json
+agent-eval.config.json
