@@ -265,7 +265,6 @@ describe("evaluator", () => {
     const result = await evaluateArtifacts({
       source: "codex",
       home: "~/.codex",
-      outputDir: "./artifacts",
     });
 
     expect(mockParseTranscriptFile).toHaveBeenCalledTimes(3);
@@ -311,7 +310,6 @@ describe("evaluator", () => {
     await evaluateArtifacts({
       source: "codex",
       home: "~/.codex",
-      outputDir: "./artifacts",
       sessionLimit: 2,
     });
 
@@ -346,7 +344,6 @@ describe("evaluator", () => {
     const result = await evaluateArtifacts({
       source: "codex",
       home: "~/.codex",
-      outputDir: "./artifacts",
     });
 
     expect(result.metrics.incidentCount).toBe(2);
@@ -379,7 +376,6 @@ describe("evaluator", () => {
     const result = await evaluateArtifacts({
       source: "codex",
       home: "~/.codex",
-      outputDir: "./artifacts",
       outputMode: "summary",
     });
 

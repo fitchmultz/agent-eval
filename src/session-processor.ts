@@ -199,18 +199,3 @@ export async function processSession(
     ),
   };
 }
-
-/**
- * Processes a session from a file path.
- * @param sessionPath - Path to the session transcript file
- * @param homeDirectory - Optional home directory for path redaction
- * @returns Processed session with turns, incidents, and metrics
- */
-export async function processSessionFromPath(
-  sessionPath: string,
-  homeDirectory?: string,
-): Promise<ProcessedSession> {
-  const { parseTranscriptFile } = await import("./transcript/index.js");
-  const session = await parseTranscriptFile(sessionPath);
-  return processSession(session, homeDirectory);
-}

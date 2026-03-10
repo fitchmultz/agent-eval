@@ -48,6 +48,14 @@ Key design choices:
 - Deterministic scoring: labeling, clustering, compliance scoring, summaries, and presentation artifacts are all rule-based.
 - Public-safe defaults: reports use redacted, truncated previews rather than full transcript bodies.
 
+Maintainer boundaries:
+
+- `src/discovery.ts`: provider-specific inventory and transcript discovery
+- `src/transcript/*`: provider-specific parsing into the shared normalized session model
+- `src/evaluator.ts`: single canonical evaluation pipeline
+- `src/insights.ts`, `src/report.ts`, `src/presentation.ts`: shared summary, markdown, and presentation outputs
+- `src/cli/*`: command wiring, option normalization, and stdout formatting
+
 ## CLI
 
 ```bash

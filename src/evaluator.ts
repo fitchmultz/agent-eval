@@ -36,8 +36,6 @@ export interface EvaluateOptions {
   source: SourceProvider;
   /** Path to the source home directory (typically ~/.codex or ~/.claude) */
   home: string;
-  /** Directory where evaluation artifacts will be written */
-  outputDir: string;
   /** Maximum number of most recent sessions to evaluate (undefined for all) */
   sessionLimit?: number;
   /** Timeout for parsing individual transcript files (milliseconds). Default: 30000 */
