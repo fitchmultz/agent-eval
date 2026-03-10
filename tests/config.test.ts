@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { getConfig, resetConfig, setConfig } from "../src/config/index.js";
 import { loadConfigFile } from "../src/config/loader.js";
+import { ConfigFileParseError } from "../src/errors.js";
 
 const testDirBase = join(tmpdir(), "agent-eval-config-test");
 
@@ -216,6 +217,16 @@ describe("config", () => {
       const config = await loadConfigFile(cwd);
 
       expect(config).toEqual({});
+    });
+
+    it("fails clearly on malformed config JSON", async () => {
+      const cwd = join(testDirBase, "bad-json");
+      await mkdir(cwd, { recursive: true });
+      await writeFile(join(cwd, ".agent-evalrc"), "{ invalid json\n");
+
+      await expect(loadConfigFile(cwd)).rejects.toBeInstanceOf(
+        ConfigFileParseError,
+      );
     });
   });
 });

@@ -6,7 +6,7 @@
 
 import { writeArtifacts, writeParseArtifacts } from "../artifact-writer.js";
 import { discoverArtifacts } from "../discovery.js";
-import { evaluateArtifacts } from "../evaluator.js";
+import { evaluateArtifacts, parseArtifacts } from "../evaluator.js";
 import {
   formatEvalOutput,
   formatInspectOutput,
@@ -50,10 +50,10 @@ export async function runParseCommand(
   options: GlobalOptions,
   signal: AbortSignal,
 ): Promise<void> {
-  const result = await evaluateForCommand(options, signal, "full");
-  await writeParseArtifacts(result.rawTurns ?? [], options.outputDir);
+  const result = await parseArtifacts(options, signal);
+  await writeParseArtifacts(result.rawTurns, options.outputDir);
   process.stdout.write(
-    `${formatParseOutput(options.outputDir, result.rawTurns?.length ?? 0)}\n`,
+    `${formatParseOutput(options.outputDir, result.rawTurns.length)}\n`,
   );
 }
 

@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { resetConfig } from "../src/config/index.js";
-import { evaluateArtifacts } from "../src/evaluator.js";
+import { evaluateArtifacts, parseArtifacts } from "../src/evaluator.js";
 import {
   createClaudeHome,
   createCodexHome,
@@ -66,6 +66,20 @@ describe("evaluateArtifacts integration", () => {
     expect(result.presentation.reportHtml).toContain("Agent Evaluator Report");
   });
 
+  it("parses a real transcript home without emitting evaluation artifacts", async () => {
+    const homeDir = await createCodexHome(testDirBase, "codex-parse");
+
+    const result = await parseArtifacts({
+      source: "codex",
+      home: homeDir,
+    });
+
+    expect(result.sessionCount).toBe(1);
+    expect(result.inventory[0]?.kind).toBe("session_jsonl");
+    expect(result.rawTurns).toHaveLength(1);
+    expect(result.rawTurns[0]?.sessionId).toBe("codex-session-1");
+  });
+
   it("normalizes equivalent Codex and Claude workflows to the same turn count", async () => {
     const codexHome = await createCodexHome(testDirBase, "codex-compare");
     const claudeHome = await createClaudeHome(testDirBase, "claude-compare");
@@ -104,5 +118,26 @@ describe("evaluateArtifacts integration", () => {
         abortController.signal,
       ),
     ).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("fails parseArtifacts when the canonical transcript directory is missing", async () => {
+    await expect(
+      parseArtifacts({
+        source: "codex",
+        home: join(testDirBase, "missing-home"),
+      }),
+    ).rejects.toMatchObject({ name: "MissingTranscriptInputError" });
+  });
+
+  it("fails parseArtifacts when no transcript JSONL files are present", async () => {
+    const homeDir = join(testDirBase, "empty-home");
+    await mkdir(join(homeDir, "sessions"), { recursive: true });
+
+    await expect(
+      parseArtifacts({
+        source: "codex",
+        home: homeDir,
+      }),
+    ).rejects.toMatchObject({ name: "MissingTranscriptInputError" });
   });
 });

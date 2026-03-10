@@ -10,6 +10,7 @@ import type { EvaluationArtifacts } from "./artifact-writer.js";
 import { clusterIncidents } from "./clustering.js";
 import { getConfig } from "./config/index.js";
 import { discoverArtifacts } from "./discovery.js";
+import { MissingTranscriptInputError } from "./errors.js";
 import {
   buildSummaryArtifact,
   buildSummaryInputsFromArtifacts,
@@ -27,6 +28,18 @@ import { getHomeDirectory } from "./utils/environment.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
 
 export type EvaluationOutputMode = "full" | "summary";
+
+/**
+ * Parse-only artifact bundle used by the CLI parse command.
+ */
+export interface ParseArtifactsResult {
+  /** Canonical discovery inventory for the selected source home. */
+  inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
+  /** Number of parsed sessions included in the result. */
+  sessionCount: number;
+  /** Flattened normalized turns emitted from parsed sessions. */
+  rawTurns: RawTurnRecord[];
+}
 
 /**
  * Options for evaluating supported transcript artifacts.
@@ -95,6 +108,7 @@ function clusterCorpusIncidents(
 
 async function processDiscoveredSessions(
   options: EvaluateOptions,
+  concurrency: number,
   signal?: AbortSignal,
 ): Promise<{
   inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
@@ -108,14 +122,35 @@ async function processDiscoveredSessions(
   });
   throwIfAborted(signal);
 
+  const sessionInventory = discovered.inventory.find(
+    (item) => item.kind === "session_jsonl",
+  );
+  if (!sessionInventory?.discovered) {
+    throw new MissingTranscriptInputError(
+      sessionInventory?.path ??
+        (options.source === "claude"
+          ? `${options.home}/projects`
+          : `${options.home}/sessions`),
+      "missing-directory",
+    );
+  }
+  if (discovered.sessionFiles.length === 0) {
+    throw new MissingTranscriptInputError(
+      sessionInventory.path,
+      "no-jsonl-files",
+    );
+  }
+
   const sessionPaths = selectSessionPaths(
     discovered.sessionFiles,
     options.sessionLimit,
   );
-  const concurrency =
-    options.outputMode === "summary"
-      ? getConfig().concurrency.summary
-      : getConfig().concurrency.full;
+  if (sessionPaths.length === 0) {
+    throw new MissingTranscriptInputError(
+      sessionInventory.path,
+      "no-jsonl-files",
+    );
+  }
   const parseTimeoutMs = options.parseTimeoutMs ?? 30000;
   const homeDirectory = getHomeDirectory();
 
@@ -139,6 +174,49 @@ async function processDiscoveredSessions(
   };
 }
 
+async function collectParsedArtifacts(
+  options: EvaluateOptions,
+  concurrency: number,
+  signal?: AbortSignal,
+): Promise<{
+  inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
+  processed: Awaited<ReturnType<typeof processSession>>[];
+  rawTurns: RawTurnRecord[];
+}> {
+  const { inventory, processed } = await processDiscoveredSessions(
+    options,
+    concurrency,
+    signal,
+  );
+  throwIfAborted(signal);
+
+  return {
+    inventory,
+    processed,
+    rawTurns: extractTurns(processed),
+  };
+}
+
+/**
+ * Performs transcript discovery and normalization without running scoring/report generation.
+ */
+export async function parseArtifacts(
+  options: EvaluateOptions,
+  signal?: AbortSignal,
+): Promise<ParseArtifactsResult> {
+  const parsed = await collectParsedArtifacts(
+    options,
+    getConfig().concurrency.full,
+    signal,
+  );
+
+  return {
+    inventory: parsed.inventory,
+    sessionCount: parsed.processed.length,
+    rawTurns: parsed.rawTurns,
+  };
+}
+
 /**
  * Performs a canonical evaluation of transcript artifacts.
  *
@@ -151,16 +229,21 @@ export async function evaluateArtifacts(
   signal?: AbortSignal,
 ): Promise<EvaluationArtifacts> {
   const outputMode = options.outputMode ?? "full";
-  const { inventory, processed } = await processDiscoveredSessions(
+  const concurrency =
+    outputMode === "summary"
+      ? getConfig().concurrency.summary
+      : getConfig().concurrency.full;
+  const parsed = await collectParsedArtifacts(
     { ...options, outputMode },
+    concurrency,
     signal,
   );
   throwIfAborted(signal);
 
-  const rawTurns = extractTurns(processed);
+  const rawTurns = parsed.rawTurns;
   const incidents = clusterCorpusIncidents(rawTurns);
   const metrics = recalculateIncidentCounts(
-    aggregateMetrics(processed, inventory),
+    aggregateMetrics(parsed.processed, parsed.inventory),
     incidents,
   );
   const summary = buildSummaryArtifact(

@@ -62,6 +62,7 @@ Maintainer boundaries:
 pnpm inspect -- --source codex --home ~/.codex
 pnpm inspect -- --source claude --home ~/.claude
 pnpm parse -- --source codex --home ~/.codex --output-dir artifacts
+cat artifacts/raw-turns.jsonl
 pnpm eval -- --source claude --home ~/.claude --output-dir artifacts
 pnpm report -- --source codex --home ~/.codex --output-dir artifacts
 pnpm exec tsx src/cli.ts eval --source claude --home ~/.claude --summary-only --session-limit 100
@@ -89,15 +90,9 @@ open artifacts/report.html
 
 ## Outputs
 
-- `artifacts/raw-turns.jsonl`
-- `artifacts/incidents.jsonl`
-- `artifacts/metrics.json`
-- `artifacts/summary.json`
-- `artifacts/report.md`
-- `artifacts/report.html`
-- `artifacts/label-counts.svg`
-- `artifacts/compliance-summary.svg`
-- `artifacts/severity-breakdown.svg`
+- `parse` writes `artifacts/raw-turns.jsonl`
+- full `eval` and `report` runs write `artifacts/raw-turns.jsonl`, `artifacts/incidents.jsonl`, `artifacts/metrics.json`, `artifacts/summary.json`, `artifacts/report.md`, `artifacts/report.html`, `artifacts/label-counts.svg`, `artifacts/compliance-summary.svg`, and `artifacts/severity-breakdown.svg`
+- `eval` and `report` with `--summary-only` skip `raw-turns.jsonl` and `incidents.jsonl` but keep the deterministic summary/report outputs
 
 Every machine-readable output includes `evaluatorVersion` and `schemaVersion`.
 
@@ -111,7 +106,7 @@ jq '.comparativeSlices' artifacts/summary.json
 jq '.topSessions' artifacts/summary.json
 ```
 
-Use `inspect` first to inventory what is available locally. Use `parse` when you want normalized turn reconstruction without the full scoring pipeline. Use `eval` for the full deterministic pipeline. Use `report` when you want the markdown report on stdout while still writing artifacts to disk.
+Use `inspect` first to inventory what is available locally. Use `parse` when you want normalized turn reconstruction only; it writes `raw-turns.jsonl` and does not run clustering, scoring, summaries, or report generation. Use `eval` for the full deterministic pipeline. Use `report` when you want the markdown report on stdout while still writing the full evaluation artifact bundle to disk.
 
 `--summary-only` is the recommended mode for large corpora because it skips the heaviest JSONL exports while keeping the same deterministic methodology.
 

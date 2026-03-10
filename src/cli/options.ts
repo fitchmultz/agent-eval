@@ -48,7 +48,20 @@ export function getDefaultHome(source: SourceProvider): string {
 }
 
 export function getDefaultOutputDir(): string {
-  return process.env[ENV_VARS.OUTPUT_DIR] ?? "artifacts";
+  return process.env[`CODEX_EVAL_${ENV_VARS.OUTPUT_DIR}`] ?? "artifacts";
+}
+
+function validatePositiveIntegerOption(
+  value: number | undefined,
+  flag: string,
+): void {
+  if (typeof value === "undefined") {
+    return;
+  }
+
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new ValidationError(`${flag} must be a positive integer.`);
+  }
 }
 
 export function normalizeOptions(options: GlobalOptions): GlobalOptions {
@@ -66,6 +79,10 @@ export function normalizeOptions(options: GlobalOptions): GlobalOptions {
     (options.home === fallbackHome && source !== fallbackSource)
       ? getDefaultHome(source)
       : options.home;
+
+  validatePositiveIntegerOption(options.sessionLimit, "--session-limit");
+  validatePositiveIntegerOption(options.concurrency, "--concurrency");
+  validatePositiveIntegerOption(options.maxTurnGap, "--max-turn-gap");
 
   return {
     ...options,
@@ -85,6 +102,7 @@ export function buildCliOverrides(
   ) {
     overrides.concurrency = {
       full: options.concurrency,
+      summary: options.concurrency,
     };
   }
 

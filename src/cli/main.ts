@@ -54,7 +54,9 @@ function registerCommands(program: Command, signal: AbortSignal): void {
 
   program
     .command("parse")
-    .description("Parse transcript files and emit raw turn artifacts.")
+    .description(
+      "Normalize transcript files and emit raw turn artifacts without scoring or report generation.",
+    )
     .action(async () => {
       throwIfAborted(signal);
       const options = await initializeCliConfig(program.opts<GlobalOptions>());
@@ -153,6 +155,7 @@ function buildProgram(): Command {
         "  agent-eval inspect --source codex --home ~/.codex",
         "  agent-eval inspect --source claude --home ~/.claude",
         "  agent-eval parse --source codex --home ~/.codex --output-dir artifacts",
+        "  cat artifacts/raw-turns.jsonl",
         "  agent-eval eval --source claude --home ~/.claude --output-dir artifacts",
         "  agent-eval report --source codex --home ~/.codex --output-dir artifacts",
         "  agent-eval eval --source claude --home ~/.claude --summary-only --session-limit 25",

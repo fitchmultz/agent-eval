@@ -65,7 +65,9 @@ vi.mock("../src/utils/environment.js", () => ({
   getHomeDirectory: mockGetHomeDirectory,
 }));
 
-const { evaluateArtifacts } = await import("../src/evaluator.js");
+const { evaluateArtifacts, parseArtifacts } = await import(
+  "../src/evaluator.js"
+);
 
 function createInventory(): InventoryRecord[] {
   return [
@@ -352,6 +354,72 @@ describe("evaluator", () => {
       result.rawTurns,
       clustered,
     );
+  });
+
+  it("parses artifacts without running scoring or presentation generation", async () => {
+    mockDiscoverArtifacts.mockResolvedValue({
+      provider: "codex",
+      homePath: "/home/user/.codex",
+      sessionFiles: ["/path/1.jsonl"],
+      inventory: createInventory(),
+    });
+    mockParseTranscriptFile.mockResolvedValue(createParsedSession("session-1"));
+    mockProcessSession.mockReturnValue({
+      sessionId: "session-1",
+      turns: [createRawTurn("session-1")],
+      incidents: [],
+      metrics: createMetrics(["session-1"]).sessions[0],
+    });
+
+    const result = await parseArtifacts({
+      source: "codex",
+      home: "~/.codex",
+    });
+
+    expect(result.sessionCount).toBe(1);
+    expect(result.rawTurns).toHaveLength(1);
+    expect(mockAggregateMetrics).not.toHaveBeenCalled();
+    expect(mockClusterIncidents).not.toHaveBeenCalled();
+    expect(mockBuildSummaryArtifact).not.toHaveBeenCalled();
+    expect(mockBuildPresentationArtifacts).not.toHaveBeenCalled();
+    expect(mockRenderSummaryReport).not.toHaveBeenCalled();
+  });
+
+  it("parseArtifacts uses the most recent discovered sessions when a session limit is set", async () => {
+    mockDiscoverArtifacts.mockResolvedValue({
+      provider: "codex",
+      homePath: "/home/user/.codex",
+      sessionFiles: ["/path/1.jsonl", "/path/2.jsonl", "/path/3.jsonl"],
+      inventory: createInventory(),
+    });
+    mockParseTranscriptFile
+      .mockResolvedValueOnce(createParsedSession("session-2"))
+      .mockResolvedValueOnce(createParsedSession("session-3"));
+    mockProcessSession
+      .mockReturnValueOnce({
+        sessionId: "session-2",
+        turns: [createRawTurn("session-2")],
+        incidents: [],
+        metrics: createMetrics(["session-2"]).sessions[0],
+      })
+      .mockReturnValueOnce({
+        sessionId: "session-3",
+        turns: [createRawTurn("session-3")],
+        incidents: [],
+        metrics: createMetrics(["session-3"]).sessions[0],
+      });
+
+    const result = await parseArtifacts({
+      source: "codex",
+      home: "~/.codex",
+      sessionLimit: 2,
+    });
+
+    expect(result.sessionCount).toBe(2);
+    expect(mockParseTranscriptFile.mock.calls).toEqual([
+      ["/path/2.jsonl", expect.objectContaining({ sourceProvider: "codex" })],
+      ["/path/3.jsonl", expect.objectContaining({ sourceProvider: "codex" })],
+    ]);
   });
 
   it("uses the same canonical pipeline in summary mode but omits raw artifacts", async () => {

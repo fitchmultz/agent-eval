@@ -5,11 +5,12 @@
  * Usage: Executed by Vitest via `pnpm test`.
  * Invariants/Assumptions: The CLI contract is `--source` plus `--home`; no provider-specific home flags remain.
  */
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { buildCliOverrides, getDefaultOutputDir } from "../src/cli/options.js";
 import { main } from "../src/cli.js";
 import {
   createClaudeHome,
@@ -34,6 +35,7 @@ describe("CLI", () => {
 
   afterEach(async () => {
     await rm(testDirBase, { recursive: true, force: true });
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -107,6 +109,19 @@ describe("CLI", () => {
     expect(
       await readFile(join(outputDir, "raw-turns.jsonl"), "utf8"),
     ).toContain('"sessionId":"codex-session-1"');
+    await expect(access(join(outputDir, "metrics.json"))).rejects.toBeDefined();
+    await expect(access(join(outputDir, "summary.json"))).rejects.toBeDefined();
+    await expect(access(join(outputDir, "report.md"))).rejects.toBeDefined();
+    await expect(access(join(outputDir, "report.html"))).rejects.toBeDefined();
+    await expect(
+      access(join(outputDir, "label-counts.svg")),
+    ).rejects.toBeDefined();
+    await expect(
+      access(join(outputDir, "compliance-summary.svg")),
+    ).rejects.toBeDefined();
+    await expect(
+      access(join(outputDir, "severity-breakdown.svg")),
+    ).rejects.toBeDefined();
   });
 
   it("evaluates a Claude home in summary-only mode", async () => {
@@ -193,6 +208,12 @@ describe("CLI", () => {
     expect(exitCode).toBe(0);
   });
 
+  it("reads CODEX_EVAL_OUTPUT_DIR for the default artifact path", () => {
+    vi.stubEnv("CODEX_EVAL_OUTPUT_DIR", "/tmp/agent-eval-from-env");
+
+    expect(getDefaultOutputDir()).toBe("/tmp/agent-eval-from-env");
+  });
+
   it("returns a usage error for an invalid source provider", async () => {
     const exitCode = await main([
       "node",
@@ -204,5 +225,92 @@ describe("CLI", () => {
 
     expect(exitCode).toBe(2);
     expect(stderrSpy).toHaveBeenCalled();
+  });
+
+  it("returns a usage error for a non-positive session limit", async () => {
+    const homeDir = await createCodexHome(testDirBase, "bad-session-limit");
+
+    const exitCode = await main([
+      "node",
+      "cli",
+      "eval",
+      "--source",
+      "codex",
+      "--home",
+      homeDir,
+      "--session-limit",
+      "0",
+    ]);
+
+    expect(exitCode).toBe(2);
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining("--session-limit must be a positive integer."),
+    );
+  });
+
+  it("fails clearly when canonical transcript input is missing", async () => {
+    const homeDir = join(testDirBase, "missing-home");
+    const outputDir = join(testDirBase, "missing-out");
+    await mkdir(outputDir, { recursive: true });
+
+    const exitCode = await main([
+      "node",
+      "cli",
+      "eval",
+      "--source",
+      "codex",
+      "--home",
+      homeDir,
+      "--output-dir",
+      outputDir,
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Canonical transcript directory not found"),
+    );
+  });
+
+  it("fails clearly on malformed config files", async () => {
+    const homeDir = await createCodexHome(testDirBase, "bad-config");
+    await writeFile(join(homeDir, ".agent-evalrc"), "{ invalid json\n");
+
+    const originalCwd = process.cwd();
+    process.chdir(homeDir);
+
+    try {
+      const exitCode = await main([
+        "node",
+        "cli",
+        "eval",
+        "--source",
+        "codex",
+        "--home",
+        homeDir,
+      ]);
+
+      expect(exitCode).toBe(2);
+      expect(stderrSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Failed to parse config file"),
+      );
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  it("applies --concurrency to summary and full evaluation modes", () => {
+    expect(
+      buildCliOverrides({
+        source: "codex",
+        home: "/tmp/home",
+        outputDir: "/tmp/out",
+        concurrency: 3,
+      }),
+    ).toEqual({
+      concurrency: {
+        full: 3,
+        summary: 3,
+      },
+    });
   });
 });

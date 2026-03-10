@@ -67,6 +67,24 @@ export class ValidationError extends EvaluatorError {
 }
 
 /**
+ * Error for malformed configuration files.
+ * Exit code: 2 (usage error)
+ */
+export class ConfigFileParseError extends EvaluatorError {
+  override name = "ConfigFileParseError";
+  constructor(
+    path: string,
+    public override readonly cause: Error,
+  ) {
+    super(
+      `Failed to parse config file at ${path}: ${cause.message}`,
+      "CONFIG_FILE_PARSE_ERROR",
+      2,
+    );
+  }
+}
+
+/**
  * Error for file not found scenarios.
  * Exit code: 1 (runtime failure)
  */
@@ -120,6 +138,23 @@ export class TranscriptFormatError extends EvaluatorError {
     super(
       `Invalid transcript format at ${path}: ${message}`,
       "TRANSCRIPT_FORMAT_ERROR",
+      1,
+    );
+  }
+}
+
+/**
+ * Error for missing canonical transcript input.
+ * Exit code: 1 (runtime failure)
+ */
+export class MissingTranscriptInputError extends EvaluatorError {
+  override name = "MissingTranscriptInputError";
+  constructor(path: string, detail: "missing-directory" | "no-jsonl-files") {
+    super(
+      detail === "missing-directory"
+        ? `Canonical transcript directory not found: ${path}. Check --home or run inspect to verify the source layout.`
+        : `No transcript JSONL files found under ${path}. Check --home or run inspect to verify the selected source home.`,
+      "MISSING_TRANSCRIPT_INPUT",
       1,
     );
   }

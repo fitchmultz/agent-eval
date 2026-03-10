@@ -3,12 +3,13 @@
  * Responsibilities: File discovery, JSON parsing, env var mapping.
  * Scope: Supports .agent-evalrc, .agent-evalrc.json, agent-eval.config.json.
  * Usage: import { loadConfigFile, loadEnvConfig, mergeConfigs } from "./loader.js";
- * Invariants: Never throws on file errors, returns empty partial config instead.
+ * Invariants: Missing config files are ignored, but malformed config content fails fast with a usage error.
  */
 
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { ConfigFileParseError, normalizeError } from "../errors.js";
 import { ENV_VARS, getEnvNumber } from "./env.js";
 import type { EvaluatorConfig } from "./index.js";
 
@@ -27,7 +28,8 @@ export type DeepPartial<T> = {
 /**
  * Loads configuration from file if it exists.
  * Tries multiple file names in order of precedence.
- * Returns empty object if no config file found.
+ * Returns empty object if no config file is present.
+ * Throws a usage error when a matching config file exists but contains invalid JSON.
  * @param cwd - Directory to search for config files (default: process.cwd())
  * @returns Partial configuration from file, or empty object
  */
@@ -41,7 +43,9 @@ export async function loadConfigFile(
         const content = await readFile(filepath, "utf8");
         const parsed = JSON.parse(content) as DeepPartial<EvaluatorConfig>;
         return parsed;
-      } catch {}
+      } catch (error) {
+        throw new ConfigFileParseError(filepath, normalizeError(error));
+      }
     }
   }
   return {};
