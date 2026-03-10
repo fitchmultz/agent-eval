@@ -514,4 +514,28 @@ describe("parseClaudeTranscriptFile", () => {
     expect(session.turns[0]?.assistantMessages).toContain("The repo is clean.");
     expect(session.turns[0]?.toolCalls[0]?.outputText).toContain("clean");
   });
+
+  it("honors abort signals on the Claude parser path", async () => {
+    const sessionPath = await writeClaudeTranscript("aborted", [
+      {
+        sessionId: "claude-session-5",
+        timestamp: "2026-03-06T19:00:00.000Z",
+        cwd: "/workspace/demo",
+        uuid: "user-1",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Inspect the repo." }],
+        },
+      },
+    ]);
+    const abortController = new AbortController();
+    abortController.abort();
+
+    await expect(
+      parseTranscriptFile(sessionPath, {
+        sourceProvider: "claude",
+        signal: abortController.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
 });

@@ -8,6 +8,7 @@
 
 import { normalizeError, TranscriptParseError } from "../errors.js";
 import type { SourceProvider, SourceRef } from "../schema.js";
+import { throwIfAborted } from "../utils/abort.js";
 import { createSourceRef } from "./event-router.js";
 import { createTranscriptLineReader, getReaderStream } from "./file-reader.js";
 import { createTurn, hasTurnContent } from "./session-builder.js";
@@ -372,6 +373,7 @@ export async function parseClaudeTranscriptFile(
   options: ParseOptions = {},
 ): Promise<ParsedSession> {
   const provider: SourceProvider = options.sourceProvider ?? "claude";
+  throwIfAborted(options.signal);
   const reader = createTranscriptLineReader(path);
   const stream = getReaderStream(reader);
   const state = createInitialState(path);
@@ -380,6 +382,8 @@ export async function parseClaudeTranscriptFile(
 
   try {
     for await (const rawLine of reader) {
+      throwIfAborted(options.signal);
+
       const line = rawLine.trim();
       if (line.length === 0) {
         continue;
