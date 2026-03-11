@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ConfigFileParseError, normalizeError } from "../errors.js";
-import { ENV_VARS, getEnvNumber } from "./env.js";
+import { ENV_VARS, getEnvNumber, getEnvString } from "./env.js";
 import type { EvaluatorConfig } from "./index.js";
 
 /** Supported configuration file names in order of precedence */
@@ -121,6 +121,11 @@ export function loadEnvConfig(): DeepPartial<EvaluatorConfig> {
     config.scoring = { frictionThreshold };
   }
 
+  const reportSkin = getEnvString(ENV_VARS.REPORT_SKIN);
+  if (reportSkin === "operator" || reportSkin === "showcase") {
+    config.reporting = { skin: reportSkin };
+  }
+
   return config;
 }
 
@@ -172,6 +177,13 @@ export function mergeConfigs(
           ...merged.scoring?.labelWeights,
           ...current.scoring?.labelWeights,
         },
+      };
+    }
+
+    if (merged.reporting || current.reporting) {
+      result.reporting = {
+        ...merged.reporting,
+        ...current.reporting,
       };
     }
 

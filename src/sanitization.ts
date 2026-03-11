@@ -1,7 +1,7 @@
 /**
  * Purpose: Redacts, ranks, and truncates free-form transcript text before it is emitted into evaluator artifacts.
  * Entrypoint: `createMessagePreviews()` is used by the evaluator and report pipeline when generating outputs.
- * Notes: v1 favors compact, public-safe previews and prioritizes human-authored signal over harness boilerplate.
+ * Notes: v1 favors compact redacted previews and prioritizes human-authored signal over harness boilerplate.
  */
 
 import { SANITIZATION } from "./constants/index.js";
@@ -49,6 +49,42 @@ function redactEmailAddresses(text: string): string {
     /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
     "[redacted-email]",
   );
+}
+
+function redactUrls(text: string): string {
+  return text.replace(/\bhttps?:\/\/\S+\b/gi, "[redacted-url]");
+}
+
+function redactIpAddresses(text: string): string {
+  return text.replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted-ip]");
+}
+
+function redactAbsolutePaths(text: string): string {
+  return text
+    .replace(
+      /(?:^|[\s("'`])(?:\/(?:Users|home|var|tmp|private|opt|etc|Volumes|mnt|workspace|workspaces)[^\s"'`)]+)+/g,
+      (match) => {
+        const prefixMatch = match.match(/^[\s("'`]?/);
+        const prefix = prefixMatch?.[0] ?? "";
+        return `${prefix}[redacted-path]`;
+      },
+    )
+    .replace(/\b[A-Z]:\\(?:[^\\\s]+\\)+[^\\\s]+\b/g, "[redacted-path]");
+}
+
+function redactTokenLikeValues(text: string): string {
+  return text
+    .replace(
+      /\b(?:sk|rk|pk|ghp|github_pat|xox[baprs])-?[A-Za-z0-9_-]{16,}\b/g,
+      "[redacted-token]",
+    )
+    .replace(/\bAIza[0-9A-Za-z\-_]{20,}\b/g, "[redacted-token]")
+    .replace(
+      /\bBearer\s+[A-Za-z0-9._\-+/=]{16,}\b/gi,
+      "Bearer [redacted-token]",
+    )
+    .replace(/\b[A-Fa-f0-9]{32,}\b/g, "[redacted-secret]")
+    .replace(/\b[A-Za-z0-9+/=_-]{40,}\b/g, "[redacted-secret]");
 }
 
 function wordCount(text: string): number {
@@ -143,8 +179,14 @@ export function sanitizeMessageText(
   options: Pick<PreviewOptions, "homeDirectory" | "maxLength">,
 ): string {
   const normalized = normalizeWhitespace(text);
-  const redacted = redactEmailAddresses(
-    redactPath(normalized, options.homeDirectory),
+  const redacted = redactTokenLikeValues(
+    redactAbsolutePaths(
+      redactIpAddresses(
+        redactUrls(
+          redactEmailAddresses(redactPath(normalized, options.homeDirectory)),
+        ),
+      ),
+    ),
   );
   if (redacted.length <= options.maxLength) {
     return redacted;

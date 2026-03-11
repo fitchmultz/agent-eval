@@ -2,22 +2,23 @@
  * Purpose: Main render orchestrator for source-neutral HTML reports.
  * Responsibilities: Assemble the complete static HTML report document for supported transcript sources.
  * Scope: Used by the presentation layer after deterministic metrics and summary generation.
- * Usage: `renderHtmlReport(summary, metrics)`.
+ * Usage: `renderHtmlReport(summary, metrics, charts)`.
  * Invariants/Assumptions: The HTML report remains static, portable, and dependency-free.
  */
 
+import { getConfig } from "../config/index.js";
 import type { MetricsRecord, SummaryArtifact } from "../schema.js";
 import {
-  renderBadges,
-  renderBragCards,
+  renderHighlightCards,
   renderIncidentCards,
   renderInventoryList,
   renderMomentumCards,
   renderOpportunityList,
+  renderRecognitions,
   renderScoreCards,
   renderSessionCards,
   renderSummaryCards,
-  renderVictoryLapCards,
+  renderVerifiedDeliverySpotlightCards,
 } from "./cards.js";
 import {
   renderComparativeSliceTable,
@@ -25,25 +26,50 @@ import {
 } from "./tables.js";
 import { escapeHtml, renderStyles } from "./templates.js";
 
+export interface HtmlReportCharts {
+  labelChartSvg: string;
+  complianceChartSvg: string;
+  severityChartSvg: string;
+}
+
+function renderMethodologyList(metrics: MetricsRecord): string {
+  const items = [
+    "This report is a deterministic transcript analytics summary with heuristic policy proxies, not a rigorous correctness evaluator.",
+    "Labels represent transcript-visible heuristics and should be read as operator-friction signals, not ground-truth task outcomes.",
+    "Compliance scores are event-order proxies based on observed transcript behavior and do not prove repository correctness.",
+    "Calibration, benchmark validation, and optional enrichment joins are intentionally deferred beyond this hardening release.",
+  ];
+
+  if (metrics.parseWarningCount > 0) {
+    items.push(
+      `Parse warnings: ${metrics.parseWarningCount}. Some malformed transcript lines were skipped, so affected sessions may be partial.`,
+    );
+  }
+
+  return `<ul class="opportunity-list">${items
+    .map((item) => `<li><span>${escapeHtml(item)}</span></li>`)
+    .join("")}</ul>`;
+}
+
 /**
  * Generates a complete HTML report from summary artifacts.
- *
- * Creates a self-contained HTML document with inline CSS styling,
- * including all sections: summary cards, charts, incidents, sessions,
- * opportunities, compliance breakdown, and inventory.
- *
- * @param summary - The summary artifact with metrics and insights
- * @param metrics - The aggregated metrics record
- * @returns Complete HTML document as a string
  */
 export function renderHtmlReport(
   summary: SummaryArtifact,
   metrics: MetricsRecord,
+  charts: HtmlReportCharts,
 ): string {
   const styles = renderStyles();
   const providers = [
     ...new Set(metrics.inventory.map((record) => record.provider)),
   ];
+  const skin = getConfig().reporting.skin;
+  const title =
+    skin === "showcase"
+      ? "Transcript Analytics Engine Report"
+      : "Transcript Analytics Report";
+  const scoreHeading =
+    skin === "showcase" ? "Shareable Scoreboard" : "Heuristic Scorecards";
 
   return [
     "<!doctype html>",
@@ -51,26 +77,35 @@ export function renderHtmlReport(
     "<head>",
     '<meta charset="utf-8" />',
     '<meta name="viewport" content="width=device-width, initial-scale=1" />',
-    `<title>Agent Evaluator Report</title>`,
+    `<title>${escapeHtml(title)}</title>`,
     `<style>${styles}</style>`,
     "</head>",
     "<body>",
     "<main>",
     "<header>",
-    "<h1>Agent Evaluator Report</h1>",
-    `<p class="lede">A deterministic, transcript-first evaluation summary for developer-agent session artifacts. The canonical JSONL and JSON outputs remain the source of truth, while this layer turns them into operator-facing insights: where friction clustered, what got verified, and which sessions deserve attention first.</p>`,
+    `<h1>${escapeHtml(title)}</h1>`,
+    `<p class="lede">${escapeHtml(
+      skin === "showcase"
+        ? "A deterministic, transcript-first summary of developer-agent sessions for sharing and review."
+        : "A deterministic, transcript-first analytics summary for developer-agent session artifacts. These outputs emphasize operator burden, verification habits, and transcript-visible workflow signals rather than correctness claims.",
+    )}</p>`,
     `<div class="meta-row">
       <span class="pill">evaluator ${escapeHtml(summary.evaluatorVersion)}</span>
       <span class="pill">schema ${escapeHtml(summary.schemaVersion)}</span>
       <span class="pill">sources ${escapeHtml(providers.join(", "))}</span>
       <span class="pill">${escapeHtml(summary.generatedAt)}</span>
+      <span class="pill">parse warnings ${metrics.parseWarningCount}</span>
     </div>`,
     "</header>",
     `<section><div class="metric-grid">${renderSummaryCards(summary)}</div></section>`,
-    `<section><h2>Show-Off Stats</h2><div class="metric-grid">${renderBragCards(summary)}</div></section>`,
-    `<section><h2>Shareable Scoreboard</h2><div class="metric-grid">${renderScoreCards(summary)}</div></section>`,
+    `<section><h2>${escapeHtml(scoreHeading)}</h2><div class="metric-grid">${renderScoreCards(summary)}</div></section>`,
     `<section><h2>Recent Momentum</h2><div class="metric-grid">${renderMomentumCards(summary)}</div></section>`,
-    `<section><h2>Badges</h2><div class="badge-row">${renderBadges(summary)}</div></section>`,
+    ...(skin === "showcase"
+      ? [
+          `<section><h2>Showcase Highlights</h2><div class="metric-grid">${renderHighlightCards(summary)}</div></section>`,
+          `<section><h2>Recognitions</h2><div class="badge-row">${renderRecognitions(summary)}</div></section>`,
+        ]
+      : []),
     `<section><h2>Operational Rates</h2><div class="rates-grid">
       <div class="rate-item"><strong>Incidents / 100 turns</strong><div class="rate-value">${summary.rates.incidentsPer100Turns}</div></div>
       <div class="rate-item"><strong>Writes / 100 turns</strong><div class="rate-value">${summary.rates.writesPer100Turns}</div></div>
@@ -81,17 +116,24 @@ export function renderHtmlReport(
     </div></section>`,
     `<section><h2>Comparative Slices</h2><div class="panel">${renderComparativeSliceTable(summary)}</div></section>`,
     `<section><h2>Charts</h2><div class="charts-grid">
-      <div class="panel wide"><img alt="Label counts chart" src="label-counts.svg" /></div>
-      <div class="panel"><img alt="Incident severity chart" src="severity-breakdown.svg" /></div>
-      <div class="panel"><img alt="Compliance rule chart" src="compliance-summary.svg" /></div>
+      <div class="panel wide">${charts.labelChartSvg}</div>
+      <div class="panel">${charts.severityChartSvg}</div>
+      <div class="panel">${charts.complianceChartSvg}</div>
     </div></section>`,
     `<section><h2>Sessions To Review First</h2><div class="sessions-grid">${renderSessionCards(summary)}</div></section>`,
-    `<section><h2>Victory Lap Sessions</h2><div class="sessions-grid">${renderVictoryLapCards(summary)}</div></section>`,
+    ...(skin === "showcase"
+      ? [
+          `<section><h2>Verified Delivery Spotlights</h2><div class="sessions-grid">${renderVerifiedDeliverySpotlightCards(summary)}</div></section>`,
+        ]
+      : []),
     `<section><h2>Top Incidents</h2><div class="incident-grid">${renderIncidentCards(summary)}</div></section>`,
     `<section><h2>Deterministic Opportunities</h2><ul class="opportunity-list">${renderOpportunityList(summary)}</ul></section>`,
     `<section><h2>Compliance Breakdown</h2><div class="panel">${renderComplianceTable(summary)}</div></section>`,
+    `<section><h2>Methodology And Limitations</h2><div class="panel">${renderMethodologyList(metrics)}</div></section>`,
     `<section><h2>Inventory</h2><ul class="inventory-list">${renderInventoryList(metrics)}</ul></section>`,
-    `<p class="footer-note">Incident evidence is redacted and truncated for compact, public-safe reporting. Derived outputs can be regenerated at any time from the canonical transcript-first artifacts.</p>`,
+    `<p class="footer-note">${escapeHtml(
+      "Incident evidence is redacted and truncated for compact reporting. Preview sanitization reduces common sensitive data exposure but is not a guarantee of full anonymization.",
+    )}</p>`,
     "</main>",
     "</body>",
     "</html>",

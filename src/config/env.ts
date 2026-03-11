@@ -1,5 +1,5 @@
 /**
- * Purpose: Environment variable names and number-parsing helpers for configuration.
+ * Purpose: Environment variable names and parsing helpers for configuration.
  * Responsibilities: Define ENV_VARS constants and provide typed access for config loading.
  * Scope: All environment variable names are prefixed with CODEX_EVAL_.
  * Usage: import { ENV_VARS, getEnvNumber } from "./env.js";
@@ -17,6 +17,8 @@ export const ENV_VARS = {
   SOURCE: "SOURCE",
   /** Output directory for artifacts */
   OUTPUT_DIR: "OUTPUT_DIR",
+  /** Report skin for markdown and HTML outputs */
+  REPORT_SKIN: "REPORT_SKIN",
   /** Concurrency for full evaluation */
   CONCURRENCY_FULL: "CONCURRENCY_FULL",
   /** Concurrency for summary evaluation */
@@ -55,4 +57,11 @@ export function getEnvNumber(key: EnvVarKey, defaultValue: number): number {
   if (!value) return defaultValue;
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? defaultValue : parsed;
+}
+
+export function getEnvString(key: EnvVarKey): string | undefined {
+  const value = process.env[`${ENV_PREFIX}${ENV_VARS[key]}`];
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : undefined;
 }

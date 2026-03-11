@@ -57,6 +57,7 @@ function createIncidents(): IncidentRecord[] {
       labels: [
         {
           label: "interrupt",
+          family: "cue",
           severity: "medium",
           confidence: "high",
           rationale: "test",
@@ -86,6 +87,7 @@ function createMetrics(): MetricsRecord {
     sessionCount: 1,
     turnCount: 1,
     incidentCount: 1,
+    parseWarningCount: 0,
     labelCounts: { interrupt: 1 },
     complianceSummary: [],
     sessions: [
@@ -95,10 +97,14 @@ function createMetrics(): MetricsRecord {
         turnCount: 1,
         labeledTurnCount: 1,
         incidentCount: 1,
+        parseWarningCount: 0,
         writeCount: 0,
         verificationCount: 0,
         verificationPassedCount: 0,
         verificationFailedCount: 0,
+        postWriteVerificationAttempted: false,
+        postWriteVerificationPassed: false,
+        endedVerified: false,
         complianceScore: 100,
         complianceRules: [],
       },
@@ -124,6 +130,7 @@ function createSummary(): SummaryArtifact {
     sessions: 1,
     turns: 1,
     incidents: 1,
+    parseWarningCount: 0,
     labels: [{ label: "interrupt", count: 1 }],
     severities: [{ severity: "medium", count: 1 }],
     compliance: [],
@@ -137,16 +144,16 @@ function createSummary(): SummaryArtifact {
     },
     delivery: {
       sessionsWithWrites: 0,
-      verifiedWriteSessions: 0,
-      writeVerificationRate: 0,
+      sessionsEndingVerified: 0,
+      writeSessionVerificationRate: 0,
     },
     comparativeSlices: [],
     topSessions: [],
     topIncidents: [],
     scoreCards: [],
-    bragCards: [],
-    achievementBadges: [],
-    victoryLaps: [],
+    highlightCards: [],
+    recognitions: [],
+    verifiedDeliverySpotlights: [],
     opportunities: [],
   };
 }
@@ -182,13 +189,24 @@ describe("artifact-writer", () => {
   });
 
   it("writes parse-only raw turn artifacts", async () => {
-    await writeParseArtifacts(createRawTurns(), tempDir);
+    await writeParseArtifacts(
+      {
+        rawTurns: createRawTurns(),
+        sessionCount: 1,
+        parseWarningCount: 2,
+      },
+      tempDir,
+    );
 
     const rawTurnsPath = join(tempDir, "raw-turns.jsonl");
     expect(existsSync(rawTurnsPath)).toBe(true);
     expect(readFileSync(rawTurnsPath, "utf-8")).toContain(
       '"sessionId":"session-1"',
     );
+    expect(
+      JSON.parse(readFileSync(join(tempDir, "parse-metrics.json"), "utf-8"))
+        .parseWarningCount,
+    ).toBe(2);
     expect(existsSync(join(tempDir, "summary.json"))).toBe(false);
   });
 

@@ -1,7 +1,7 @@
 /**
  * Purpose: Provides shared synthetic Codex and Claude transcript fixtures for integration-style tests.
  * Responsibilities: Generate provider-shaped JSONL content and materialize temporary homes for CLI and evaluator tests.
- * Scope: Test-only helper used by cross-provider integration coverage; fixtures remain synthetic and public-safe.
+ * Scope: Test-only helper used by cross-provider integration coverage; fixtures remain synthetic and public-facing redaction.
  * Usage: Import `createCodexHome()` or `createClaudeHome()` with a temporary base directory per test suite.
  * Invariants/Assumptions: Codex and Claude fixtures describe equivalent workflows unless a test overrides the default transcript content.
  */

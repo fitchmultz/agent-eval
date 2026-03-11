@@ -1,7 +1,7 @@
 /**
  * Purpose: Verifies session processing from normalized transcripts into turns, incidents, and metrics.
  * Responsibilities: Cover labeling, clustering, redaction, preview generation, and metric calculation.
- * Scope: Uses synthetic parsed sessions so tests stay deterministic and public-safe.
+ * Scope: Uses synthetic parsed sessions so tests stay deterministic and public-facing redaction.
  * Usage: Executed by Vitest via `pnpm test`.
  * Invariants/Assumptions: Parsed sessions must include an explicit source provider after normalization.
  */

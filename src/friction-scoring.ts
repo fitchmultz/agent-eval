@@ -8,6 +8,7 @@
 import { getConfig } from "./config/index.js";
 import { DOMINANT_LABELS, SCORING } from "./constants/index.js";
 import { ValidationError } from "./errors.js";
+import { incidentLabelNames } from "./labels.js";
 import type { LabelName } from "./schema.js";
 import { labelTaxonomy } from "./schema.js";
 
@@ -114,6 +115,9 @@ export function calculateFrictionScore(
 
   // Calculate weighted sum using validated getters
   const weighted = labelTaxonomy.reduce((total, label) => {
+    if (!incidentLabelNames.includes(label)) {
+      return total;
+    }
     const count = getLabelCount(labelCounts, label);
     const weight = getLabelWeight(label);
     return total + count * weight;
@@ -135,6 +139,7 @@ export function dominantLabelsForSession(
   labelCounts: Record<LabelName, number>,
 ): LabelName[] {
   return [...labelTaxonomy]
+    .filter((label) => incidentLabelNames.includes(label))
     .filter((label) => {
       const count = labelCounts[label];
       return typeof count === "number" && !Number.isNaN(count) && count > 0;

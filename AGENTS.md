@@ -5,7 +5,7 @@
 # AGENTS.md
 
 Goals:
-- Build a local evaluator for developer-agent session/log artifacts.
+- Build a local transcript analytics engine for developer-agent session/log artifacts.
 - Use transcript/session/log artifacts as canonical input.
 - Discover the local environment dynamically.
 - Prefer precision over recall in v1.
@@ -22,14 +22,14 @@ Notes:
 - Exploration outputs live under `notes/`.
 - Canonical methodology should treat transcript JSONL under the selected source home as required input.
 - Treat SQLite/log/history/shell snapshot stores as optional enrichment only.
-- Keep generated evaluator outputs under `artifacts/` untracked for this public repo.
+- Keep generated analytics outputs under `artifacts/` untracked for this public repo.
 - Favor deterministic parsing, labeling, clustering, and scoring as the canonical methodology.
-- Generated evaluator artifacts should prefer redacted, truncated previews over full transcript bodies.
+- Generated analytics artifacts should prefer redacted, truncated previews over full transcript bodies.
 - Incident evidence selection should prefer non-boilerplate user text over AGENTS or instruction dumps when possible.
 - Treat orchestration wrappers like parallel-integration prompts, forked-session blocks, and subagent notifications as low-signal preview candidates.
 - For large corpus runs, prefer the summary-only path that skips giant raw-turn/incidents artifacts.
 - When `sessionLimit` is set, it must mean the most recent discovered sessions, not an arbitrary subset.
-- Keep the public-facing layer useful for non-experts: maintain shareable scorecards, brag stats, and clean-session spotlight sections as deterministic derivatives.
+- Keep the public-facing layer useful for non-experts: maintain shareable scorecards, recognitions, and verified-delivery spotlight sections as deterministic derivatives.
 - Keep trend reporting deterministic too: comparative slices should come from aggregated session metrics, and headline momentum should prefer a stable recent window over a twitchy tiny slice when possible.
 - Keep summary logic split by responsibility: canonical core math, optional presentation decorations, and shared report section derivation should not collapse back into one giant module.
 - Supported providers currently include Codex and Claude Code; parser and discovery changes should preserve a shared normalized session model.

@@ -80,12 +80,17 @@ const scoringSchema = z.object({
     .describe("Friction score threshold"),
 });
 
+const reportingSchema = z.object({
+  skin: z.enum(["operator", "showcase"]).describe("Report output skin"),
+});
+
 /** Complete configuration schema */
 const configSchema = z.object({
   concurrency: concurrencySchema,
   clustering: clusteringSchema,
   previews: previewsSchema,
   scoring: scoringSchema,
+  reporting: reportingSchema,
 });
 
 /**

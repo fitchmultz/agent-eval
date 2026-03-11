@@ -1,5 +1,5 @@
 /**
- * Purpose: Verifies artifact previews are redacted and truncated before they are emitted into public-safe outputs.
+ * Purpose: Verifies artifact previews are redacted and truncated before they are emitted into public-facing redaction outputs.
  * Entrypoint: Executed by Vitest via `pnpm test`.
  * Notes: Uses synthetic text with home paths and email addresses to exercise deterministic redaction.
  */
@@ -32,7 +32,7 @@ describe("sanitizeMessageText", () => {
       maxLength: 12,
     });
 
-    expect(sanitized).toBe("aaaaaaaaa...");
+    expect(sanitized).toBe("[redacted...");
   });
 });
 

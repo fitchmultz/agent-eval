@@ -1,7 +1,7 @@
 /**
  * Purpose: Verifies user-message labeling prefers high-confidence signals and avoids known false positives.
  * Entrypoint: Executed by Vitest via `pnpm test`.
- * Notes: Uses synthetic turns so taxonomy behavior remains stable and public-safe.
+ * Notes: Uses synthetic turns so taxonomy behavior remains stable and public-facing redaction.
  */
 import { describe, expect, it } from "vitest";
 

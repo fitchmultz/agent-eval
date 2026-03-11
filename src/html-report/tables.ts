@@ -18,30 +18,36 @@ function hasApplicableDiscipline(summary: SummaryArtifact): boolean {
 function formatComparativeSliceValue(
   summary: SummaryArtifact,
   slice: SummaryArtifact["comparativeSlices"][number],
-  field: "proofScore" | "disciplineScore" | "writeVerificationRate",
+  field:
+    | "verificationProxyScore"
+    | "workflowProxyScore"
+    | "writeSessionVerificationRate",
 ): string {
   if (slice.key !== "selected_corpus") {
-    return field === "writeVerificationRate"
+    return field === "writeSessionVerificationRate"
       ? `${slice[field]}%`
       : `${slice[field]}`;
   }
 
   if (
-    field === "writeVerificationRate" &&
+    field === "writeSessionVerificationRate" &&
     summary.delivery.sessionsWithWrites === 0
   ) {
     return "N/A";
   }
 
-  if (field === "proofScore" && summary.delivery.sessionsWithWrites === 0) {
+  if (
+    field === "verificationProxyScore" &&
+    summary.delivery.sessionsWithWrites === 0
+  ) {
     return "N/A";
   }
 
-  if (field === "disciplineScore" && !hasApplicableDiscipline(summary)) {
+  if (field === "workflowProxyScore" && !hasApplicableDiscipline(summary)) {
     return "N/A";
   }
 
-  return field === "writeVerificationRate"
+  return field === "writeSessionVerificationRate"
     ? `${slice[field]}%`
     : `${slice[field]}`;
 }
@@ -69,11 +75,11 @@ export function renderComplianceTable(summary: SummaryArtifact): string {
 export function renderComparativeSliceTable(summary: SummaryArtifact): string {
   return [
     `<table class="compliance-table">`,
-    `<thead><tr><th>Slice</th><th>Sessions</th><th>Proof</th><th>Flow</th><th>Discipline</th><th>Write Verification</th><th>Incidents / 100 Turns</th></tr></thead>`,
+    `<thead><tr><th>Slice</th><th>Sessions</th><th>Verification Proxy</th><th>Flow Proxy</th><th>Workflow Proxy</th><th>Write-Session Verification</th><th>Incidents / 100 Turns</th></tr></thead>`,
     "<tbody>",
     ...summary.comparativeSlices.map(
       (slice) =>
-        `<tr><td>${escapeHtml(slice.label)}</td><td>${slice.sessionCount}</td><td>${escapeHtml(formatComparativeSliceValue(summary, slice, "proofScore"))}</td><td>${slice.flowScore}</td><td>${escapeHtml(formatComparativeSliceValue(summary, slice, "disciplineScore"))}</td><td>${escapeHtml(formatComparativeSliceValue(summary, slice, "writeVerificationRate"))}</td><td>${slice.incidentsPer100Turns}</td></tr>`,
+        `<tr><td>${escapeHtml(slice.label)}</td><td>${slice.sessionCount}</td><td>${escapeHtml(formatComparativeSliceValue(summary, slice, "verificationProxyScore"))}</td><td>${slice.flowProxyScore}</td><td>${escapeHtml(formatComparativeSliceValue(summary, slice, "workflowProxyScore"))}</td><td>${escapeHtml(formatComparativeSliceValue(summary, slice, "writeSessionVerificationRate"))}</td><td>${slice.incidentsPer100Turns}</td></tr>`,
     ),
     "</tbody>",
     "</table>",

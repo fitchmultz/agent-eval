@@ -12,6 +12,24 @@ import type {
   SessionMetrics,
 } from "../src/session-processor.js";
 
+function createLabelRecord(label: LabelName) {
+  return {
+    label,
+    family:
+      label === "context_drift" ||
+      label === "test_build_lint_failure_complaint" ||
+      label === "regression_report" ||
+      label === "stalled_or_guessing"
+        ? ("incident" as const)
+        : label === "praise"
+          ? ("positive" as const)
+          : ("cue" as const),
+    severity: "medium" as const,
+    confidence: "high" as const,
+    rationale: "test",
+  };
+}
+
 describe("aggregateMetrics", () => {
   const createMockSession = (
     id: string,
@@ -30,16 +48,7 @@ describe("aggregateMetrics", () => {
         assistantMessagePreviews: ["test response"],
         toolCalls: [],
         labels:
-          labelCount > 0
-            ? [
-                {
-                  label: "interrupt" as LabelName,
-                  severity: "medium",
-                  confidence: "high",
-                  rationale: "test",
-                },
-              ]
-            : [],
+          labelCount > 0 ? [createLabelRecord("interrupt" as LabelName)] : [],
         sourceRefs: [
           {
             provider: "codex",
@@ -60,14 +69,7 @@ describe("aggregateMetrics", () => {
               sessionId: id,
               turnIds: ["turn-1"],
               turnIndices: [0],
-              labels: [
-                {
-                  label: "interrupt" as LabelName,
-                  severity: "medium",
-                  confidence: "high",
-                  rationale: "test",
-                },
-              ],
+              labels: [createLabelRecord("interrupt" as LabelName)],
               summary: "Test incident",
               evidencePreviews: ["test"],
               severity: "medium",
@@ -89,10 +91,14 @@ describe("aggregateMetrics", () => {
       turnCount: 1,
       labeledTurnCount: labelCount > 0 ? 1 : 0,
       incidentCount: labelCount > 0 ? 1 : 0,
+      parseWarningCount: 0,
       writeCount: 0,
       verificationCount: 0,
       verificationPassedCount: 0,
       verificationFailedCount: 0,
+      postWriteVerificationAttempted: false,
+      postWriteVerificationPassed: false,
+      endedVerified: false,
       complianceScore: 50,
       complianceRules: [],
     },
@@ -205,9 +211,7 @@ describe("countLabel", () => {
       userMessagePreviews: ["test"],
       assistantMessagePreviews: ["test"],
       toolCalls: [],
-      labels: [
-        { label, severity: "medium", confidence: "high", rationale: "test" },
-      ],
+      labels: [createLabelRecord(label)],
       sourceRefs: [
         {
           provider: "codex",
@@ -224,10 +228,14 @@ describe("countLabel", () => {
       turnCount: count,
       labeledTurnCount: count,
       incidentCount: 0,
+      parseWarningCount: 0,
       writeCount: 0,
       verificationCount: 0,
       verificationPassedCount: 0,
       verificationFailedCount: 0,
+      postWriteVerificationAttempted: false,
+      postWriteVerificationPassed: false,
+      endedVerified: false,
       complianceScore: 50,
       complianceRules: [],
     },
@@ -289,10 +297,14 @@ describe("countWriteTurns", () => {
       turnCount: writeTurnCount,
       labeledTurnCount: 0,
       incidentCount: 0,
+      parseWarningCount: 0,
       writeCount: writeTurnCount,
       verificationCount: 0,
       verificationPassedCount: 0,
       verificationFailedCount: 0,
+      postWriteVerificationAttempted: false,
+      postWriteVerificationPassed: false,
+      endedVerified: false,
       complianceScore: 50,
       complianceRules: [],
     },
@@ -348,10 +360,14 @@ describe("countWriteTurns", () => {
           turnCount: 1,
           labeledTurnCount: 0,
           incidentCount: 0,
+          parseWarningCount: 0,
           writeCount: 0,
           verificationCount: 0,
           verificationPassedCount: 0,
           verificationFailedCount: 0,
+          postWriteVerificationAttempted: false,
+          postWriteVerificationPassed: false,
+          endedVerified: false,
           complianceScore: 50,
           complianceRules: [],
         },

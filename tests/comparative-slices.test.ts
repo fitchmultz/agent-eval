@@ -24,10 +24,14 @@ function createMockSessionMetrics(
     turnCount: 10,
     labeledTurnCount: 5,
     incidentCount: 0,
+    parseWarningCount: 0,
     writeCount: 2,
     verificationCount: 1,
     verificationPassedCount: 1,
     verificationFailedCount: 0,
+    postWriteVerificationAttempted: true,
+    postWriteVerificationPassed: true,
+    endedVerified: true,
     complianceScore: 100,
     complianceRules: [],
     ...overrides,
@@ -44,6 +48,7 @@ function createMockMetricsRecord(
     sessionCount: 1,
     turnCount: 10,
     incidentCount: 0,
+    parseWarningCount: 0,
     labelCounts: {},
     complianceSummary: [],
     sessions: [createMockSessionMetrics()],
@@ -66,6 +71,9 @@ describe("comparative-slices", () => {
             sessionId: "s2",
             writeCount: 2,
             verificationPassedCount: 0,
+            postWriteVerificationAttempted: false,
+            postWriteVerificationPassed: false,
+            endedVerified: false,
           }),
         ],
         turnCount: 20,
@@ -74,8 +82,8 @@ describe("comparative-slices", () => {
       const snapshot = buildScoreSnapshot(metrics);
 
       // 1 verified out of 2 write sessions = 50%
-      expect(snapshot.proofScore).toBe(50);
-      expect(snapshot.writeVerificationRate).toBe(50);
+      expect(snapshot.verificationProxyScore).toBe(50);
+      expect(snapshot.writeSessionVerificationRate).toBe(50);
     });
 
     it("calculates flow score with interrupt penalty", () => {
@@ -88,8 +96,8 @@ describe("comparative-slices", () => {
       const snapshot = buildScoreSnapshot(metrics);
 
       // 10 interrupts / 100 turns = 10% * 8 multiplier = 80 penalty
-      // flowScore = max(0, 100 - 80) = 20
-      expect(snapshot.flowScore).toBe(20);
+      // flowProxyScore = max(0, 100 - 80) = 20
+      expect(snapshot.flowProxyScore).toBe(20);
     });
 
     it("calculates flow score with reinjection penalty", () => {
@@ -102,8 +110,8 @@ describe("comparative-slices", () => {
       const snapshot = buildScoreSnapshot(metrics);
 
       // 5 reinjections / 100 turns = 5% * 20 multiplier = 100 penalty
-      // flowScore = max(0, 100 - 100) = 0
-      expect(snapshot.flowScore).toBe(0);
+      // flowProxyScore = max(0, 100 - 100) = 0
+      expect(snapshot.flowProxyScore).toBe(0);
     });
 
     it("calculates flow score with drift penalty", () => {
@@ -116,8 +124,8 @@ describe("comparative-slices", () => {
       const snapshot = buildScoreSnapshot(metrics);
 
       // 2 drifts / 100 turns = 2% * 40 multiplier = 80 penalty
-      // flowScore = max(0, 100 - 80) = 20
-      expect(snapshot.flowScore).toBe(20);
+      // flowProxyScore = max(0, 100 - 80) = 20
+      expect(snapshot.flowProxyScore).toBe(20);
     });
 
     it("returns 0 for undefined label counts", () => {
@@ -136,8 +144,8 @@ describe("comparative-slices", () => {
       const snapshot = buildScoreSnapshot(metrics);
 
       // No labels means no penalties, flow score should be 100
-      expect(snapshot.flowScore).toBe(100);
-      expect(snapshot.proofScore).toBe(0); // No write sessions with verification
+      expect(snapshot.flowProxyScore).toBe(100);
+      expect(snapshot.verificationProxyScore).toBe(0); // No write sessions with verification
     });
 
     it("handles empty sessions array", () => {
@@ -149,10 +157,10 @@ describe("comparative-slices", () => {
 
       const snapshot = buildScoreSnapshot(metrics);
 
-      expect(snapshot.proofScore).toBe(0);
-      expect(snapshot.flowScore).toBe(100); // No penalties when empty
-      expect(snapshot.disciplineScore).toBe(0);
-      expect(snapshot.writeVerificationRate).toBe(0);
+      expect(snapshot.verificationProxyScore).toBe(0);
+      expect(snapshot.flowProxyScore).toBe(100); // No penalties when empty
+      expect(snapshot.workflowProxyScore).toBe(0);
+      expect(snapshot.writeSessionVerificationRate).toBe(0);
       expect(snapshot.incidentsPer100Turns).toBe(0);
     });
 
@@ -175,8 +183,8 @@ describe("comparative-slices", () => {
 
       const snapshot = buildScoreSnapshot(metrics);
 
-      expect(snapshot.proofScore).toBe(0);
-      expect(snapshot.writeVerificationRate).toBe(0);
+      expect(snapshot.verificationProxyScore).toBe(0);
+      expect(snapshot.writeSessionVerificationRate).toBe(0);
     });
 
     it("calculates discipline score from compliance rules", () => {
@@ -218,7 +226,7 @@ describe("comparative-slices", () => {
       const snapshot = buildScoreSnapshot(metrics);
 
       // All rules have 100% pass rate, average is 100
-      expect(snapshot.disciplineScore).toBe(100);
+      expect(snapshot.workflowProxyScore).toBe(100);
     });
 
     it("calculates discipline score with mixed compliance results", () => {
@@ -260,7 +268,7 @@ describe("comparative-slices", () => {
       const snapshot = buildScoreSnapshot(metrics);
 
       // Pass rates: 50%, 100%, 0%, 50% = average 50
-      expect(snapshot.disciplineScore).toBe(50);
+      expect(snapshot.workflowProxyScore).toBe(50);
     });
 
     it("calculates incidents per 100 turns", () => {
@@ -502,16 +510,16 @@ describe("comparative-slices", () => {
         expect(slice.turnCount).toBeGreaterThanOrEqual(0);
         expect(slice.incidentCount).toBeGreaterThanOrEqual(0);
         // Scores should be within 0-100 range (NaN will fail these)
-        expect(slice.proofScore).toBeGreaterThanOrEqual(0);
-        expect(slice.proofScore).toBeLessThanOrEqual(100);
-        // Check flowScore is valid before range checks
-        if (!Number.isNaN(slice.flowScore)) {
-          expect(slice.flowScore).toBeGreaterThanOrEqual(0);
-          expect(slice.flowScore).toBeLessThanOrEqual(100);
+        expect(slice.verificationProxyScore).toBeGreaterThanOrEqual(0);
+        expect(slice.verificationProxyScore).toBeLessThanOrEqual(100);
+        // Check flowProxyScore is valid before range checks
+        if (!Number.isNaN(slice.flowProxyScore)) {
+          expect(slice.flowProxyScore).toBeGreaterThanOrEqual(0);
+          expect(slice.flowProxyScore).toBeLessThanOrEqual(100);
         }
-        expect(slice.disciplineScore).toBeGreaterThanOrEqual(0);
-        expect(slice.disciplineScore).toBeLessThanOrEqual(100);
-        expect(slice.writeVerificationRate).toBeGreaterThanOrEqual(0);
+        expect(slice.workflowProxyScore).toBeGreaterThanOrEqual(0);
+        expect(slice.workflowProxyScore).toBeLessThanOrEqual(100);
+        expect(slice.writeSessionVerificationRate).toBeGreaterThanOrEqual(0);
         expect(slice.incidentsPer100Turns).toBeGreaterThanOrEqual(0);
       }
     });

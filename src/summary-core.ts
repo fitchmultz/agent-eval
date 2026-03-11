@@ -10,10 +10,13 @@ import { buildComparativeSlices } from "./comparative-slices.js";
 import { getConfig } from "./config/index.js";
 import type { LabelName, MetricsRecord } from "./schema.js";
 import {
-  filterVerifiedWriteSessions,
+  filterEndedVerifiedWriteSessions,
   filterWriteSessions,
 } from "./session-filters.js";
-import { buildTopSessions, buildVictoryLaps } from "./session-ranking.js";
+import {
+  buildTopSessions,
+  buildVerifiedDeliverySpotlights,
+} from "./session-ranking.js";
 import { countLabel, safeRate } from "./summary/index.js";
 import type { SummaryCoreData, SummaryInputs } from "./summary/types.js";
 
@@ -47,9 +50,12 @@ export function buildSummaryCore(
   inputs: SummaryInputs,
 ): SummaryCoreData {
   const sessionsWithWrites = filterWriteSessions(metrics.sessions);
-  const verifiedWriteSessions = filterVerifiedWriteSessions(metrics.sessions);
+  const endedVerifiedWriteSessions = filterEndedVerifiedWriteSessions(
+    metrics.sessions,
+  );
   const topSessions = buildTopSessions(metrics, inputs.sessionLabelCounts);
-  const victoryLaps = buildVictoryLaps(topSessions);
+  const verifiedDeliverySpotlights =
+    buildVerifiedDeliverySpotlights(topSessions);
   const comparativeSlices = buildComparativeSlices(
     metrics,
     inputs.sessionLabelCounts,
@@ -76,6 +82,7 @@ export function buildSummaryCore(
         inputs.severityCounts[severity as keyof typeof inputs.severityCounts],
     })),
     compliance: metrics.complianceSummary,
+    parseWarningCount: metrics.parseWarningCount,
     rates: {
       incidentsPer100Turns: safeRate(metrics.incidentCount, metrics.turnCount),
       writesPer100Turns: safeRate(inputs.writeTurnCount, metrics.turnCount),
@@ -98,15 +105,15 @@ export function buildSummaryCore(
     },
     delivery: {
       sessionsWithWrites: sessionsWithWrites.length,
-      verifiedWriteSessions: verifiedWriteSessions.length,
-      writeVerificationRate: safeRate(
-        verifiedWriteSessions.length,
+      sessionsEndingVerified: endedVerifiedWriteSessions.length,
+      writeSessionVerificationRate: safeRate(
+        endedVerifiedWriteSessions.length,
         sessionsWithWrites.length,
       ),
     },
     comparativeSlices,
     topSessions: topSessions.slice(0, getConfig().previews.maxTopSessions),
-    victoryLaps,
+    verifiedDeliverySpotlights,
     topIncidents: inputs.topIncidents,
   };
 }

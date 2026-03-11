@@ -9,6 +9,7 @@ import type { ParsedTurn } from "./transcript/index.js";
 
 interface LabelRule {
   label: LabelRecord["label"];
+  family: LabelRecord["family"];
   severity: LabelRecord["severity"];
   confidence: LabelRecord["confidence"];
   rationale: string;
@@ -18,6 +19,7 @@ interface LabelRule {
 const labelRules: LabelRule[] = [
   {
     label: "context_drift",
+    family: "incident",
     severity: "medium",
     confidence: "high",
     rationale:
@@ -29,6 +31,7 @@ const labelRules: LabelRule[] = [
   },
   {
     label: "test_build_lint_failure_complaint",
+    family: "incident",
     severity: "high",
     confidence: "high",
     rationale: "User called out failing tests, build, lint, or CI behavior.",
@@ -39,6 +42,7 @@ const labelRules: LabelRule[] = [
   },
   {
     label: "interrupt",
+    family: "cue",
     severity: "medium",
     confidence: "high",
     rationale: "User explicitly interrupted or redirected ongoing work.",
@@ -49,6 +53,7 @@ const labelRules: LabelRule[] = [
   },
   {
     label: "regression_report",
+    family: "incident",
     severity: "high",
     confidence: "medium",
     rationale:
@@ -60,6 +65,7 @@ const labelRules: LabelRule[] = [
   },
   {
     label: "praise",
+    family: "positive",
     severity: "info",
     confidence: "high",
     rationale: "User expressed positive feedback or appreciation.",
@@ -68,6 +74,7 @@ const labelRules: LabelRule[] = [
   },
   {
     label: "context_reinjection",
+    family: "cue",
     severity: "low",
     confidence: "high",
     rationale: "User restated goals or constraints to re-anchor the agent.",
@@ -78,6 +85,7 @@ const labelRules: LabelRule[] = [
   },
   {
     label: "verification_request",
+    family: "cue",
     severity: "medium",
     confidence: "high",
     rationale: "User explicitly requested verification or validation steps.",
@@ -88,6 +96,7 @@ const labelRules: LabelRule[] = [
   },
   {
     label: "stalled_or_guessing",
+    family: "incident",
     severity: "high",
     confidence: "high",
     rationale:
@@ -98,6 +107,10 @@ const labelRules: LabelRule[] = [
       ),
   },
 ];
+
+export const incidentLabelNames = labelRules
+  .filter((rule) => rule.family === "incident")
+  .map((rule) => rule.label);
 
 /**
  * Labels a turn based on user message heuristics.
@@ -135,8 +148,16 @@ export function labelTurn(turn: ParsedTurn): LabelRecord[] {
     .filter((rule) => rule.test(text))
     .map((rule) => ({
       label: rule.label,
+      family: rule.family,
       severity: rule.severity,
       confidence: rule.confidence,
       rationale: rule.rationale,
     }));
+}
+
+/**
+ * Returns true when the label belongs to the adverse incident family.
+ */
+export function isIncidentLabel(label: LabelRecord): boolean {
+  return label.family === "incident";
 }

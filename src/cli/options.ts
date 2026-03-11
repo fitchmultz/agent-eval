@@ -18,6 +18,7 @@ export interface GlobalOptions {
   source: SourceProvider;
   home: string;
   outputDir: string;
+  reportSkin?: "operator" | "showcase";
   sessionLimit?: number;
   summaryOnly?: boolean;
   concurrency?: number;
@@ -83,6 +84,15 @@ export function normalizeOptions(options: GlobalOptions): GlobalOptions {
   validatePositiveIntegerOption(options.sessionLimit, "--session-limit");
   validatePositiveIntegerOption(options.concurrency, "--concurrency");
   validatePositiveIntegerOption(options.maxTurnGap, "--max-turn-gap");
+  if (
+    options.reportSkin &&
+    options.reportSkin !== "operator" &&
+    options.reportSkin !== "showcase"
+  ) {
+    throw new ValidationError(
+      "--report-skin must be either 'operator' or 'showcase'.",
+    );
+  }
 
   return {
     ...options,
@@ -112,6 +122,12 @@ export function buildCliOverrides(
   ) {
     overrides.clustering = {
       maxTurnGap: options.maxTurnGap,
+    };
+  }
+
+  if (options.reportSkin) {
+    overrides.reporting = {
+      skin: options.reportSkin,
     };
   }
 

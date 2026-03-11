@@ -4,8 +4,8 @@
  * Notes: Centralizes tool classification to eliminate duplication between compliance scoring and evaluation.
  */
 
+import { extractCommandTextFromArgumentsText } from "./tool-command-text.js";
 import type { ParsedToolCall } from "./transcript/index.js";
-import { isRecord } from "./utils/type-guards.js";
 
 /**
  * Tool names that perform write operations on files.
@@ -111,49 +111,5 @@ export function isVerificationTool(toolCall: ParsedToolCall): boolean {
 export function extractCommandText(
   toolCall: ParsedToolCall,
 ): string | undefined {
-  const payloadText = toolCall.argumentsText;
-  if (!payloadText) {
-    return undefined;
-  }
-
-  try {
-    const parsedUnknown: unknown = JSON.parse(payloadText);
-    if (
-      typeof parsedUnknown !== "object" ||
-      parsedUnknown === null ||
-      Array.isArray(parsedUnknown)
-    ) {
-      return payloadText;
-    }
-
-    if (!isRecord(parsedUnknown)) {
-      return payloadText;
-    }
-
-    const parsed = parsedUnknown;
-    const commandKey = "command";
-    const cmdKey = "cmd";
-    const cmd = parsed[cmdKey];
-    const command = parsed[commandKey];
-    if (typeof cmd === "string") {
-      return cmd;
-    }
-    if (Array.isArray(command)) {
-      return command.filter((item) => typeof item === "string").join(" ");
-    }
-  } catch (error) {
-    // Log JSON parsing errors for debugging, but don't fail silently
-    // This helps identify malformed tool call arguments during development
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    // Only log in development/debug mode to avoid noise in production
-    // biome-ignore lint/complexity/useLiteralKeys: Environment access uses index signatures in Node typings.
-    if (process.env["DEBUG"]) {
-      process.stderr.write(
-        `[tool-classification] JSON parse error: ${errorMessage}\n`,
-      );
-    }
-    return payloadText;
-  }
-
-  return undefined;
+  return extractCommandTextFromArgumentsText(toolCall.argumentsText);
 }

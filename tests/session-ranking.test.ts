@@ -5,7 +5,10 @@
  */
 import { describe, expect, it } from "vitest";
 import type { LabelName, MetricsRecord } from "../src/schema.js";
-import { buildTopSessions, buildVictoryLaps } from "../src/session-ranking.js";
+import {
+  buildTopSessions,
+  buildVerifiedDeliverySpotlights,
+} from "../src/session-ranking.js";
 import { createEmptySessionLabelMap } from "../src/summary/index.js";
 
 function createSession(
@@ -14,17 +17,21 @@ function createSession(
 ): MetricsRecord["sessions"][number] {
   return {
     sessionId,
+    provider: overrides.provider ?? "codex",
     turnCount: 10,
     labeledTurnCount: 2,
     incidentCount: 1,
+    parseWarningCount: 0,
     writeCount: 3,
     verificationCount: 2,
     verificationPassedCount: 1,
     verificationFailedCount: 1,
+    postWriteVerificationAttempted: true,
+    postWriteVerificationPassed: true,
+    endedVerified: true,
     complianceScore: 80,
     complianceRules: [],
     ...overrides,
-    provider: overrides.provider ?? "codex",
   };
 }
 
@@ -59,6 +66,7 @@ describe("buildTopSessions", () => {
       sessionCount: 0,
       turnCount: 0,
       incidentCount: 0,
+      parseWarningCount: 0,
       labelCounts: {},
       complianceSummary: [],
       sessions: [],
@@ -82,6 +90,7 @@ describe("buildTopSessions", () => {
       sessionCount: sessions.length,
       turnCount: 20,
       incidentCount: 5,
+      parseWarningCount: 0,
       labelCounts: {},
       complianceSummary: [],
       sessions,
@@ -106,6 +115,7 @@ describe("buildTopSessions", () => {
       createSession("verified", {
         writeCount: 5,
         verificationPassedCount: 3,
+        endedVerified: true,
         complianceScore: 100,
         complianceRules: createPassingRules(),
       }),
@@ -117,6 +127,7 @@ describe("buildTopSessions", () => {
       sessionCount: 1,
       turnCount: 10,
       incidentCount: 0,
+      parseWarningCount: 0,
       labelCounts: {},
       complianceSummary: [],
       sessions,
@@ -127,7 +138,7 @@ describe("buildTopSessions", () => {
 
     const result = buildTopSessions(metrics, sessionLabelCounts);
     expect(result[0]?.archetype).toBe("verified_delivery");
-    expect(result[0]?.archetypeLabel).toBe("Clean Ship");
+    expect(result[0]?.archetypeLabel).toBe("Verified Delivery");
   });
 
   it("includes dominant labels in results", () => {
@@ -139,6 +150,7 @@ describe("buildTopSessions", () => {
       sessionCount: 1,
       turnCount: 10,
       incidentCount: 0,
+      parseWarningCount: 0,
       labelCounts: {},
       complianceSummary: [],
       sessions,
@@ -153,7 +165,7 @@ describe("buildTopSessions", () => {
 
     const result = buildTopSessions(metrics, sessionLabelCounts);
     expect(result[0]?.dominantLabels).toContain("context_drift");
-    expect(result[0]?.dominantLabels).toContain("interrupt");
+    expect(result[0]?.dominantLabels).not.toContain("interrupt");
   });
 
   it("breaks ties by incident count descending", () => {
@@ -174,6 +186,7 @@ describe("buildTopSessions", () => {
       sessionCount: 2,
       turnCount: 20,
       incidentCount: 4,
+      parseWarningCount: 0,
       labelCounts: {},
       complianceSummary: [],
       sessions,
@@ -202,6 +215,7 @@ describe("buildTopSessions", () => {
       sessionCount: 2,
       turnCount: 20,
       incidentCount: 0,
+      parseWarningCount: 0,
       labelCounts: {},
       complianceSummary: [],
       sessions,
@@ -219,25 +233,26 @@ describe("buildTopSessions", () => {
   });
 });
 
-describe("buildVictoryLaps", () => {
+describe("buildVerifiedDeliverySpotlights", () => {
   it("returns empty array when no verified delivery sessions", () => {
     const topSessions = [
       {
         sessionId: "unverified",
         archetype: "unverified_delivery" as const,
-        archetypeLabel: "Needs Proof",
+        archetypeLabel: "Unverified Delivery",
         frictionScore: 5,
         complianceScore: 60,
         incidentCount: 2,
         labeledTurnCount: 3,
         writeCount: 5,
         verificationPassedCount: 0,
+        endedVerified: false,
         dominantLabels: [],
         note: "test",
       },
     ];
 
-    const result = buildVictoryLaps(topSessions);
+    const result = buildVerifiedDeliverySpotlights(topSessions);
     expect(result).toEqual([]);
   });
 
@@ -246,45 +261,48 @@ describe("buildVictoryLaps", () => {
       {
         sessionId: "verified-1",
         archetype: "verified_delivery" as const,
-        archetypeLabel: "Clean Ship",
+        archetypeLabel: "Verified Delivery",
         frictionScore: 2,
         complianceScore: 100,
         incidentCount: 0,
         labeledTurnCount: 2,
         writeCount: 5,
         verificationPassedCount: 3,
+        endedVerified: true,
         dominantLabels: [],
         note: "test",
       },
       {
         sessionId: "unverified",
         archetype: "unverified_delivery" as const,
-        archetypeLabel: "Needs Proof",
+        archetypeLabel: "Unverified Delivery",
         frictionScore: 5,
         complianceScore: 60,
         incidentCount: 2,
         labeledTurnCount: 3,
         writeCount: 5,
         verificationPassedCount: 0,
+        endedVerified: false,
         dominantLabels: [],
         note: "test",
       },
       {
         sessionId: "verified-2",
         archetype: "verified_delivery" as const,
-        archetypeLabel: "Clean Ship",
+        archetypeLabel: "Verified Delivery",
         frictionScore: 1,
         complianceScore: 95,
         incidentCount: 1,
         labeledTurnCount: 2,
         writeCount: 3,
         verificationPassedCount: 2,
+        endedVerified: true,
         dominantLabels: [],
         note: "test",
       },
     ];
 
-    const result = buildVictoryLaps(topSessions);
+    const result = buildVerifiedDeliverySpotlights(topSessions);
     expect(result).toHaveLength(2);
     expect(result.every((s) => s.archetype === "verified_delivery")).toBe(true);
   });
@@ -294,32 +312,34 @@ describe("buildVictoryLaps", () => {
       {
         sessionId: "lower-compliance",
         archetype: "verified_delivery" as const,
-        archetypeLabel: "Clean Ship",
+        archetypeLabel: "Verified Delivery",
         frictionScore: 1,
         complianceScore: 90,
         incidentCount: 0,
         labeledTurnCount: 2,
         writeCount: 5,
         verificationPassedCount: 3,
+        endedVerified: true,
         dominantLabels: [],
         note: "test",
       },
       {
         sessionId: "higher-compliance",
         archetype: "verified_delivery" as const,
-        archetypeLabel: "Clean Ship",
+        archetypeLabel: "Verified Delivery",
         frictionScore: 1,
         complianceScore: 100,
         incidentCount: 0,
         labeledTurnCount: 2,
         writeCount: 5,
         verificationPassedCount: 3,
+        endedVerified: true,
         dominantLabels: [],
         note: "test",
       },
     ];
 
-    const result = buildVictoryLaps(topSessions);
+    const result = buildVerifiedDeliverySpotlights(topSessions);
     expect(result[0]?.sessionId).toBe("higher-compliance");
     expect(result[1]?.sessionId).toBe("lower-compliance");
   });
@@ -328,18 +348,19 @@ describe("buildVictoryLaps", () => {
     const topSessions = Array.from({ length: 10 }, (_, i) => ({
       sessionId: `verified-${i}`,
       archetype: "verified_delivery" as const,
-      archetypeLabel: "Clean Ship",
+      archetypeLabel: "Verified Delivery",
       frictionScore: 1,
       complianceScore: 100 - i,
       incidentCount: 0,
       labeledTurnCount: 2,
       writeCount: 5,
       verificationPassedCount: 3,
+      endedVerified: true,
       dominantLabels: [],
       note: "test",
     }));
 
-    const result = buildVictoryLaps(topSessions);
+    const result = buildVerifiedDeliverySpotlights(topSessions);
     expect(result).toHaveLength(6);
   });
 });

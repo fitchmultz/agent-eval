@@ -5,16 +5,16 @@
  */
 
 export {
-  renderBadges,
-  renderBragCards,
+  renderHighlightCards,
   renderIncidentCards,
   renderInventoryList,
   renderMomentumCards,
   renderOpportunityList,
+  renderRecognitions,
   renderScoreCards,
   renderSessionCards,
   renderSummaryCards,
-  renderVictoryLapCards,
+  renderVerifiedDeliverySpotlightCards,
 } from "./cards.js";
 export { renderHtmlReport } from "./render.js";
 export { loadStyles, renderStyles } from "./styles.js";

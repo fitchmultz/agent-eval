@@ -17,10 +17,14 @@ function createMockSessionMetrics(
     turnCount: 10,
     labeledTurnCount: 5,
     incidentCount: 0,
+    parseWarningCount: 0,
     writeCount: 2,
     verificationCount: 1,
     verificationPassedCount: 1,
     verificationFailedCount: 0,
+    postWriteVerificationAttempted: true,
+    postWriteVerificationPassed: true,
+    endedVerified: true,
     complianceScore: 100,
     complianceRules: [],
     ...overrides,
@@ -37,6 +41,7 @@ function createMockMetricsRecord(
     sessionCount: 1,
     turnCount: 10,
     incidentCount: 0,
+    parseWarningCount: 0,
     labelCounts: {},
     complianceSummary: [],
     sessions: [createMockSessionMetrics()],
@@ -58,6 +63,7 @@ function createMockSessionInsightRow(
     labeledTurnCount: 5,
     writeCount: 2,
     verificationPassedCount: 1,
+    endedVerified: true,
     dominantLabels: [],
     note: "Clean session",
     ...overrides,
@@ -73,9 +79,9 @@ describe("summary-decorations", () => {
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
       expect(decorations.scoreCards).toHaveLength(3);
-      expect(decorations.scoreCards[0]?.title).toBe("Proof Score");
-      expect(decorations.scoreCards[1]?.title).toBe("Flow Score");
-      expect(decorations.scoreCards[2]?.title).toBe("Discipline Score");
+      expect(decorations.scoreCards[0]?.title).toBe("Verification Proxy Score");
+      expect(decorations.scoreCards[1]?.title).toBe("Flow Proxy Score");
+      expect(decorations.scoreCards[2]?.title).toBe("Workflow Proxy Score");
     });
 
     it("sets good tone for scores >= 90", () => {
@@ -85,6 +91,7 @@ describe("summary-decorations", () => {
             sessionId: "s1",
             writeCount: 10,
             verificationPassedCount: 10,
+            endedVerified: true,
             complianceScore: 95,
           }),
         ],
@@ -139,13 +146,15 @@ describe("summary-decorations", () => {
             sessionId: `s${i}`,
             writeCount: 10,
             verificationPassedCount: 10,
+            endedVerified: true,
           }),
         ),
         ...Array.from({ length: 2 }, (_, i) =>
           createMockSessionMetrics({
             sessionId: `s${i + 8}`,
             writeCount: 10,
-            verificationPassedCount: 0, // Not verified
+            verificationPassedCount: 0,
+            endedVerified: false, // Not verified
           }),
         ),
       ];
@@ -191,7 +200,7 @@ describe("summary-decorations", () => {
 
       // Proof score should be 80 (neutral)
       const proofCard = decorations.scoreCards.find(
-        (c) => c.title === "Proof Score",
+        (c) => c.title === "Verification Proxy Score",
       );
       expect(proofCard?.score).toBe(80);
       expect(proofCard?.tone).toBe("neutral");
@@ -206,13 +215,15 @@ describe("summary-decorations", () => {
             sessionId: `s${i}`,
             writeCount: 10,
             verificationPassedCount: 10,
+            endedVerified: true,
           }),
         ),
         ...Array.from({ length: 5 }, (_, i) =>
           createMockSessionMetrics({
             sessionId: `s${i + 5}`,
             writeCount: 10,
-            verificationPassedCount: 0, // Not verified
+            verificationPassedCount: 0,
+            endedVerified: false, // Not verified
           }),
         ),
       ];
@@ -258,7 +269,7 @@ describe("summary-decorations", () => {
 
       // Proof score should be 50 (warn)
       const proofCard = decorations.scoreCards.find(
-        (c) => c.title === "Proof Score",
+        (c) => c.title === "Verification Proxy Score",
       );
       expect(proofCard?.score).toBe(50);
       expect(proofCard?.tone).toBe("warn");
@@ -273,13 +284,15 @@ describe("summary-decorations", () => {
             sessionId: `s${i}`,
             writeCount: 10,
             verificationPassedCount: 10,
+            endedVerified: true,
           }),
         ),
         ...Array.from({ length: 8 }, (_, i) =>
           createMockSessionMetrics({
             sessionId: `s${i + 2}`,
             writeCount: 10,
-            verificationPassedCount: 0, // Not verified
+            verificationPassedCount: 0,
+            endedVerified: false, // Not verified
           }),
         ),
       ];
@@ -325,7 +338,7 @@ describe("summary-decorations", () => {
 
       // Proof score should be 20 (danger)
       const proofCard = decorations.scoreCards.find(
-        (c) => c.title === "Proof Score",
+        (c) => c.title === "Verification Proxy Score",
       );
       expect(proofCard?.score).toBe(20);
       expect(proofCard?.tone).toBe("danger");
@@ -333,23 +346,26 @@ describe("summary-decorations", () => {
   });
 
   describe("buildBragCards", () => {
-    it("counts proof-backed ships correctly", () => {
+    it("counts verification-backed ships correctly", () => {
       const metrics = createMockMetricsRecord({
         sessions: [
           createMockSessionMetrics({
             sessionId: "s1",
             writeCount: 2,
             verificationPassedCount: 1,
+            endedVerified: true,
           }),
           createMockSessionMetrics({
             sessionId: "s2",
             writeCount: 2,
             verificationPassedCount: 1,
+            endedVerified: true,
           }),
           createMockSessionMetrics({
             sessionId: "s3",
             writeCount: 0, // No writes
             verificationPassedCount: 0,
+            endedVerified: false,
           }),
         ],
         sessionCount: 3,
@@ -358,8 +374,8 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      const proofCard = decorations.bragCards.find(
-        (c) => c.title === "Proof-Backed Ships",
+      const proofCard = decorations.highlightCards.find(
+        (c) => c.title === "Verified Deliveries",
       );
       expect(proofCard?.value).toBe("2");
       expect(proofCard?.tone).toBe("good");
@@ -387,8 +403,8 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      const quietCard = decorations.bragCards.find(
-        (c) => c.title === "Quiet Runs",
+      const quietCard = decorations.highlightCards.find(
+        (c) => c.title === "Low-Incident Sessions",
       );
       expect(quietCard?.value).toBe("2");
       expect(quietCard?.tone).toBe("good");
@@ -406,8 +422,8 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      const battleCard = decorations.bragCards.find(
-        (c) => c.title === "Battle-Tested Runs",
+      const battleCard = decorations.highlightCards.find(
+        (c) => c.title === "Corpus Coverage",
       );
       expect(battleCard?.value).toBe("500");
       expect(battleCard?.tone).toBe("neutral");
@@ -424,8 +440,8 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      const battleCard = decorations.bragCards.find(
-        (c) => c.title === "Battle-Tested Runs",
+      const battleCard = decorations.highlightCards.find(
+        (c) => c.title === "Corpus Coverage",
       );
       expect(battleCard?.tone).toBe("good");
     });
@@ -448,26 +464,28 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      const quietCard = decorations.bragCards.find(
-        (c) => c.title === "Quiet Runs",
+      const quietCard = decorations.highlightCards.find(
+        (c) => c.title === "Low-Incident Sessions",
       );
       expect(quietCard?.value).toBe("0");
       expect(quietCard?.tone).toBe("neutral");
       expect(quietCard?.detail).toContain("No fully incident-free sessions");
     });
 
-    it("sets neutral tone for proof-backed ships when none exist", () => {
+    it("sets neutral tone for verification-backed ships when none exist", () => {
       const metrics = createMockMetricsRecord({
         sessions: [
           createMockSessionMetrics({
             sessionId: "s1",
             writeCount: 2,
             verificationPassedCount: 0,
+            endedVerified: false,
           }),
           createMockSessionMetrics({
             sessionId: "s2",
             writeCount: 1,
             verificationPassedCount: 0,
+            endedVerified: false,
           }),
         ],
         sessionCount: 2,
@@ -476,8 +494,8 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      const proofCard = decorations.bragCards.find(
-        (c) => c.title === "Proof-Backed Ships",
+      const proofCard = decorations.highlightCards.find(
+        (c) => c.title === "Verified Deliveries",
       );
       expect(proofCard?.value).toBe("0");
       expect(proofCard?.tone).toBe("neutral");
@@ -496,7 +514,7 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).toContain("Battle-Tested Corpus");
+      expect(decorations.recognitions).toContain("Battle-Tested Corpus");
     });
 
     it("does not award Battle-Tested Corpus below 1000 sessions", () => {
@@ -510,18 +528,17 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).not.toContain(
-        "Battle-Tested Corpus",
-      );
+      expect(decorations.recognitions).not.toContain("Battle-Tested Corpus");
     });
 
-    it("awards Proof-Backed Builder at 90%+ verification", () => {
+    it("awards Strong Verification Proxy at 90%+ verification", () => {
       const metrics = createMockMetricsRecord({
         sessions: [
           createMockSessionMetrics({
             sessionId: "s1",
             writeCount: 10,
             verificationPassedCount: 10,
+            endedVerified: true,
           }),
         ],
         sessionCount: 1,
@@ -530,16 +547,17 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).toContain("Proof-Backed Builder");
+      expect(decorations.recognitions).toContain("Strong Verification Proxy");
     });
 
-    it("does not award Proof-Backed Builder when no sessions have verification passed", () => {
+    it("does not award Strong Verification Proxy when no sessions have verification passed", () => {
       const metrics = createMockMetricsRecord({
         sessions: [
           createMockSessionMetrics({
             sessionId: "s1",
             writeCount: 10,
-            verificationPassedCount: 0, // No verifications passed
+            verificationPassedCount: 0,
+            endedVerified: false, // No verifications passed
           }),
         ],
         sessionCount: 1,
@@ -548,12 +566,12 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).not.toContain(
-        "Proof-Backed Builder",
+      expect(decorations.recognitions).not.toContain(
+        "Strong Verification Proxy",
       );
     });
 
-    it("awards Low-Drama Operator at <= 2% interruptions", () => {
+    it("awards Low-Interruption Corpus at <= 2% interruptions", () => {
       const metrics = createMockMetricsRecord({
         sessions: [createMockSessionMetrics({ sessionId: "s1" })],
         turnCount: 100,
@@ -564,10 +582,10 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).toContain("Low-Drama Operator");
+      expect(decorations.recognitions).toContain("Low-Interruption Corpus");
     });
 
-    it("does not award Low-Drama Operator above 2% interruptions", () => {
+    it("does not award Low-Interruption Corpus above 2% interruptions", () => {
       const metrics = createMockMetricsRecord({
         sessions: [createMockSessionMetrics({ sessionId: "s1" })],
         turnCount: 100,
@@ -578,7 +596,7 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).not.toContain("Low-Drama Operator");
+      expect(decorations.recognitions).not.toContain("Low-Interruption Corpus");
     });
 
     it("awards Zero Drift Complaints when no drift", () => {
@@ -592,7 +610,7 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).toContain("Zero Drift Complaints");
+      expect(decorations.recognitions).toContain("Zero Drift Complaints");
     });
 
     it("does not award Zero Drift Complaints when drift exists", () => {
@@ -606,12 +624,10 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).not.toContain(
-        "Zero Drift Complaints",
-      );
+      expect(decorations.recognitions).not.toContain("Zero Drift Complaints");
     });
 
-    it("awards Recovery Specialist when high friction recovery exists", () => {
+    it("awards High-Friction Recovery Evidence when high friction recovery exists", () => {
       const metrics = createMockMetricsRecord({
         sessions: [createMockSessionMetrics({ sessionId: "s1" })],
         sessionCount: 1,
@@ -619,16 +635,18 @@ describe("summary-decorations", () => {
       const topSessions: SessionInsightRow[] = [
         createMockSessionInsightRow({
           sessionId: "s1",
-          archetype: "high_friction_recovery",
+          archetype: "high_friction_verified_delivery",
         }),
       ];
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).toContain("Recovery Specialist");
+      expect(decorations.recognitions).toContain(
+        "High-Friction Recovery Evidence",
+      );
     });
 
-    it("does not award Recovery Specialist without high friction recovery", () => {
+    it("does not award High-Friction Recovery Evidence without high friction recovery", () => {
       const metrics = createMockMetricsRecord({
         sessions: [createMockSessionMetrics({ sessionId: "s1" })],
         sessionCount: 1,
@@ -642,8 +660,8 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).not.toContain(
-        "Recovery Specialist",
+      expect(decorations.recognitions).not.toContain(
+        "High-Friction Recovery Evidence",
       );
     });
 
@@ -653,7 +671,8 @@ describe("summary-decorations", () => {
           createMockSessionMetrics({
             sessionId: "s1",
             writeCount: 10,
-            verificationPassedCount: 0, // No verifications passed
+            verificationPassedCount: 0,
+            endedVerified: false, // No verifications passed
             incidentCount: 5,
           }),
         ],
@@ -673,7 +692,7 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).toHaveLength(0);
+      expect(decorations.recognitions).toHaveLength(0);
     });
 
     it("awards multiple badges when criteria met", () => {
@@ -683,6 +702,7 @@ describe("summary-decorations", () => {
             sessionId: `s${i}`,
             writeCount: 10,
             verificationPassedCount: 10,
+            endedVerified: true,
             incidentCount: 0,
           }),
         ),
@@ -694,10 +714,10 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.achievementBadges).toContain("Battle-Tested Corpus");
-      expect(decorations.achievementBadges).toContain("Proof-Backed Builder");
-      expect(decorations.achievementBadges).toContain("Low-Drama Operator");
-      expect(decorations.achievementBadges).toContain("Zero Drift Complaints");
+      expect(decorations.recognitions).toContain("Battle-Tested Corpus");
+      expect(decorations.recognitions).toContain("Strong Verification Proxy");
+      expect(decorations.recognitions).toContain("Low-Interruption Corpus");
+      expect(decorations.recognitions).toContain("Zero Drift Complaints");
     });
   });
 
@@ -851,6 +871,7 @@ describe("summary-decorations", () => {
             sessionId: "s1",
             writeCount: 0,
             verificationPassedCount: 0,
+            endedVerified: false,
           }),
         ],
         turnCount: 100,

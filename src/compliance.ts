@@ -1,16 +1,18 @@
 /**
- * Purpose: Scores session compliance against the evaluator's AGENTS-style operating rules.
+ * Purpose: Scores session compliance against heuristic operating-rule proxies using ordered session events.
  * Entrypoint: `scoreCompliance()` is called once per parsed session during evaluation.
- * Notes: Rules are heuristic and optimized for precision over recall in evaluator v1.
+ * Notes: Rules are intentionally heuristic and rely on transcript-visible evidence only, not ground-truth task outcomes.
  */
+
 import { COMPLIANCE, CONTEXT_CONFIRMATION } from "./constants/index.js";
 import type { ComplianceRuleResult, ComplianceStatus } from "./schema.js";
-import {
-  extractCommandText,
-  isVerificationTool,
-  isWriteTool,
-} from "./tool-classification.js";
-import type { ParsedSession, ParsedTurn } from "./transcript/index.js";
+import { categorizeToolCall } from "./tool-classification.js";
+import { extractCommandTextFromArgumentsText } from "./tool-command-text.js";
+import type {
+  ParsedSession,
+  ParsedTurn,
+  ScoringEvent,
+} from "./transcript/index.js";
 
 /**
  * Scorecard for a session's compliance with AGENTS-style operating rules.
@@ -28,60 +30,17 @@ export interface ComplianceScorecard {
   verificationFailedCount: number;
   /** Number of write tool calls observed */
   writeCount: number;
+  /** Whether any verification was attempted after the final write */
+  postWriteVerificationAttempted: boolean;
+  /** Whether the last post-write verification attempt passed */
+  postWriteVerificationPassed: boolean;
+  /** Whether the session ended with the final write verified */
+  endedVerified: boolean;
 }
 
-function hasRepoExplorationSignal(turn: ParsedTurn): boolean {
-  return turn.toolCalls.some((toolCall) => {
-    const commandText = extractCommandText(toolCall);
-    return (
-      typeof commandText === "string" &&
-      /\b(pwd|git status|ls|find|rg|fd|tree)\b/.test(commandText)
-    );
-  });
-}
-
-function hasScopeAcknowledgement(turn: ParsedTurn): boolean {
-  return turn.assistantMessages.some(
-    (message) =>
-      /\b(i('| a)?ll|i will|plan|inspect|check|verify|fix|update|review|search|trace|debug|investigate)\b/i.test(
-        message,
-      ) || message.trim().length >= CONTEXT_CONFIRMATION.MIN_MESSAGE_LENGTH,
-  );
-}
-
-function hasScopeConfirmationBeforeWrite(
-  turns: readonly ParsedTurn[],
-  firstWriteIndex: number,
-): boolean {
-  const priorTurns = turns.slice(0, firstWriteIndex + 1);
-  return priorTurns.some(
-    (turn) => hasScopeAcknowledgement(turn) || hasRepoExplorationSignal(turn),
-  );
-}
-
-function hasRepoOrCwdConfirmationBeforeWrite(
-  turns: readonly ParsedTurn[],
-  firstWriteIndex: number,
-): boolean {
-  return turns
-    .slice(0, firstWriteIndex + 1)
-    .some((turn) => hasRepoExplorationSignal(turn));
-}
-
-function hasPreWritePlan(
-  turns: readonly ParsedTurn[],
-  firstWriteIndex: number,
-): boolean {
-  const priorTurns = turns.slice(0, firstWriteIndex + 1);
-  return priorTurns.some(
-    (turn) =>
-      turn.toolCalls.some((toolCall) => toolCall.toolName === "update_plan") ||
-      turn.assistantMessages.some(
-        (message) =>
-          /\bplan\b/i.test(message) ||
-          /\n1\.\s|\n2\.\s|first|next|then/i.test(message),
-      ),
-  );
+interface ScoredToolEvent extends ScoringEvent {
+  kind: "tool_call";
+  toolName: string;
 }
 
 function createRule(
@@ -92,49 +51,146 @@ function createRule(
   return { rule, status, rationale };
 }
 
+function isToolEvent(event: ScoringEvent): event is ScoredToolEvent {
+  return event.kind === "tool_call" && typeof event.toolName === "string";
+}
+
+function hasScopeAcknowledgement(text: string): boolean {
+  return (
+    /\b(i('| a)?ll|i will|plan|inspect|check|verify|fix|update|review|search|trace|debug|investigate)\b/i.test(
+      text,
+    ) || text.trim().length >= CONTEXT_CONFIRMATION.MIN_MESSAGE_LENGTH
+  );
+}
+
+function hasPlanSignal(text: string): boolean {
+  return (
+    /\bplan\b/i.test(text) || /\n1\.\s|\n2\.\s|first|next|then/i.test(text)
+  );
+}
+
+function hasRepoExplorationSignal(commandText: string): boolean {
+  return /\b(pwd|git status|git rev-parse --show-toplevel|git branch --show-current|ls|find|rg|fd|tree)\b/i.test(
+    commandText,
+  );
+}
+
+function hasExplicitRepoOrCwdConfirmation(commandText: string): boolean {
+  return /\b(pwd|git status|git rev-parse --show-toplevel|git branch --show-current)\b/i.test(
+    commandText,
+  );
+}
+
+function compareSequence(left: ScoringEvent, right: ScoringEvent): number {
+  return left.sequenceIndex - right.sequenceIndex;
+}
+
+function synthesizeScoringEvents(turns: readonly ParsedTurn[]): ScoringEvent[] {
+  const events: ScoringEvent[] = [];
+  let sequenceIndex = 0;
+
+  for (const turn of turns) {
+    for (const text of turn.userMessages) {
+      events.push({
+        sessionId: "synthetic-session",
+        turnIndex: turn.turnIndex,
+        sequenceIndex,
+        timestamp: turn.startedAt,
+        cwd: turn.cwd,
+        kind: "user_message",
+        text,
+      });
+      sequenceIndex += 1;
+    }
+
+    for (const text of turn.assistantMessages) {
+      events.push({
+        sessionId: "synthetic-session",
+        turnIndex: turn.turnIndex,
+        sequenceIndex,
+        timestamp: turn.startedAt,
+        cwd: turn.cwd,
+        kind: "assistant_message",
+        text,
+      });
+      sequenceIndex += 1;
+    }
+
+    for (const toolCall of turn.toolCalls) {
+      events.push({
+        sessionId: "synthetic-session",
+        turnIndex: turn.turnIndex,
+        sequenceIndex,
+        timestamp: toolCall.timestamp ?? turn.startedAt,
+        cwd: turn.cwd,
+        kind: "tool_call",
+        toolName: toolCall.toolName,
+        commandText: extractCommandTextFromArgumentsText(
+          toolCall.argumentsText,
+        ),
+        status: toolCall.status,
+      });
+      sequenceIndex += 1;
+    }
+  }
+
+  return events;
+}
+
+function getOrderedEvents(session: ParsedSession): ScoringEvent[] {
+  const sourceEvents =
+    session.scoringEvents && session.scoringEvents.length > 0
+      ? session.scoringEvents
+      : synthesizeScoringEvents(session.turns);
+
+  return [...sourceEvents]
+    .map((event) => ({
+      ...event,
+      sessionId: event.sessionId || session.sessionId,
+    }))
+    .sort(compareSequence);
+}
+
+function getToolEvents(events: readonly ScoringEvent[]): Array<
+  ScoredToolEvent & {
+    writeLike: boolean;
+    verificationLike: boolean;
+    commandText?: string | undefined;
+  }
+> {
+  return events.filter(isToolEvent).map((event) => {
+    const categorization = categorizeToolCall(
+      event.toolName,
+      event.commandText,
+    );
+    return {
+      ...event,
+      ...(event.commandText ? { commandText: event.commandText } : {}),
+      writeLike: categorization.writeLike,
+      verificationLike: categorization.verificationLike,
+    };
+  });
+}
+
 /**
  * Scores a session's compliance against AGENTS-style operating rules.
- *
- * Evaluates five compliance rules:
- * 1. scope_confirmed_before_major_write - Context exploration before writing
- * 2. cwd_or_repo_echoed_before_write - Repository/cwd confirmation before writing
- * 3. short_plan_before_large_change - Explicit plan before major changes
- * 4. verification_after_code_changes - Verification after code changes
- * 5. no_unverified_ending - Session ends with passing verification
- *
- * The score starts at 100 and loses 20 points for each failed rule.
- *
- * @param session - The parsed session to evaluate
- * @returns ComplianceScorecard with overall score and per-rule results
- *
- * @example
- * ```typescript
- * const session = await parseTranscriptFile("session.jsonl");
- * const scorecard = scoreCompliance(session);
- * console.log(`Compliance: ${scorecard.score}/100`);
- * for (const rule of scorecard.rules) {
- *   console.log(`  ${rule.rule}: ${rule.status}`);
- * }
- * ```
  */
 export function scoreCompliance(session: ParsedSession): ComplianceScorecard {
-  const writeTurns = session.turns.flatMap((turn, turnIndex) =>
-    turn.toolCalls
-      .filter(isWriteTool)
-      .map((toolCall) => ({ toolCall, turnIndex })),
+  const events = getOrderedEvents(session);
+  const toolEvents = getToolEvents(events);
+  const writeEvents = toolEvents.filter((event) => event.writeLike);
+  const verificationEvents = toolEvents.filter(
+    (event) => event.verificationLike,
   );
-  const verificationCalls = session.turns.flatMap((turn) =>
-    turn.toolCalls.filter(isVerificationTool),
-  );
-  const verificationPassedCount = verificationCalls.filter(
-    (toolCall) => toolCall.status === "completed",
+  const verificationPassedCount = verificationEvents.filter(
+    (event) => event.status === "completed",
   ).length;
-  const verificationFailedCount = verificationCalls.filter(
-    (toolCall) => toolCall.status === "errored",
+  const verificationFailedCount = verificationEvents.filter(
+    (event) => event.status === "errored",
   ).length;
 
   const rules: ComplianceRuleResult[] = [];
-  if (writeTurns.length === 0) {
+  if (writeEvents.length === 0) {
     rules.push(
       createRule(
         "scope_confirmed_before_major_write",
@@ -162,50 +218,92 @@ export function scoreCompliance(session: ParsedSession): ComplianceScorecard {
         "No high-confidence write tools were observed.",
       ),
     );
+
     return {
       score: COMPLIANCE.STARTING_SCORE,
       rules,
-      verificationCount: verificationCalls.length,
+      verificationCount: verificationEvents.length,
       verificationPassedCount,
       verificationFailedCount,
       writeCount: 0,
+      postWriteVerificationAttempted: false,
+      postWriteVerificationPassed: false,
+      endedVerified: false,
     };
   }
 
-  const firstWriteTurnIndex = writeTurns[0]?.turnIndex ?? 0;
+  const [firstWriteEvent] = writeEvents;
+  const lastWriteEvent = writeEvents.at(-1);
+  if (!firstWriteEvent || !lastWriteEvent) {
+    throw new Error("Expected write events after write-count guard.");
+  }
+  const preWriteEvents = events.filter(
+    (event) => event.sequenceIndex < firstWriteEvent.sequenceIndex,
+  );
+  const postWriteVerificationEvents = verificationEvents.filter(
+    (event) => event.sequenceIndex > lastWriteEvent.sequenceIndex,
+  );
+  const lastPostWriteVerification =
+    postWriteVerificationEvents[postWriteVerificationEvents.length - 1];
+  const scopeConfirmed = preWriteEvents.some((event) => {
+    if (event.kind === "assistant_message" && typeof event.text === "string") {
+      return hasScopeAcknowledgement(event.text);
+    }
+    return (
+      event.kind === "tool_call" &&
+      typeof event.commandText === "string" &&
+      hasRepoExplorationSignal(event.commandText)
+    );
+  });
+  const repoOrCwdConfirmed =
+    Boolean(session.cwd) ||
+    preWriteEvents.some((event) => {
+      if (event.cwd) {
+        return true;
+      }
+      return (
+        event.kind === "tool_call" &&
+        typeof event.commandText === "string" &&
+        hasExplicitRepoOrCwdConfirmation(event.commandText)
+      );
+    });
+  const plannedBeforeWrite = preWriteEvents.some((event) => {
+    if (event.kind === "assistant_message" && typeof event.text === "string") {
+      return hasPlanSignal(event.text);
+    }
+    return event.kind === "tool_call" && event.toolName === "update_plan";
+  });
+  const hasSuccessfulPostWriteVerification =
+    lastPostWriteVerification?.status === "completed";
+  const postWriteVerificationAttempted = postWriteVerificationEvents.length > 0;
+  const postWriteVerificationPassed = hasSuccessfulPostWriteVerification;
+  const endedVerified = hasSuccessfulPostWriteVerification;
+
   rules.push(
     createRule(
       "scope_confirmed_before_major_write",
-      hasScopeConfirmationBeforeWrite(session.turns, firstWriteTurnIndex)
-        ? "pass"
-        : "fail",
-      "Checks whether the agent acknowledged scope or explored context before writing.",
+      scopeConfirmed ? "pass" : "fail",
+      "Checks whether the agent acknowledged scope or explored repository context before the first write.",
     ),
     createRule(
       "cwd_or_repo_echoed_before_write",
-      hasRepoOrCwdConfirmationBeforeWrite(session.turns, firstWriteTurnIndex)
-        ? "pass"
-        : "fail",
-      "Checks for early repository or cwd confirmation signals before writing.",
+      repoOrCwdConfirmed ? "pass" : "fail",
+      "Checks for explicit cwd or repository confirmation before the first write.",
     ),
     createRule(
       "short_plan_before_large_change",
-      hasPreWritePlan(session.turns, firstWriteTurnIndex) ? "pass" : "fail",
-      "Checks for a short explicit plan before the first major write.",
+      plannedBeforeWrite ? "pass" : "fail",
+      "Checks for an explicit plan signal before the first write.",
     ),
     createRule(
       "verification_after_code_changes",
-      verificationPassedCount > 0
-        ? "pass"
-        : verificationFailedCount > 0
-          ? "fail"
-          : "fail",
-      "Checks whether a verification command passed after code changes.",
+      hasSuccessfulPostWriteVerification ? "pass" : "fail",
+      "Checks whether the last verification attempt after the final write succeeded.",
     ),
     createRule(
       "no_unverified_ending",
-      verificationPassedCount > 0 ? "pass" : "fail",
-      "Checks whether the session ended after changes without a passing verification signal.",
+      hasSuccessfulPostWriteVerification ? "pass" : "fail",
+      "Checks whether the session ended without leaving the final write unverified.",
     ),
   );
 
@@ -219,9 +317,12 @@ export function scoreCompliance(session: ParsedSession): ComplianceScorecard {
   return {
     score: Math.max(0, score),
     rules,
-    verificationCount: verificationCalls.length,
+    verificationCount: verificationEvents.length,
     verificationPassedCount,
     verificationFailedCount,
-    writeCount: writeTurns.length,
+    writeCount: writeEvents.length,
+    postWriteVerificationAttempted,
+    postWriteVerificationPassed,
+    endedVerified,
   };
 }

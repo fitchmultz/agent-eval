@@ -28,6 +28,7 @@ function mergeLabels(labels: readonly LabelRecord[]): LabelRecord[] {
 
     merged.set(label.label, {
       label: label.label,
+      family: label.family,
       severity: chooseMaxSeverity([existing.severity, label.severity]),
       confidence: chooseMaxConfidence([existing.confidence, label.confidence]),
       rationale: existing.rationale,

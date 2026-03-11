@@ -1,7 +1,7 @@
 /**
  * Purpose: Verifies deterministic comparative slices and momentum cards stay stable as corpus windows change.
  * Entrypoint: Executed by Vitest via `pnpm test`.
- * Notes: Uses synthetic session aggregates so trend behavior remains reproducible and public-safe.
+ * Notes: Uses synthetic session aggregates so trend behavior remains reproducible and public-facing redaction.
  */
 import { describe, expect, it } from "vitest";
 
@@ -53,10 +53,14 @@ describe("buildSummaryArtifact", () => {
         turnCount: 10,
         labeledTurnCount: 1,
         incidentCount: 1,
+        parseWarningCount: 0,
         writeCount: 1,
         verificationCount: 1,
         verificationPassedCount: 0,
         verificationFailedCount: 1,
+        postWriteVerificationAttempted: false,
+        postWriteVerificationPassed: false,
+        endedVerified: false,
         complianceScore: 60,
         complianceRules: createPassingRules().map((rule, index) =>
           index === 3 ? { ...rule, status: "fail" as const } : rule,
@@ -68,10 +72,14 @@ describe("buildSummaryArtifact", () => {
         turnCount: 10,
         labeledTurnCount: 0,
         incidentCount: 0,
+        parseWarningCount: 0,
         writeCount: 1,
         verificationCount: 1,
         verificationPassedCount: 1,
         verificationFailedCount: 0,
+        postWriteVerificationAttempted: true,
+        postWriteVerificationPassed: true,
+        endedVerified: true,
         complianceScore: 100,
         complianceRules: createPassingRules(),
       })),
@@ -84,6 +92,7 @@ describe("buildSummaryArtifact", () => {
       sessionCount: sessions.length,
       turnCount: 1010,
       incidentCount: 1,
+      parseWarningCount: 0,
       labelCounts: {
         verification_request: 1,
       },
@@ -151,10 +160,12 @@ describe("buildSummaryArtifact", () => {
       "selected_corpus",
       "recent_100",
     ]);
-    expect(summary.comparativeSlices[0]?.proofScore).toBe(99);
-    expect(summary.comparativeSlices[1]?.proofScore).toBe(100);
+    expect(summary.comparativeSlices[0]?.verificationProxyScore).toBe(99);
+    expect(summary.comparativeSlices[1]?.verificationProxyScore).toBe(100);
     const sections = buildSummarySections(summary);
-    expect(sections.recentMomentum[0]?.title).toBe("Proof Momentum");
+    expect(sections.recentMomentum[0]?.title).toBe(
+      "Verification Proxy Momentum",
+    );
     expect(sections.recentMomentum[0]?.value).toBe("+1 pts");
     expect(sections.recentMomentum[0]?.tone).toBe("neutral");
   });

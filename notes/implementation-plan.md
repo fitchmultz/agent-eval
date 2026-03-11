@@ -4,16 +4,16 @@ This plan now tracks the implemented source-aware architecture and the next stri
 
 ## Implemented Architecture
 
-The evaluator currently has four stable layers:
+The transcript analytics engine currently has four stable layers:
 
 1. Discovery
    - dynamically finds transcript JSONL and optional local enrichment stores
 2. Ingestion
    - parses canonical transcript JSONL into reconstructed sessions and turns
-3. Evaluation
+3. Analytics
    - labels user-facing friction signals
    - clusters incidents
-   - scores AGENTS-style compliance
+   - scores heuristic policy proxies from ordered transcript events
    - aggregates corpus/session metrics
 4. Reporting
    - emits machine-readable artifacts
@@ -24,7 +24,7 @@ The evaluator currently has four stable layers:
 - `~/.codex/sessions/**/*.jsonl`
 - `~/.claude/projects/**/*.jsonl`
 
-These remain the only required inputs for deterministic v1 evaluation.
+These remain the only required inputs for deterministic v1 analytics.
 
 ## Optional Enrichment Inputs
 
@@ -121,19 +121,19 @@ Derived:
 
 ## Completed Refactor Passes
 
-- evaluator full vs summary-only aggregation paths were consolidated
+- analytics full vs summary-only aggregation paths were consolidated
 - duplicated artifact-writing logic was consolidated
 - the oversized insight layer was split into focused modules
 - report and presentation now share section-level derived data
 - planning docs were aligned with the implemented model
-- source-specific discovery and parsing were split from the shared evaluator core
+- source-specific discovery and parsing were split from the shared analytics core
 
 ## Next Logical Expansions
 
 Only expand beyond the current implementation if one of these becomes worth the added complexity:
 
 1. join optional enrichment stores into deterministic scoring
-2. add new labels or compliance rules with strong user value
+2. expand the calibration corpus and proxy validation with strong user value
 3. add export/dashboard formats beyond the current markdown/html/svg bundle
 4. add a clearly optional second-pass LLM layer on top of deterministic artifacts
 
@@ -141,4 +141,4 @@ Only expand beyond the current implementation if one of these becomes worth the 
 
 - no mandatory SQLite dependence
 - no opaque model-based scoring in the core path
-- no richer normalized event model unless it clearly reduces net complexity
+- no provider expansion before calibration and benchmark coverage improve

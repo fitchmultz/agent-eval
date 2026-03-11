@@ -1,7 +1,7 @@
 /**
- * Purpose: Ranks sessions by friction and selects top performers for review.
- * Entrypoint: `buildTopSessions()` and `buildVictoryLaps()` for session prioritization.
- * Notes: Victory laps highlight the best verified delivery sessions.
+ * Purpose: Ranks sessions by friction and selects verified delivery spotlights for review.
+ * Entrypoint: `buildTopSessions()` and `buildVerifiedDeliverySpotlights()` for session prioritization.
+ * Notes: Verified delivery spotlights highlight the best terminally verified write sessions.
  */
 
 import { getConfig } from "./config/index.js";
@@ -40,8 +40,7 @@ export function buildTopSessions(
       );
       const archetype = determineArchetype(
         session.writeCount,
-        session.verificationPassedCount,
-        dominantLabels,
+        session.endedVerified,
         frictionScore,
       );
 
@@ -55,6 +54,7 @@ export function buildTopSessions(
         labeledTurnCount: session.labeledTurnCount,
         writeCount: session.writeCount,
         verificationPassedCount: session.verificationPassedCount,
+        endedVerified: session.endedVerified,
         dominantLabels,
         note: createArchetypeNote(archetype, dominantLabels, session),
       };
@@ -68,11 +68,11 @@ export function buildTopSessions(
 }
 
 /**
- * Selects the top verified delivery sessions (victory laps) for highlighting.
+ * Selects the top verified delivery sessions for highlighting.
  * @param topSessions - Array of ranked session insights
  * @returns Array of up to 6 best verified delivery sessions
  */
-export function buildVictoryLaps(
+export function buildVerifiedDeliverySpotlights(
   topSessions: readonly SessionInsightRow[],
 ): SessionInsightRow[] {
   return topSessions

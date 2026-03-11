@@ -18,6 +18,7 @@ function createMockSummaryArtifact(
     sessions: 10,
     turns: 100,
     incidents: 5,
+    parseWarningCount: 0,
     labels: [],
     severities: [],
     compliance: [],
@@ -31,8 +32,8 @@ function createMockSummaryArtifact(
     },
     delivery: {
       sessionsWithWrites: 8,
-      verifiedWriteSessions: 6,
-      writeVerificationRate: 75,
+      sessionsEndingVerified: 6,
+      writeSessionVerificationRate: 75,
     },
     comparativeSlices: [
       {
@@ -41,33 +42,34 @@ function createMockSummaryArtifact(
         sessionCount: 10,
         turnCount: 100,
         incidentCount: 5,
-        proofScore: 75,
-        flowScore: 80,
-        disciplineScore: 85,
-        writeVerificationRate: 75,
+        verificationProxyScore: 75,
+        flowProxyScore: 80,
+        workflowProxyScore: 85,
+        writeSessionVerificationRate: 75,
         incidentsPer100Turns: 5,
       },
     ],
     topSessions: [
       {
         sessionId: "session-1",
-        archetype: "high_friction_recovery",
-        archetypeLabel: "High Friction Recovery",
+        archetype: "high_friction_verified_delivery",
+        archetypeLabel: "High-Friction Verified Delivery",
         frictionScore: 12,
         complianceScore: 70,
         incidentCount: 3,
         labeledTurnCount: 5,
         writeCount: 2,
         verificationPassedCount: 1,
+        endedVerified: true,
         dominantLabels: ["interrupt"],
         note: "High friction session",
       },
     ],
     topIncidents: [],
     scoreCards: [],
-    bragCards: [],
-    achievementBadges: [],
-    victoryLaps: [],
+    highlightCards: [],
+    recognitions: [],
+    verifiedDeliverySpotlights: [],
     opportunities: [],
     ...overrides,
   };
@@ -84,10 +86,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 70,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 70,
+            verificationProxyScore: 70,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 70,
             incidentsPer100Turns: 5,
           },
           {
@@ -96,10 +98,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 75, // +5 delta
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 75,
+            verificationProxyScore: 75, // +5 delta
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 75,
             incidentsPer100Turns: 5,
           },
         ],
@@ -107,7 +109,7 @@ describe("summary-sections", () => {
 
       const sections = buildSummarySections(summary);
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
 
       expect(proofMomentum?.tone).toBe("good");
@@ -123,10 +125,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 80,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 5,
           },
           {
@@ -135,10 +137,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 70, // -10 delta
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 70,
+            verificationProxyScore: 70, // -10 delta
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 70,
             incidentsPer100Turns: 5,
           },
         ],
@@ -146,7 +148,7 @@ describe("summary-sections", () => {
 
       const sections = buildSummarySections(summary);
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
 
       expect(proofMomentum?.tone).toBe("danger");
@@ -162,10 +164,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 80,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 5,
           },
           {
@@ -174,10 +176,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 75, // -5 delta
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 75,
+            verificationProxyScore: 75, // -5 delta
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 75,
             incidentsPer100Turns: 5,
           },
         ],
@@ -185,7 +187,7 @@ describe("summary-sections", () => {
 
       const sections = buildSummarySections(summary);
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
 
       expect(proofMomentum?.tone).toBe("warn");
@@ -201,10 +203,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 80,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 5,
           },
           {
@@ -213,10 +215,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 82, // +2 delta (between -5 and 5)
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 82,
+            verificationProxyScore: 82, // +2 delta (between -5 and 5)
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 82,
             incidentsPer100Turns: 5,
           },
         ],
@@ -224,7 +226,7 @@ describe("summary-sections", () => {
 
       const sections = buildSummarySections(summary);
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
 
       expect(proofMomentum?.tone).toBe("neutral");
@@ -240,10 +242,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 80,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 5,
           },
           {
@@ -252,10 +254,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 74, // -6 delta (between -10 and -5)
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 74,
+            verificationProxyScore: 74, // -6 delta (between -10 and -5)
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 74,
             incidentsPer100Turns: 5,
           },
         ],
@@ -263,7 +265,7 @@ describe("summary-sections", () => {
 
       const sections = buildSummarySections(summary);
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
 
       expect(proofMomentum?.tone).toBe("warn");
@@ -281,10 +283,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 70,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 70,
+            verificationProxyScore: 70,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 70,
             incidentsPer100Turns: 5,
           },
           {
@@ -293,10 +295,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 80, // +10 delta
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80, // +10 delta
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 5,
           },
         ],
@@ -304,7 +306,7 @@ describe("summary-sections", () => {
 
       const sections = buildSummarySections(summary);
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
 
       expect(proofMomentum?.value).toBe("+10 pts");
@@ -319,10 +321,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 80,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 5,
           },
           {
@@ -331,10 +333,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 70, // -10 delta
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 70,
+            verificationProxyScore: 70, // -10 delta
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 70,
             incidentsPer100Turns: 5,
           },
         ],
@@ -342,7 +344,7 @@ describe("summary-sections", () => {
 
       const sections = buildSummarySections(summary);
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
 
       expect(proofMomentum?.value).toBe("-10 pts");
@@ -357,10 +359,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 80,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 5,
           },
           {
@@ -369,10 +371,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 80, // 0 delta
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80, // 0 delta
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 5,
           },
         ],
@@ -380,7 +382,7 @@ describe("summary-sections", () => {
 
       const sections = buildSummarySections(summary);
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
 
       expect(proofMomentum?.value).toBe("+0 pts");
@@ -392,14 +394,14 @@ describe("summary-sections", () => {
       const summary = createMockSummaryArtifact({
         delivery: {
           sessionsWithWrites: 10,
-          verifiedWriteSessions: 8,
-          writeVerificationRate: 80,
+          sessionsEndingVerified: 8,
+          writeSessionVerificationRate: 80,
         },
       });
 
       const sections = buildSummarySections(summary);
       const writeCard = sections.headlineInsights.find(
-        (c) => c.title === "Write Verification",
+        (c) => c.title === "Terminal Verification",
       );
 
       expect(writeCard).toBeDefined();
@@ -411,14 +413,14 @@ describe("summary-sections", () => {
       const summary = createMockSummaryArtifact({
         delivery: {
           sessionsWithWrites: 10,
-          verifiedWriteSessions: 10,
-          writeVerificationRate: 100,
+          sessionsEndingVerified: 10,
+          writeSessionVerificationRate: 100,
         },
       });
 
       const sections = buildSummarySections(summary);
       const writeCard = sections.headlineInsights.find(
-        (c) => c.title === "Write Verification",
+        (c) => c.title === "Terminal Verification",
       );
 
       expect(writeCard?.tone).toBe("good");
@@ -428,14 +430,14 @@ describe("summary-sections", () => {
       const summary = createMockSummaryArtifact({
         delivery: {
           sessionsWithWrites: 10,
-          verifiedWriteSessions: 8,
-          writeVerificationRate: 80,
+          sessionsEndingVerified: 8,
+          writeSessionVerificationRate: 80,
         },
       });
 
       const sections = buildSummarySections(summary);
       const writeCard = sections.headlineInsights.find(
-        (c) => c.title === "Write Verification",
+        (c) => c.title === "Terminal Verification",
       );
 
       expect(writeCard?.tone).toBe("warn");
@@ -445,14 +447,14 @@ describe("summary-sections", () => {
       const summary = createMockSummaryArtifact({
         delivery: {
           sessionsWithWrites: 0,
-          verifiedWriteSessions: 0,
-          writeVerificationRate: 0,
+          sessionsEndingVerified: 0,
+          writeSessionVerificationRate: 0,
         },
       });
 
       const sections = buildSummarySections(summary);
       const writeCard = sections.headlineInsights.find(
-        (c) => c.title === "Write Verification",
+        (c) => c.title === "Terminal Verification",
       );
 
       expect(writeCard?.tone).toBe("neutral");
@@ -525,14 +527,15 @@ describe("summary-sections", () => {
         topSessions: [
           {
             sessionId: "high-friction-session",
-            archetype: "high_friction_recovery",
-            archetypeLabel: "High Friction Recovery",
+            archetype: "high_friction_verified_delivery",
+            archetypeLabel: "High-Friction Verified Delivery",
             frictionScore: 15,
             complianceScore: 60,
             incidentCount: 5,
             labeledTurnCount: 10,
             writeCount: 3,
             verificationPassedCount: 1,
+            endedVerified: true,
             dominantLabels: ["interrupt", "context_drift"],
             note: "Very high friction",
           },
@@ -547,7 +550,7 @@ describe("summary-sections", () => {
       expect(frictionCard).toBeDefined();
       expect(frictionCard?.value).toBe("high-friction-session");
       expect(frictionCard?.detail).toContain("15 friction points");
-      expect(frictionCard?.detail).toContain("High Friction Recovery");
+      expect(frictionCard?.detail).toContain("High-Friction Verified Delivery");
     });
 
     it("sets danger tone for high friction session", () => {
@@ -555,14 +558,15 @@ describe("summary-sections", () => {
         topSessions: [
           {
             sessionId: "high-friction-session",
-            archetype: "high_friction_recovery",
-            archetypeLabel: "High Friction Recovery",
+            archetype: "high_friction_verified_delivery",
+            archetypeLabel: "High-Friction Verified Delivery",
             frictionScore: 12, // Above HIGH_FRICTION_THRESHOLD of 8
             complianceScore: 60,
             incidentCount: 5,
             labeledTurnCount: 10,
             writeCount: 3,
             verificationPassedCount: 1,
+            endedVerified: true,
             dominantLabels: ["interrupt"],
             note: "Very high friction",
           },
@@ -590,6 +594,7 @@ describe("summary-sections", () => {
             labeledTurnCount: 5,
             writeCount: 2,
             verificationPassedCount: 2,
+            endedVerified: true,
             dominantLabels: [],
             note: "Normal session",
           },
@@ -625,7 +630,7 @@ describe("summary-sections", () => {
       const sections = buildSummarySections(summary);
 
       expect(sections.headlineInsights).toHaveLength(3);
-      expect(sections.headlineInsights[0]?.title).toBe("Write Verification");
+      expect(sections.headlineInsights[0]?.title).toBe("Terminal Verification");
       expect(sections.headlineInsights[1]?.title).toBe("Interruption Load");
       expect(sections.headlineInsights[2]?.title).toBe(
         "Highest Friction Session",
@@ -653,10 +658,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 75,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 75,
+            verificationProxyScore: 75,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 75,
             incidentsPer100Turns: 5,
           },
         ],
@@ -676,10 +681,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 75,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 75,
+            verificationProxyScore: 75,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 75,
             incidentsPer100Turns: 5,
           },
           {
@@ -688,10 +693,10 @@ describe("summary-sections", () => {
             sessionCount: 500,
             turnCount: 5000,
             incidentCount: 25,
-            proofScore: 80,
-            flowScore: 85,
-            disciplineScore: 90,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80,
+            flowProxyScore: 85,
+            workflowProxyScore: 90,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 0.5,
           },
         ],
@@ -702,7 +707,7 @@ describe("summary-sections", () => {
       // Should use recent_500 since it's available
       expect(sections.recentMomentum).toHaveLength(3);
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
       expect(proofMomentum?.detail).toContain("Recent 500");
     });
@@ -716,10 +721,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 75,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 75,
+            verificationProxyScore: 75,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 75,
             incidentsPer100Turns: 5,
           },
           {
@@ -728,10 +733,10 @@ describe("summary-sections", () => {
             sessionCount: 500,
             turnCount: 5000,
             incidentCount: 25,
-            proofScore: 80,
-            flowScore: 85,
-            disciplineScore: 90,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80,
+            flowProxyScore: 85,
+            workflowProxyScore: 90,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 0.5,
           },
           {
@@ -740,10 +745,10 @@ describe("summary-sections", () => {
             sessionCount: 100,
             turnCount: 1000,
             incidentCount: 5,
-            proofScore: 85,
-            flowScore: 90,
-            disciplineScore: 95,
-            writeVerificationRate: 85,
+            verificationProxyScore: 85,
+            flowProxyScore: 90,
+            workflowProxyScore: 95,
+            writeSessionVerificationRate: 85,
             incidentsPer100Turns: 0.5,
           },
         ],
@@ -753,7 +758,7 @@ describe("summary-sections", () => {
 
       // Implementation prefers recent_500 over recent_100
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
       expect(proofMomentum?.detail).toContain("Recent 500");
     });
@@ -767,10 +772,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 75,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 75,
+            verificationProxyScore: 75,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 75,
             incidentsPer100Turns: 5,
           },
           {
@@ -779,10 +784,10 @@ describe("summary-sections", () => {
             sessionCount: 1000,
             turnCount: 10000,
             incidentCount: 50,
-            proofScore: 70,
-            flowScore: 75,
-            disciplineScore: 80,
-            writeVerificationRate: 70,
+            verificationProxyScore: 70,
+            flowProxyScore: 75,
+            workflowProxyScore: 80,
+            writeSessionVerificationRate: 70,
             incidentsPer100Turns: 0.5,
           },
         ],
@@ -793,7 +798,7 @@ describe("summary-sections", () => {
       // Should use recent_1000 as fallback
       expect(sections.recentMomentum).toHaveLength(3);
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
       expect(proofMomentum?.detail).toContain("Recent 1000");
     });
@@ -807,10 +812,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 70,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 70,
+            verificationProxyScore: 70,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 70,
             incidentsPer100Turns: 5,
           },
           {
@@ -819,10 +824,10 @@ describe("summary-sections", () => {
             sessionCount: 100,
             turnCount: 1000,
             incidentCount: 5,
-            proofScore: 80, // +10 delta
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80, // +10 delta
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 0.5,
           },
         ],
@@ -830,7 +835,7 @@ describe("summary-sections", () => {
 
       const sections = buildSummarySections(summary);
       const proofMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Proof Momentum",
+        (m) => m.title === "Verification Proxy Momentum",
       );
 
       expect(proofMomentum?.value).toBe("+10 pts");
@@ -845,10 +850,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 75,
-            flowScore: 70,
-            disciplineScore: 85,
-            writeVerificationRate: 75,
+            verificationProxyScore: 75,
+            flowProxyScore: 70,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 75,
             incidentsPer100Turns: 5,
           },
           {
@@ -857,10 +862,10 @@ describe("summary-sections", () => {
             sessionCount: 100,
             turnCount: 1000,
             incidentCount: 5,
-            proofScore: 75,
-            flowScore: 85, // +15 delta
-            disciplineScore: 85,
-            writeVerificationRate: 75,
+            verificationProxyScore: 75,
+            flowProxyScore: 85, // +15 delta
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 75,
             incidentsPer100Turns: 0.5,
           },
         ],
@@ -868,7 +873,7 @@ describe("summary-sections", () => {
 
       const sections = buildSummarySections(summary);
       const flowMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Flow Momentum",
+        (m) => m.title === "Flow Proxy Momentum",
       );
 
       expect(flowMomentum?.value).toBe("+15 pts");
@@ -883,10 +888,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 75,
-            flowScore: 80,
-            disciplineScore: 70,
-            writeVerificationRate: 75,
+            verificationProxyScore: 75,
+            flowProxyScore: 80,
+            workflowProxyScore: 70,
+            writeSessionVerificationRate: 75,
             incidentsPer100Turns: 5,
           },
           {
@@ -895,10 +900,10 @@ describe("summary-sections", () => {
             sessionCount: 100,
             turnCount: 1000,
             incidentCount: 5,
-            proofScore: 75,
-            flowScore: 80,
-            disciplineScore: 90, // +20 delta
-            writeVerificationRate: 75,
+            verificationProxyScore: 75,
+            flowProxyScore: 80,
+            workflowProxyScore: 90, // +20 delta
+            writeSessionVerificationRate: 75,
             incidentsPer100Turns: 0.5,
           },
         ],
@@ -906,7 +911,7 @@ describe("summary-sections", () => {
 
       const sections = buildSummarySections(summary);
       const disciplineMomentum = sections.recentMomentum.find(
-        (m) => m.title === "Discipline Momentum",
+        (m) => m.title === "Workflow Proxy Momentum",
       );
 
       expect(disciplineMomentum?.value).toBe("+20 pts");
@@ -921,10 +926,10 @@ describe("summary-sections", () => {
             sessionCount: 10,
             turnCount: 100,
             incidentCount: 5,
-            proofScore: 75,
-            flowScore: 80,
-            disciplineScore: 85,
-            writeVerificationRate: 75,
+            verificationProxyScore: 75,
+            flowProxyScore: 80,
+            workflowProxyScore: 85,
+            writeSessionVerificationRate: 75,
             incidentsPer100Turns: 5,
           },
           {
@@ -933,10 +938,10 @@ describe("summary-sections", () => {
             sessionCount: 100,
             turnCount: 1000,
             incidentCount: 5,
-            proofScore: 80,
-            flowScore: 85,
-            disciplineScore: 90,
-            writeVerificationRate: 80,
+            verificationProxyScore: 80,
+            flowProxyScore: 85,
+            workflowProxyScore: 90,
+            writeSessionVerificationRate: 80,
             incidentsPer100Turns: 0.5,
           },
         ],
@@ -945,9 +950,11 @@ describe("summary-sections", () => {
       const sections = buildSummarySections(summary);
 
       expect(sections.recentMomentum).toHaveLength(3);
-      expect(sections.recentMomentum[0]?.title).toBe("Proof Momentum");
-      expect(sections.recentMomentum[1]?.title).toBe("Flow Momentum");
-      expect(sections.recentMomentum[2]?.title).toBe("Discipline Momentum");
+      expect(sections.recentMomentum[0]?.title).toBe(
+        "Verification Proxy Momentum",
+      );
+      expect(sections.recentMomentum[1]?.title).toBe("Flow Proxy Momentum");
+      expect(sections.recentMomentum[2]?.title).toBe("Workflow Proxy Momentum");
     });
   });
 });

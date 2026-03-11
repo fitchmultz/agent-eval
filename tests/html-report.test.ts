@@ -8,6 +8,12 @@ import { describe, expect, it } from "vitest";
 import { renderHtmlReport } from "../src/html-report/index.js";
 import type { MetricsRecord, SummaryArtifact } from "../src/schema.js";
 
+const baseCharts = {
+  labelChartSvg: '<svg data-chart="labels"></svg>',
+  complianceChartSvg: '<svg data-chart="compliance"></svg>',
+  severityChartSvg: '<svg data-chart="severity"></svg>',
+};
+
 const baseMetrics: MetricsRecord = {
   evaluatorVersion: "0.1.0",
   schemaVersion: "1",
@@ -15,6 +21,7 @@ const baseMetrics: MetricsRecord = {
   sessionCount: 2,
   turnCount: 8,
   incidentCount: 2,
+  parseWarningCount: 0,
   labelCounts: {
     verification_request: 3,
     context_reinjection: 1,
@@ -35,10 +42,14 @@ const baseMetrics: MetricsRecord = {
       turnCount: 4,
       labeledTurnCount: 2,
       incidentCount: 1,
+      parseWarningCount: 0,
       writeCount: 1,
       verificationCount: 1,
       verificationPassedCount: 1,
       verificationFailedCount: 0,
+      postWriteVerificationAttempted: true,
+      postWriteVerificationPassed: true,
+      endedVerified: true,
       complianceScore: 100,
       complianceRules: [],
     },
@@ -62,6 +73,7 @@ const baseSummary: SummaryArtifact = {
   sessions: 2,
   turns: 8,
   incidents: 2,
+  parseWarningCount: 0,
   labels: [
     { label: "verification_request", count: 3 },
     { label: "context_reinjection", count: 1 },
@@ -89,22 +101,22 @@ const baseSummary: SummaryArtifact = {
   },
   delivery: {
     sessionsWithWrites: 1,
-    verifiedWriteSessions: 1,
-    writeVerificationRate: 100,
+    sessionsEndingVerified: 1,
+    writeSessionVerificationRate: 100,
   },
   topSessions: [],
-  victoryLaps: [],
+  verifiedDeliverySpotlights: [],
   topIncidents: [],
   opportunities: [],
-  bragCards: [],
+  highlightCards: [],
   scoreCards: [],
-  achievementBadges: [],
+  recognitions: [],
   comparativeSlices: [],
 };
 
 describe("renderHtmlReport", () => {
   it("renders a complete HTML document", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
     expect(html).toContain("<!doctype html>");
     expect(html).toContain('<html lang="en">');
@@ -114,14 +126,14 @@ describe("renderHtmlReport", () => {
   });
 
   it("includes the report title", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
-    expect(html).toContain("Agent Evaluator Report");
-    expect(html).toContain("<title>Agent Evaluator Report</title>");
+    expect(html).toContain("Transcript Analytics Report");
+    expect(html).toContain("<title>Transcript Analytics Report</title>");
   });
 
   it("includes inline CSS styles", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
     expect(html).toContain("<style>");
     expect(html).toContain("--bg:");
@@ -130,7 +142,7 @@ describe("renderHtmlReport", () => {
   });
 
   it("displays session and incident counts", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
     expect(html).toContain("Sessions");
     expect(html).toContain(">2<");
@@ -139,7 +151,7 @@ describe("renderHtmlReport", () => {
   });
 
   it("displays operational rates section", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
     expect(html).toContain("Operational Rates");
     expect(html).toContain("Incidents / 100 turns");
@@ -150,12 +162,12 @@ describe("renderHtmlReport", () => {
     expect(html).toContain("Praise / 100 turns");
   });
 
-  it("includes chart image references", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+  it("inlines chart SVG markup", () => {
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
-    expect(html).toContain('src="label-counts.svg"');
-    expect(html).toContain('src="severity-breakdown.svg"');
-    expect(html).toContain('src="compliance-summary.svg"');
+    expect(html).toContain('<svg data-chart="labels"></svg>');
+    expect(html).toContain('<svg data-chart="severity"></svg>');
+    expect(html).toContain('<svg data-chart="compliance"></svg>');
   });
 
   it("escapes HTML in summary metadata", () => {
@@ -163,7 +175,7 @@ describe("renderHtmlReport", () => {
       ...baseSummary,
       evaluatorVersion: "<script>alert(1)</script>",
     };
-    const html = renderHtmlReport(summaryWithHtml, baseMetrics);
+    const html = renderHtmlReport(summaryWithHtml, baseMetrics, baseCharts);
 
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
@@ -183,7 +195,7 @@ describe("renderHtmlReport", () => {
         },
       ],
     };
-    const html = renderHtmlReport(baseSummary, metricsWithHtml);
+    const html = renderHtmlReport(baseSummary, metricsWithHtml, baseCharts);
 
     // Check that the dangerous path is escaped in the inventory section
     expect(html).toContain("<code>&lt;img src=x onerror=alert(1)&gt;</code>");
@@ -191,37 +203,37 @@ describe("renderHtmlReport", () => {
   });
 
   it("shows empty state for badges when none exist", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
-    expect(html).toContain("Badges");
-    expect(html).toContain("No badges earned");
+    expect(html).not.toContain("Badges");
+    expect(html).not.toContain("No badges earned");
   });
 
   it("shows empty state for incidents when none exist", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
     expect(html).toContain("Top Incidents");
     expect(html).toContain("No labeled incidents were detected");
   });
 
   it("shows empty state for sessions when none exist", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
     expect(html).toContain("Sessions To Review First");
     expect(html).toContain("No session insights were available");
   });
 
   it("shows empty state for victory laps when none exist", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
-    expect(html).toContain("Victory Lap Sessions");
-    expect(html).toContain(
+    expect(html).not.toContain("Victory Lap Sessions");
+    expect(html).not.toContain(
       "No clean verified delivery sessions were available",
     );
   });
 
   it("shows empty state for opportunities when none exist", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
     expect(html).toContain("Deterministic Opportunities");
     expect(html).toContain(
@@ -230,31 +242,30 @@ describe("renderHtmlReport", () => {
   });
 
   it("shows empty state for momentum when not enough data", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
     expect(html).toContain("Recent Momentum");
     expect(html).toContain("Not enough sessions in this slice");
   });
 
   it("includes all major sections", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
-    expect(html).toContain("Show-Off Stats");
-    expect(html).toContain("Shareable Scoreboard");
+    expect(html).not.toContain("Show-Off Stats");
+    expect(html).toContain("Heuristic Scorecards");
     expect(html).toContain("Recent Momentum");
-    expect(html).toContain("Badges");
     expect(html).toContain("Comparative Slices");
     expect(html).toContain("Charts");
     expect(html).toContain("Sessions To Review First");
-    expect(html).toContain("Victory Lap Sessions");
     expect(html).toContain("Top Incidents");
     expect(html).toContain("Deterministic Opportunities");
     expect(html).toContain("Compliance Breakdown");
+    expect(html).toContain("Methodology And Limitations");
     expect(html).toContain("Inventory");
   });
 
   it("includes footer note", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics);
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
     expect(html).toContain("footer-note");
     expect(html).toContain("Incident evidence is redacted");
@@ -263,19 +274,18 @@ describe("renderHtmlReport", () => {
   it("renders badges when present", () => {
     const summaryWithBadges: SummaryArtifact = {
       ...baseSummary,
-      achievementBadges: ["Low-Drama Operator", "Clean Ship"],
+      recognitions: ["Low-Interruption Corpus", "Verified Delivery"],
     };
-    const html = renderHtmlReport(summaryWithBadges, baseMetrics);
+    const html = renderHtmlReport(summaryWithBadges, baseMetrics, baseCharts);
 
-    expect(html).toContain("Low-Drama Operator");
-    expect(html).toContain("Clean Ship");
-    expect(html).not.toContain("No badges earned");
+    expect(html).not.toContain("Low-Interruption Corpus");
+    expect(html).not.toContain("Verified Delivery");
   });
 
   it("renders brag cards when present", () => {
     const summaryWithBrag: SummaryArtifact = {
       ...baseSummary,
-      bragCards: [
+      highlightCards: [
         {
           title: "Test Brag",
           value: "100%",
@@ -284,12 +294,10 @@ describe("renderHtmlReport", () => {
         },
       ],
     };
-    const html = renderHtmlReport(summaryWithBrag, baseMetrics);
+    const html = renderHtmlReport(summaryWithBrag, baseMetrics, baseCharts);
 
-    expect(html).toContain("Test Brag");
-    expect(html).toContain("100%");
-    expect(html).toContain("Test detail");
-    expect(html).toContain("tone-good");
+    expect(html).not.toContain("Test Brag");
+    expect(html).not.toContain("Test detail");
   });
 
   it("renders score cards when present", () => {
@@ -297,16 +305,16 @@ describe("renderHtmlReport", () => {
       ...baseSummary,
       scoreCards: [
         {
-          title: "Proof Score",
+          title: "Verification Proxy Score",
           score: 95,
           detail: "Based on verification",
           tone: "good",
         },
       ],
     };
-    const html = renderHtmlReport(summaryWithScores, baseMetrics);
+    const html = renderHtmlReport(summaryWithScores, baseMetrics, baseCharts);
 
-    expect(html).toContain("Proof Score");
+    expect(html).toContain("Verification Proxy Score");
     expect(html).toContain(">95<");
     expect(html).toContain("/100");
   });
@@ -317,8 +325,8 @@ describe("renderHtmlReport", () => {
         ...baseSummary,
         delivery: {
           sessionsWithWrites: 0,
-          verifiedWriteSessions: 0,
-          writeVerificationRate: 0,
+          sessionsEndingVerified: 0,
+          writeSessionVerificationRate: 0,
         },
         compliance: baseSummary.compliance.map((rule) => ({
           ...rule,
@@ -328,13 +336,13 @@ describe("renderHtmlReport", () => {
         })),
         scoreCards: [
           {
-            title: "Proof Score",
+            title: "Verification Proxy Score",
             score: 0,
             detail: "placeholder",
             tone: "danger",
           },
           {
-            title: "Discipline Score",
+            title: "Workflow Proxy Score",
             score: 0,
             detail: "placeholder",
             tone: "danger",
@@ -351,9 +359,10 @@ describe("renderHtmlReport", () => {
           notApplicableCount: 1,
         })),
       },
+      baseCharts,
     );
 
-    expect(html).toContain("Write Verification");
+    expect(html).toContain("Terminal Verification");
     expect(html).toContain(">N/A<");
     expect(html).toContain("No write sessions were observed in this slice.");
     expect(html).toContain(
@@ -376,7 +385,11 @@ describe("renderHtmlReport", () => {
         },
       ],
     };
-    const html = renderHtmlReport(summaryWithIncidents, baseMetrics);
+    const html = renderHtmlReport(
+      summaryWithIncidents,
+      baseMetrics,
+      baseCharts,
+    );
 
     expect(html).toContain("Test incident");
     expect(html).toContain("Test evidence");
@@ -391,42 +404,47 @@ describe("renderHtmlReport", () => {
         {
           sessionId: "session-1",
           archetype: "verified_delivery",
-          archetypeLabel: "Clean Ship",
+          archetypeLabel: "Verified Delivery",
           frictionScore: 2,
           complianceScore: 100,
           incidentCount: 0,
           labeledTurnCount: 2,
           writeCount: 1,
           verificationPassedCount: 1,
+          endedVerified: true,
           dominantLabels: ["verification_request"],
           note: "Well executed session",
         },
       ],
     };
-    const html = renderHtmlReport(summaryWithSessions, baseMetrics);
+    const html = renderHtmlReport(summaryWithSessions, baseMetrics, baseCharts);
 
     expect(html).toContain("session-1");
-    expect(html).toContain("Clean Ship");
+    expect(html).toContain("Verified Delivery");
     expect(html).toContain("Well executed session");
     expect(html).toContain("verification_request");
     expect(html).not.toContain("verified_delivery");
   });
 
   it("filters inventory noise down to discovered items and missing required inputs", () => {
-    const html = renderHtmlReport(baseSummary, {
-      ...baseMetrics,
-      inventory: [
-        ...baseMetrics.inventory,
-        {
-          provider: "codex",
-          kind: "state_sqlite",
-          path: "~/.codex/state_5.sqlite",
-          discovered: false,
-          required: false,
-          optional: true,
-        },
-      ],
-    });
+    const html = renderHtmlReport(
+      baseSummary,
+      {
+        ...baseMetrics,
+        inventory: [
+          ...baseMetrics.inventory,
+          {
+            provider: "codex",
+            kind: "state_sqlite",
+            path: "~/.codex/state_5.sqlite",
+            discovered: false,
+            required: false,
+            optional: true,
+          },
+        ],
+      },
+      baseCharts,
+    );
 
     expect(html).toContain("session_jsonl");
     expect(html).not.toContain("state_5.sqlite");
@@ -435,27 +453,27 @@ describe("renderHtmlReport", () => {
   it("renders victory laps when present", () => {
     const summaryWithVictory: SummaryArtifact = {
       ...baseSummary,
-      victoryLaps: [
+      verifiedDeliverySpotlights: [
         {
           sessionId: "session-1",
           archetype: "verified_delivery",
-          archetypeLabel: "Clean Ship",
+          archetypeLabel: "Verified Delivery",
           frictionScore: 0,
           complianceScore: 100,
           incidentCount: 0,
           labeledTurnCount: 2,
           writeCount: 1,
           verificationPassedCount: 2,
+          endedVerified: true,
           dominantLabels: [],
           note: "Perfect session",
         },
       ],
     };
-    const html = renderHtmlReport(summaryWithVictory, baseMetrics);
+    const html = renderHtmlReport(summaryWithVictory, baseMetrics, baseCharts);
 
-    expect(html).toContain("victory-lap");
-    expect(html).toContain("Perfect session");
-    expect(html).toContain("2 verifications");
+    expect(html).not.toContain("Perfect session");
+    expect(html).not.toContain("2 verifications");
   });
 
   it("renders opportunities when present", () => {
@@ -468,7 +486,7 @@ describe("renderHtmlReport", () => {
         },
       ],
     };
-    const html = renderHtmlReport(summaryWithOpps, baseMetrics);
+    const html = renderHtmlReport(summaryWithOpps, baseMetrics, baseCharts);
 
     expect(html).toContain("Add more verification");
     expect(html).toContain("Verification improves confidence");
@@ -484,15 +502,15 @@ describe("renderHtmlReport", () => {
           sessionCount: 10,
           turnCount: 80,
           incidentCount: 5,
-          proofScore: 85,
-          flowScore: 90,
-          disciplineScore: 88,
-          writeVerificationRate: 100,
+          verificationProxyScore: 85,
+          flowProxyScore: 90,
+          workflowProxyScore: 88,
+          writeSessionVerificationRate: 100,
           incidentsPer100Turns: 5,
         },
       ],
     };
-    const html = renderHtmlReport(summaryWithSlices, baseMetrics);
+    const html = renderHtmlReport(summaryWithSlices, baseMetrics, baseCharts);
 
     expect(html).toContain("Selected Corpus");
     expect(html).toContain("compliance-table");
@@ -508,10 +526,10 @@ describe("renderHtmlReport", () => {
           sessionCount: 10,
           turnCount: 80,
           incidentCount: 5,
-          proofScore: 80,
-          flowScore: 80,
-          disciplineScore: 80,
-          writeVerificationRate: 100,
+          verificationProxyScore: 80,
+          flowProxyScore: 80,
+          workflowProxyScore: 80,
+          writeSessionVerificationRate: 100,
           incidentsPer100Turns: 5,
         },
         {
@@ -520,18 +538,18 @@ describe("renderHtmlReport", () => {
           sessionCount: 5,
           turnCount: 40,
           incidentCount: 2,
-          proofScore: 85,
-          flowScore: 82,
-          disciplineScore: 83,
-          writeVerificationRate: 100,
+          verificationProxyScore: 85,
+          flowProxyScore: 82,
+          workflowProxyScore: 83,
+          writeSessionVerificationRate: 100,
           incidentsPer100Turns: 3,
         },
       ],
     };
-    const html = renderHtmlReport(summaryWithMomentum, baseMetrics);
+    const html = renderHtmlReport(summaryWithMomentum, baseMetrics, baseCharts);
 
     expect(html).toContain("Recent Momentum");
-    expect(html).toContain("Proof Momentum");
+    expect(html).toContain("Verification Proxy Momentum");
     expect(html).not.toContain("Not enough sessions");
   });
 });

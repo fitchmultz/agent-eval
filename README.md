@@ -1,8 +1,8 @@
 # agent-eval
 
-`agent-eval` is a transcript-first evaluator for developer AI agents. It discovers local session artifacts, normalizes Codex and Claude Code transcripts into one shared model, applies deterministic labeling and compliance heuristics, and emits machine-readable artifacts plus shareable reports.
+`agent-eval` is a transcript-first analytics engine for developer AI agents. It discovers local session artifacts, normalizes Codex and Claude Code transcripts into one shared model, applies deterministic labeling and compliance heuristics, and emits machine-readable artifacts plus shareable reports.
 
-This repo is intentionally built for evaluation discipline rather than demo flash. The canonical outputs are JSON and JSONL. The markdown, HTML, and SVG layers are deterministic derivatives that make the results easier to share with engineers, managers, and hiring panels without turning the evaluator into an opaque black box.
+This repo is intentionally built for methodology discipline rather than demo flash. The canonical outputs are JSON and JSONL. The markdown, HTML, and SVG layers are deterministic derivatives that make the results easier to share with engineers, managers, and hiring panels without turning the analytics engine into an opaque black box.
 
 ## Why this project exists
 
@@ -10,10 +10,10 @@ Teams adopting coding agents need a repeatable way to inspect real usage pattern
 
 - Are sessions ending with verification or guesswork?
 - Where does friction show up repeatedly?
-- How much of the work is backed by explicit proof?
+- How much of the work is backed by passing verification signal?
 - Can results be shared publicly without dumping raw transcripts?
 
-`agent-eval` answers those questions with a local-first, transcript-first workflow that favors precision, reproducibility, and public-safe reporting.
+`agent-eval` answers those questions with a local-first, transcript-first workflow that favors precision, reproducibility, and public-facing redaction reporting.
 
 ## Supported sources
 
@@ -24,9 +24,9 @@ Optional enrichment stores such as history, SQLite, shell snapshots, and session
 
 ## Why this is relevant to Applied AI / Solutions Architect work
 
-- It shows eval design discipline: deterministic metrics, explicit tradeoffs, and reproducible reports.
+- It shows analytics design discipline: deterministic metrics, explicit tradeoffs, and reproducible reports.
 - It shows governance judgment: transcript previews are redacted and truncated by default, and generated artifacts stay out of git history.
-- It shows scalable architecture thinking: source-specific discovery and parsing feed a shared normalized evaluation pipeline.
+- It shows scalable architecture thinking: source-specific discovery and parsing feed a shared normalized analytics pipeline.
 - It shows communication range: the same run produces machine-readable artifacts for engineers and readable reports for broader stakeholders.
 
 ## Architecture
@@ -43,16 +43,16 @@ source home
 
 Key design choices:
 
-- Transcript-first: canonical evaluation starts from session JSONL, not optional side stores.
+- Transcript-first: canonical analytics starts from session JSONL, not optional side stores.
 - Source-aware adapters: Codex and Claude Code use separate discovery/parsing logic but converge on one normalized session model.
 - Deterministic scoring: labeling, clustering, compliance scoring, summaries, and presentation artifacts are all rule-based.
-- Public-safe defaults: reports use redacted, truncated previews rather than full transcript bodies.
+- Redacted-preview defaults: reports use redacted, truncated previews rather than full transcript bodies.
 
 Maintainer boundaries:
 
 - `src/discovery.ts`: provider-specific inventory and transcript discovery
 - `src/transcript/*`: provider-specific parsing into the shared normalized session model
-- `src/evaluator.ts`: single canonical evaluation pipeline
+- `src/evaluator.ts`: single canonical analytics pipeline
 - `src/insights.ts`, `src/report.ts`, `src/presentation.ts`: shared summary, markdown, and presentation outputs
 - `src/cli/*`: command wiring, option normalization, and stdout formatting
 
@@ -90,7 +90,7 @@ open artifacts/report.html
 
 ## Outputs
 
-- `parse` writes `artifacts/raw-turns.jsonl`
+- `parse` writes `artifacts/raw-turns.jsonl` and `artifacts/parse-metrics.json`
 - full `eval` and `report` runs write `artifacts/raw-turns.jsonl`, `artifacts/incidents.jsonl`, `artifacts/metrics.json`, `artifacts/summary.json`, `artifacts/report.md`, `artifacts/report.html`, `artifacts/label-counts.svg`, `artifacts/compliance-summary.svg`, and `artifacts/severity-breakdown.svg`
 - `eval` and `report` with `--summary-only` skip `raw-turns.jsonl` and `incidents.jsonl` but keep the deterministic summary/report outputs
 
@@ -133,7 +133,7 @@ Current limitations:
 
 ## Case study
 
-The portfolio-facing writeup lives in `docs/case-study.md` and explains the problem framing, architecture choices, public-safe design, and how this evaluator could support enterprise AI adoption workflows.
+The portfolio-facing writeup lives in `docs/case-study.md` and explains the problem framing, architecture choices, redacted-preview design, and how this transcript analytics engine could support enterprise AI adoption workflows.
 
 ## Local verification
 

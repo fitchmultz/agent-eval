@@ -101,15 +101,16 @@ export function buildSummaryInputsFromArtifacts(
  */
 export function aggregateDeliveryMetrics(
   sessionsWithWrites: MetricsRecord["sessions"],
-  verifiedWriteSessions: MetricsRecord["sessions"],
+  endedVerifiedWriteSessions: MetricsRecord["sessions"],
 ): SummaryArtifact["delivery"] {
   return {
     sessionsWithWrites: sessionsWithWrites.length,
-    verifiedWriteSessions: verifiedWriteSessions.length,
-    writeVerificationRate:
+    sessionsEndingVerified: endedVerifiedWriteSessions.length,
+    writeSessionVerificationRate:
       sessionsWithWrites.length > 0
         ? Math.round(
-            (verifiedWriteSessions.length / sessionsWithWrites.length) * 100,
+            (endedVerifiedWriteSessions.length / sessionsWithWrites.length) *
+              100,
           )
         : 0,
   };

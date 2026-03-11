@@ -45,6 +45,8 @@ export function createParserContext(path: string): ParserContext {
     turns: [],
     currentTurn: createTurn(0),
     nextTurnIndex: 0,
+    scoringEvents: [],
+    nextScoringSequenceIndex: 0,
     pendingToolCalls: new Map(),
     lineNumber: 0,
   };
@@ -120,6 +122,15 @@ async function doParseCodexTranscriptFile(
   options: ParseOptions = {},
 ): Promise<ParsedSession> {
   const context = createParserContext(path);
+  let parseWarningCount = 0;
+  const onParseError = (
+    line: string,
+    lineNumber: number,
+    error: Error,
+  ): void => {
+    parseWarningCount += 1;
+    options.onParseError?.(line, lineNumber, error);
+  };
   const reader = createTranscriptLineReader(path);
   const stream = getReaderStream(reader);
 
@@ -134,7 +145,10 @@ async function doParseCodexTranscriptFile(
       }
 
       context.lineNumber += 1;
-      const event = parseEventLine(line, context.lineNumber, path, options);
+      const event = parseEventLine(line, context.lineNumber, path, {
+        ...options,
+        onParseError,
+      });
 
       if (!event.payload) {
         continue;
@@ -148,7 +162,10 @@ async function doParseCodexTranscriptFile(
     (stream as { destroy?: () => void } | undefined)?.destroy?.();
   }
 
-  return buildParsedSession(context, path, "codex");
+  return {
+    ...buildParsedSession(context, path, "codex"),
+    parseWarningCount,
+  };
 }
 
 /**

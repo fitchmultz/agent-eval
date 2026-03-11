@@ -195,10 +195,10 @@ describe("CLI", () => {
 
     expect(exitCode).toBe(0);
     expect(stdoutSpy).toHaveBeenCalledWith(
-      expect.stringContaining("# Agent Evaluator Report"),
+      expect.stringContaining("# Transcript Analytics Report"),
     );
     expect(await readFile(join(outputDir, "report.md"), "utf8")).toContain(
-      "# Agent Evaluator Report",
+      "# Transcript Analytics Report",
     );
   });
 

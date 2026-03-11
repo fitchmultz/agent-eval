@@ -33,10 +33,26 @@ export interface EvaluationArtifacts {
  * Writes parse-only artifacts.
  */
 export async function writeParseArtifacts(
-  rawTurns: readonly RawTurnRecord[],
+  result: {
+    rawTurns: readonly RawTurnRecord[];
+    sessionCount: number;
+    parseWarningCount: number;
+  },
   outputDir: string,
 ): Promise<void> {
-  await writeJsonLinesFile(join(outputDir, "raw-turns.jsonl"), rawTurns);
+  await writeJsonLinesFile(join(outputDir, "raw-turns.jsonl"), result.rawTurns);
+  await writeTextFile(
+    join(outputDir, "parse-metrics.json"),
+    `${JSON.stringify(
+      {
+        sessionCount: result.sessionCount,
+        rawTurnCount: result.rawTurns.length,
+        parseWarningCount: result.parseWarningCount,
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 /**

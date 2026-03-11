@@ -43,8 +43,10 @@ describe("evaluateArtifacts integration", () => {
     expect(result.rawTurns).toHaveLength(1);
     expect(result.rawTurns?.[0]?.sessionId).toBe("codex-session-1");
     expect(result.rawTurns?.[0]?.sourceRefs[0]?.provider).toBe("codex");
-    expect(result.report).toContain("# Agent Evaluator Report");
-    expect(result.presentation.reportHtml).toContain("Agent Evaluator Report");
+    expect(result.report).toContain("# Transcript Analytics Report");
+    expect(result.presentation.reportHtml).toContain(
+      "Transcript Analytics Report",
+    );
   });
 
   it("evaluates a real Claude transcript home through the shared summary pipeline", async () => {
@@ -63,7 +65,9 @@ describe("evaluateArtifacts integration", () => {
     expect(result.rawTurns).toBeUndefined();
     expect(result.incidents).toBeUndefined();
     expect(result.report).toContain("Sources: `claude`");
-    expect(result.presentation.reportHtml).toContain("Agent Evaluator Report");
+    expect(result.presentation.reportHtml).toContain(
+      "Transcript Analytics Report",
+    );
   });
 
   it("parses a real transcript home without emitting evaluation artifacts", async () => {

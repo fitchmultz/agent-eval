@@ -23,6 +23,7 @@ function createTestMetrics(overrides?: Partial<MetricsRecord>): MetricsRecord {
     sessionCount: 2,
     turnCount: 10,
     incidentCount: 1,
+    parseWarningCount: 0,
     labelCounts: {
       verification_request: 1,
       praise: 2,
@@ -71,10 +72,14 @@ function createTestMetrics(overrides?: Partial<MetricsRecord>): MetricsRecord {
         turnCount: 5,
         labeledTurnCount: 1,
         incidentCount: 1,
+        parseWarningCount: 0,
         writeCount: 2,
         verificationCount: 1,
         verificationPassedCount: 1,
         verificationFailedCount: 0,
+        postWriteVerificationAttempted: false,
+        postWriteVerificationPassed: false,
+        endedVerified: false,
         complianceScore: 80,
         complianceRules: [
           {
@@ -110,10 +115,14 @@ function createTestMetrics(overrides?: Partial<MetricsRecord>): MetricsRecord {
         turnCount: 5,
         labeledTurnCount: 0,
         incidentCount: 0,
+        parseWarningCount: 0,
         writeCount: 1,
         verificationCount: 1,
         verificationPassedCount: 1,
         verificationFailedCount: 0,
+        postWriteVerificationAttempted: false,
+        postWriteVerificationPassed: false,
+        endedVerified: false,
         complianceScore: 100,
         complianceRules: [
           {
@@ -193,6 +202,7 @@ function createTestRawTurns(): RawTurnRecord[] {
       labels: [
         {
           label: "verification_request",
+          family: "cue",
           severity: "low",
           confidence: "high",
           rationale: "User asked for verification",
@@ -217,6 +227,7 @@ function createTestIncidents(): IncidentRecord[] {
       labels: [
         {
           label: "verification_request",
+          family: "cue",
           severity: "low",
           confidence: "high",
           rationale: "User asked for verification",
@@ -243,6 +254,7 @@ function createEmptyMetrics(): MetricsRecord {
     sessionCount: 0,
     turnCount: 0,
     incidentCount: 0,
+    parseWarningCount: 0,
     labelCounts: {},
     complianceSummary: [
       {
@@ -294,20 +306,18 @@ describe("renderReport", () => {
 
     const report = renderReport(metrics, incidents, rawTurns);
 
-    expect(report).toContain("# Agent Evaluator Report");
+    expect(report).toContain("# Transcript Analytics Report");
     expect(report).toContain("## Headline Insights");
-    expect(report).toContain("## Show-Off Stats");
-    expect(report).toContain("## Shareable Scoreboard");
+    expect(report).toContain("## Heuristic Scorecards");
     expect(report).toContain("## Recent Momentum");
-    expect(report).toContain("## Badges");
     expect(report).toContain("## Operational Rates");
     expect(report).toContain("## Comparative Slices");
     expect(report).toContain("## Label Counts");
     expect(report).toContain("## Sessions To Review First");
-    expect(report).toContain("## Victory Lap Sessions");
     expect(report).toContain("## Deterministic Opportunities");
     expect(report).toContain("## Compliance Summary");
     expect(report).toContain("## Top Incidents");
+    expect(report).toContain("## Methodology And Limitations");
     expect(report).toContain("## Inventory");
   });
 
@@ -329,17 +339,16 @@ describe("renderReport", () => {
     const metrics = createEmptyMetrics();
     const report = renderReport(metrics, [], []);
 
-    expect(report).toContain("# Agent Evaluator Report");
+    expect(report).toContain("# Transcript Analytics Report");
     expect(report).toContain("No labels were detected");
     expect(report).toContain("- No session insights were available.");
-    expect(report).toContain(
-      "- No clean verified delivery sessions were available in this slice.",
-    );
     expect(report).toContain(
       "- No deterministic improvement opportunities were identified.",
     );
     expect(report).toContain("- No labeled incidents detected.");
-    expect(report).toContain("Selected Corpus: sessions 0, proof N/A");
+    expect(report).toContain(
+      "Selected Corpus: sessions 0, verification proxy N/A",
+    );
   });
 
   it("includes label counts correctly", () => {
@@ -409,7 +418,7 @@ describe("renderReport", () => {
     const report = renderReport(metrics, incidents, rawTurns);
 
     expect(report).toContain(
-      "_Incident evidence is redacted and truncated for compact, public-safe reporting._",
+      "_Incident evidence is redacted and truncated for compact reporting. Preview sanitization reduces common sensitive data exposure but is not a guarantee of full anonymization._",
     );
   });
 });
@@ -445,7 +454,7 @@ describe("renderSummaryReport", () => {
 
     const report = renderSummaryReport(metrics, summary);
 
-    expect(report).toContain("# Agent Evaluator Report");
+    expect(report).toContain("# Transcript Analytics Report");
     expect(report).toContain("## Headline Insights");
     expect(report).toContain("test incident");
   });
@@ -470,7 +479,7 @@ describe("renderSummaryReport", () => {
 
     const report = renderSummaryReport(metrics, summary);
 
-    expect(report).toContain("Proof Score:");
+    expect(report).toContain("Verification Proxy Score:");
     expect(report).toContain("/100");
   });
 
@@ -485,8 +494,8 @@ describe("renderSummaryReport", () => {
 
     const report = renderSummaryReport(metrics, summary);
 
-    expect(report).toContain("Proof Score: N/A");
-    expect(report).toContain("Discipline Score: N/A");
+    expect(report).toContain("Verification Proxy Score: N/A");
+    expect(report).toContain("Workflow Proxy Score: N/A");
   });
 
   it("renders brag cards", () => {
@@ -509,7 +518,7 @@ describe("renderSummaryReport", () => {
 
     const report = renderSummaryReport(metrics, summary);
 
-    expect(report).toContain("## Show-Off Stats");
+    expect(report).not.toContain("## Show-Off Stats");
   });
 
   it("handles sessions to review", () => {
@@ -573,9 +582,6 @@ describe("renderSummaryReport", () => {
 
     const report = renderSummaryReport(metrics, summary);
 
-    expect(report).toContain("## Badges");
-    // Empty data can still generate some default badges like "Low-Drama Operator"
-    // The important thing is the section exists
-    expect(report).toMatch(/## Badges[\s\S]+## Operational Rates/);
+    expect(report).not.toContain("## Badges");
   });
 });

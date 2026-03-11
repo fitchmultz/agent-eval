@@ -61,19 +61,19 @@ function buildHeadlineInsights(
 
   return [
     {
-      title: "Write Verification",
+      title: "Terminal Verification",
       value:
         summary.delivery.sessionsWithWrites > 0
-          ? `${summary.delivery.verifiedWriteSessions}/${summary.delivery.sessionsWithWrites}`
+          ? `${summary.delivery.sessionsEndingVerified}/${summary.delivery.sessionsWithWrites}`
           : "N/A",
       detail:
         summary.delivery.sessionsWithWrites > 0
-          ? `${summary.delivery.writeVerificationRate}% of write sessions ended with a passing verification signal.`
+          ? `${summary.delivery.writeSessionVerificationRate}% of write sessions ended with a passing verification signal.`
           : "No write sessions were observed.",
       tone:
         summary.delivery.sessionsWithWrites === 0
           ? "neutral"
-          : summary.delivery.verifiedWriteSessions ===
+          : summary.delivery.sessionsEndingVerified ===
               summary.delivery.sessionsWithWrites
             ? "good"
             : "warn",
@@ -119,28 +119,30 @@ function buildRecentMomentum(
     return [];
   }
 
-  const proofDelta = recent.proofScore - corpus.proofScore;
-  const flowDelta = recent.flowScore - corpus.flowScore;
-  const disciplineDelta = recent.disciplineScore - corpus.disciplineScore;
+  const verificationProxyDelta =
+    recent.verificationProxyScore - corpus.verificationProxyScore;
+  const flowProxyDelta = recent.flowProxyScore - corpus.flowProxyScore;
+  const workflowProxyDelta =
+    recent.workflowProxyScore - corpus.workflowProxyScore;
 
   return [
     {
-      title: "Proof Momentum",
-      value: `${formatSignedDelta(proofDelta)} pts`,
-      detail: `${recent.label} vs selected corpus on proof-backed delivery.`,
-      tone: toneForDelta(proofDelta),
+      title: "Verification Proxy Momentum",
+      value: `${formatSignedDelta(verificationProxyDelta)} pts`,
+      detail: `${recent.label} vs selected corpus on terminal verification outcomes.`,
+      tone: toneForDelta(verificationProxyDelta),
     },
     {
-      title: "Flow Momentum",
-      value: `${formatSignedDelta(flowDelta)} pts`,
+      title: "Flow Proxy Momentum",
+      value: `${formatSignedDelta(flowProxyDelta)} pts`,
       detail: `${recent.label} vs selected corpus on calmer sessions.`,
-      tone: toneForDelta(flowDelta),
+      tone: toneForDelta(flowProxyDelta),
     },
     {
-      title: "Discipline Momentum",
-      value: `${formatSignedDelta(disciplineDelta)} pts`,
+      title: "Workflow Proxy Momentum",
+      value: `${formatSignedDelta(workflowProxyDelta)} pts`,
       detail: `${recent.label} vs selected corpus on operating-rule compliance.`,
-      tone: toneForDelta(disciplineDelta),
+      tone: toneForDelta(workflowProxyDelta),
     },
   ];
 }

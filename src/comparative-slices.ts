@@ -11,7 +11,7 @@ import {
 import type { LabelName, MetricsRecord, SummaryArtifact } from "./schema.js";
 import { labelTaxonomy } from "./schema.js";
 import {
-  filterVerifiedWriteSessions,
+  filterEndedVerifiedWriteSessions,
   filterWriteSessions,
 } from "./session-filters.js";
 import {
@@ -35,12 +35,14 @@ function applicablePassRate(
 
 export function buildScoreSnapshot(metrics: MetricsRecord): ScoreSnapshot {
   const sessionsWithWrites = filterWriteSessions(metrics.sessions);
-  const verifiedWriteSessions = filterVerifiedWriteSessions(metrics.sessions);
-  const writeVerificationRate = safeRate(
-    verifiedWriteSessions.length,
+  const endedVerifiedWriteSessions = filterEndedVerifiedWriteSessions(
+    metrics.sessions,
+  );
+  const writeSessionVerificationRate = safeRate(
+    endedVerifiedWriteSessions.length,
     sessionsWithWrites.length,
   );
-  const proofScore = Math.round(writeVerificationRate);
+  const verificationProxyScore = Math.round(writeSessionVerificationRate);
   const flowPenalty =
     safeRate(countLabel(metrics.labelCounts, "interrupt"), metrics.turnCount) *
       FLOW_PENALTY_MULTIPLIERS.INTERRUPT +
@@ -54,8 +56,8 @@ export function buildScoreSnapshot(metrics: MetricsRecord): ScoreSnapshot {
       metrics.turnCount,
     ) *
       FLOW_PENALTY_MULTIPLIERS.CONTEXT_DRIFT;
-  const flowScore = Math.max(0, Math.round(100 - flowPenalty));
-  const disciplineScore = Math.round(
+  const flowProxyScore = Math.max(0, Math.round(100 - flowPenalty));
+  const workflowProxyScore = Math.round(
     (applicablePassRate(metrics, "scope_confirmed_before_major_write") +
       applicablePassRate(metrics, "cwd_or_repo_echoed_before_write") +
       applicablePassRate(metrics, "short_plan_before_large_change") +
@@ -64,10 +66,10 @@ export function buildScoreSnapshot(metrics: MetricsRecord): ScoreSnapshot {
   );
 
   return {
-    proofScore,
-    flowScore,
-    disciplineScore,
-    writeVerificationRate,
+    verificationProxyScore,
+    flowProxyScore,
+    workflowProxyScore,
+    writeSessionVerificationRate,
     incidentsPer100Turns: safeRate(metrics.incidentCount, metrics.turnCount),
   };
 }
@@ -114,6 +116,10 @@ function createSubsetMetrics(
     sessionCount: sessions.length,
     turnCount,
     incidentCount,
+    parseWarningCount: sessions.reduce(
+      (total, session) => total + session.parseWarningCount,
+      0,
+    ),
     labelCounts: aggregateLabelCounts(sessions, sessionLabelCounts),
     complianceSummary: aggregateComplianceSummary(sessions),
     sessions: [...sessions],
@@ -135,10 +141,10 @@ export function buildComparativeSlices(
     sessionCount: metrics.sessionCount,
     turnCount: metrics.turnCount,
     incidentCount: metrics.incidentCount,
-    proofScore: selectedSnapshot.proofScore,
-    flowScore: selectedSnapshot.flowScore,
-    disciplineScore: selectedSnapshot.disciplineScore,
-    writeVerificationRate: selectedSnapshot.writeVerificationRate,
+    verificationProxyScore: selectedSnapshot.verificationProxyScore,
+    flowProxyScore: selectedSnapshot.flowProxyScore,
+    workflowProxyScore: selectedSnapshot.workflowProxyScore,
+    writeSessionVerificationRate: selectedSnapshot.writeSessionVerificationRate,
     incidentsPer100Turns: selectedSnapshot.incidentsPer100Turns,
   });
 
@@ -161,10 +167,10 @@ export function buildComparativeSlices(
       sessionCount: subsetMetrics.sessionCount,
       turnCount: subsetMetrics.turnCount,
       incidentCount: subsetMetrics.incidentCount,
-      proofScore: snapshot.proofScore,
-      flowScore: snapshot.flowScore,
-      disciplineScore: snapshot.disciplineScore,
-      writeVerificationRate: snapshot.writeVerificationRate,
+      verificationProxyScore: snapshot.verificationProxyScore,
+      flowProxyScore: snapshot.flowProxyScore,
+      workflowProxyScore: snapshot.workflowProxyScore,
+      writeSessionVerificationRate: snapshot.writeSessionVerificationRate,
       incidentsPer100Turns: snapshot.incidentsPer100Turns,
     });
   }

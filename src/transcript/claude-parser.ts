@@ -8,16 +8,22 @@
 
 import { normalizeError, TranscriptParseError } from "../errors.js";
 import type { SourceProvider, SourceRef } from "../schema.js";
+import { extractCommandTextFromArgumentsText } from "../tool-command-text.js";
 import { throwIfAborted } from "../utils/abort.js";
 import { createSourceRef } from "./event-router.js";
 import { createTranscriptLineReader, getReaderStream } from "./file-reader.js";
-import { createTurn, hasTurnContent } from "./session-builder.js";
+import {
+  appendScoringEvent,
+  createTurn,
+  hasTurnContent,
+} from "./session-builder.js";
 import { asRecord, asString, getValue, isRecord } from "./type-guards.js";
 import type {
   ParsedSession,
   ParsedToolCall,
   ParsedTurn,
   ParseOptions,
+  ScoringEvent,
 } from "./types.js";
 
 interface ClaudeEventRecord {
@@ -39,6 +45,8 @@ interface ClaudeParseState {
   turns: ParsedTurn[];
   currentTurn: ParsedTurn;
   nextTurnIndex: number;
+  scoringEvents: ScoringEvent[];
+  nextScoringSequenceIndex: number;
   pendingToolCalls: Map<string, ParsedToolCall>;
 }
 
@@ -53,6 +61,8 @@ function createInitialState(path: string): ClaudeParseState {
     turns: [],
     currentTurn: createTurn(0),
     nextTurnIndex: 0,
+    scoringEvents: [],
+    nextScoringSequenceIndex: 0,
     pendingToolCalls: new Map(),
   };
 }
@@ -285,6 +295,12 @@ function appendAssistantActivity(
 
   for (const message of parts.assistantMessages) {
     appendMessageText(state.currentTurn.assistantMessages, message);
+    appendScoringEvent(state, {
+      kind: "assistant_message",
+      text: message,
+      timestamp: record.timestamp ?? state.currentTurn.startedAt,
+      cwd: record.cwd ?? state.currentTurn.cwd,
+    });
   }
 
   for (const toolUse of parts.toolUses) {
@@ -299,6 +315,16 @@ function appendAssistantActivity(
       status: "unknown",
       timestamp: state.currentTurn.startedAt,
     };
+    parsedToolCall.scoringEventIndex = appendScoringEvent(state, {
+      kind: "tool_call",
+      toolName: parsedToolCall.toolName,
+      commandText: extractCommandTextFromArgumentsText(
+        parsedToolCall.argumentsText,
+      ),
+      status: parsedToolCall.status,
+      timestamp: parsedToolCall.timestamp,
+      cwd: record.cwd ?? state.currentTurn.cwd,
+    });
     state.currentTurn.toolCalls.push(parsedToolCall);
     state.pendingToolCalls.set(toolUseId, parsedToolCall);
   }
@@ -329,6 +355,18 @@ function appendToolResults(
       toolResult.toolUseId,
       toolResult.value,
     );
+    const toolCall = toolResult.toolUseId
+      ? state.pendingToolCalls.get(toolResult.toolUseId)
+      : undefined;
+    if (toolCall && typeof toolCall.scoringEventIndex === "number") {
+      const scoringEvent = state.scoringEvents[toolCall.scoringEventIndex];
+      if (scoringEvent) {
+        state.scoringEvents[toolCall.scoringEventIndex] = {
+          ...scoringEvent,
+          status: toolCall.status,
+        };
+      }
+    }
   }
 }
 
@@ -365,6 +403,12 @@ function applyClaudeRecord(
   setTurnMetadata(state.currentTurn, record, sourceRef);
   for (const messageText of parts.userMessages) {
     appendMessageText(state.currentTurn.userMessages, messageText);
+    appendScoringEvent(state, {
+      kind: "user_message",
+      text: messageText,
+      timestamp: record.timestamp ?? state.currentTurn.startedAt,
+      cwd: record.cwd ?? state.currentTurn.cwd,
+    });
   }
 }
 
@@ -379,6 +423,15 @@ export async function parseClaudeTranscriptFile(
   const state = createInitialState(path);
   let parentSessionId: string | undefined;
   let lineNumber = 0;
+  let parseWarningCount = 0;
+  const onParseError = (
+    line: string,
+    warningLineNumber: number,
+    error: Error,
+  ): void => {
+    parseWarningCount += 1;
+    options.onParseError?.(line, warningLineNumber, error);
+  };
 
   try {
     for await (const rawLine of reader) {
@@ -390,7 +443,10 @@ export async function parseClaudeTranscriptFile(
       }
 
       lineNumber += 1;
-      const record = parseClaudeEventLine(line, lineNumber, path, options);
+      const record = parseClaudeEventLine(line, lineNumber, path, {
+        ...options,
+        onParseError,
+      });
       if (!record) {
         continue;
       }
@@ -425,6 +481,8 @@ export async function parseClaudeTranscriptFile(
     provider,
     path,
     turns: state.turns,
+    scoringEvents: state.scoringEvents,
+    parseWarningCount,
   };
 
   if (parentSessionId) {

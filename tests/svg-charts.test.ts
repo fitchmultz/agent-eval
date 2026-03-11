@@ -19,6 +19,7 @@ const baseSummary: SummaryArtifact = {
   sessions: 2,
   turns: 8,
   incidents: 2,
+  parseWarningCount: 0,
   labels: [
     { label: "verification_request", count: 3 },
     { label: "context_reinjection", count: 1 },
@@ -53,16 +54,16 @@ const baseSummary: SummaryArtifact = {
   },
   delivery: {
     sessionsWithWrites: 1,
-    verifiedWriteSessions: 1,
-    writeVerificationRate: 100,
+    sessionsEndingVerified: 1,
+    writeSessionVerificationRate: 100,
   },
   topSessions: [],
-  victoryLaps: [],
+  verifiedDeliverySpotlights: [],
   topIncidents: [],
   opportunities: [],
-  bragCards: [],
+  highlightCards: [],
   scoreCards: [],
-  achievementBadges: [],
+  recognitions: [],
   comparativeSlices: [],
 };
 

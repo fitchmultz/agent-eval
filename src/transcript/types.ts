@@ -14,6 +14,19 @@ import type {
 // Re-export for convenience
 export type SourceRef = SchemaSourceRef;
 
+export interface ScoringEvent {
+  sessionId: string;
+  turnIndex: number;
+  sequenceIndex: number;
+  timestamp?: string | undefined;
+  cwd?: string | undefined;
+  kind: "user_message" | "assistant_message" | "tool_call";
+  text?: string | undefined;
+  toolName?: string | undefined;
+  commandText?: string | undefined;
+  status?: "completed" | "errored" | "unknown" | undefined;
+}
+
 export interface ParsedToolCall {
   callId: string;
   toolName: string;
@@ -22,6 +35,7 @@ export interface ParsedToolCall {
   outputText?: string | undefined;
   status: "completed" | "errored" | "unknown";
   timestamp?: string | undefined;
+  scoringEventIndex?: number | undefined;
 }
 
 export interface ParsedTurn {
@@ -43,6 +57,8 @@ export interface ParsedSession {
   startedAt?: string;
   cwd?: string;
   turns: ParsedTurn[];
+  scoringEvents?: ScoringEvent[] | undefined;
+  parseWarningCount?: number | undefined;
 }
 
 export interface JsonlEventRecord {
@@ -79,6 +95,8 @@ export interface ParserContext {
   turns: ParsedTurn[];
   currentTurn: ParsedTurn;
   nextTurnIndex: number;
+  scoringEvents: ScoringEvent[];
+  nextScoringSequenceIndex: number;
   pendingToolCalls: Map<string, ParsedToolCall>;
   lineNumber: number;
 }

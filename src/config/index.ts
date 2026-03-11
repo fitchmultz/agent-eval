@@ -8,7 +8,7 @@
  *   - Access: const config = getConfig();
  *   - Update: setConfig({ concurrency: { full: 8 } });
  * Invariants:
- *   - Configuration is immutable after getConfig() returns
+ *   - Callers should treat returned configuration snapshots as immutable
  *   - All numeric values are positive integers
  *   - initializeConfig() must be called before accessing env/file-based overrides
  */
@@ -80,6 +80,11 @@ export interface EvaluatorConfig {
     /** Threshold above which friction score is considered significant */
     frictionThreshold: number;
   };
+  /** Report rendering preferences */
+  reporting: {
+    /** Output skin for report rendering */
+    skin: "operator" | "showcase";
+  };
 }
 
 /**
@@ -106,16 +111,19 @@ const DEFAULT_CONFIG: EvaluatorConfig = {
     labelWeights: { ...LABEL_WEIGHTS },
     frictionThreshold: SCORING.FRICTION_THRESHOLD,
   },
+  reporting: {
+    skin: "operator",
+  },
 };
 
 /** Current configuration, starts with defaults */
-let currentConfig: EvaluatorConfig = { ...DEFAULT_CONFIG };
+let currentConfig: EvaluatorConfig = structuredClone(DEFAULT_CONFIG);
 /**
  * Gets the current configuration.
  * @returns The current EvaluatorConfig
  */
 export function getConfig(): EvaluatorConfig {
-  return currentConfig;
+  return structuredClone(currentConfig);
 }
 
 /**
@@ -132,6 +140,7 @@ export function setConfig(
       labelWeights: Partial<EvaluatorConfig["scoring"]["labelWeights"]>;
       frictionThreshold: number;
     }>;
+    reporting: Partial<EvaluatorConfig["reporting"]>;
   }>,
 ): void {
   currentConfig = {
@@ -148,6 +157,7 @@ export function setConfig(
         ...config.scoring?.labelWeights,
       },
     },
+    reporting: { ...currentConfig.reporting, ...config.reporting },
   };
 }
 
@@ -156,7 +166,7 @@ export function setConfig(
  * Useful for testing.
  */
 export function resetConfig(): void {
-  currentConfig = { ...DEFAULT_CONFIG };
+  currentConfig = structuredClone(DEFAULT_CONFIG);
 }
 
 /**
@@ -208,7 +218,8 @@ export async function initializeConfig(
   } = options;
 
   // Start with defaults
-  let mergedConfig: DeepPartial<EvaluatorConfig> = { ...DEFAULT_CONFIG };
+  let mergedConfig: DeepPartial<EvaluatorConfig> =
+    structuredClone(DEFAULT_CONFIG);
 
   // Load from file if enabled
   if (loadFile) {

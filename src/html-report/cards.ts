@@ -1,7 +1,7 @@
 /**
  * Purpose: Card rendering components for HTML reports.
  * Entrypoint: Used by render.ts for all card-based sections.
- * Notes: Handles summary cards, brag cards, score cards, momentum, incidents, sessions.
+ * Notes: Handles summary cards, highlight cards, score cards, momentum, incidents, sessions.
  */
 
 import type { MetricsRecord, SummaryArtifact } from "../schema.js";
@@ -33,7 +33,7 @@ function formatScoreCardDisplay(
   card: SummaryArtifact["scoreCards"][number],
 ): { score: number | string; detail: string; tone: typeof card.tone } {
   if (
-    card.title === "Proof Score" &&
+    card.title === "Verification Proxy Score" &&
     summary.delivery.sessionsWithWrites === 0
   ) {
     return {
@@ -43,7 +43,10 @@ function formatScoreCardDisplay(
     };
   }
 
-  if (card.title === "Discipline Score" && !hasApplicableDiscipline(summary)) {
+  if (
+    card.title === "Workflow Proxy Score" &&
+    !hasApplicableDiscipline(summary)
+  ) {
     return {
       score: "N/A",
       detail: "No write-related compliance rules were exercised in this slice.",
@@ -97,14 +100,14 @@ export function renderSummaryCards(summary: SummaryArtifact): string {
 }
 
 /**
- * Renders the brag cards section.
+ * Renders the highlight cards section.
  */
-export function renderBragCards(summary: SummaryArtifact): string {
-  if (summary.bragCards.length === 0) {
-    return createEmptyState("No brag cards available for this slice.");
+export function renderHighlightCards(summary: SummaryArtifact): string {
+  if (summary.highlightCards.length === 0) {
+    return createEmptyState("No highlight cards available for this slice.");
   }
 
-  return summary.bragCards
+  return summary.highlightCards
     .map((card) =>
       createMetricCard(
         card.title,
@@ -163,15 +166,17 @@ export function renderMomentumCards(summary: SummaryArtifact): string {
 }
 
 /**
- * Renders the achievement badges section.
+ * Renders the recognitions section.
  */
-export function renderBadges(summary: SummaryArtifact): string {
-  if (summary.achievementBadges.length === 0) {
-    return createEmptyState("No badges earned for this slice yet.");
+export function renderRecognitions(summary: SummaryArtifact): string {
+  if (summary.recognitions.length === 0) {
+    return createEmptyState("No recognitions earned for this slice yet.");
   }
 
-  return summary.achievementBadges
-    .map((badge) => `<span class="badge">${escapeHtml(badge)}</span>`)
+  return summary.recognitions
+    .map(
+      (recognition) => `<span class="badge">${escapeHtml(recognition)}</span>`,
+    )
     .join("");
 }
 
@@ -226,19 +231,21 @@ export function renderSessionCards(summary: SummaryArtifact): string {
 }
 
 /**
- * Renders the victory lap session cards section.
+ * Renders the verified delivery spotlight cards section.
  */
-export function renderVictoryLapCards(summary: SummaryArtifact): string {
-  if (summary.victoryLaps.length === 0) {
+export function renderVerifiedDeliverySpotlightCards(
+  summary: SummaryArtifact,
+): string {
+  if (summary.verifiedDeliverySpotlights.length === 0) {
     return createEmptyState(
       "No clean verified delivery sessions were available in this slice.",
     );
   }
 
-  return summary.victoryLaps
+  return summary.verifiedDeliverySpotlights
     .map(
       (session) => `
-      <article class="session-card victory-lap">
+      <article class="session-card verified-delivery-spotlight">
         <div class="incident-meta">
           <span class="pill">${escapeHtml(session.archetypeLabel)}</span>
           <span class="pill">score ${session.complianceScore}</span>

@@ -1,4 +1,6 @@
 .scratchpad.md
+.DS_Store
+node_modules/
 artifacts/
 coverage/
 dist/

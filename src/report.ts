@@ -1,11 +1,12 @@
 /**
- * Purpose: Converts evaluator metrics and summary data into a concise source-neutral markdown report suitable for public sharing.
- * Responsibilities: Build deterministic report sections from metrics and summary artifacts.
+ * Purpose: Converts evaluator metrics and summary data into a concise markdown report for operators or showcase audiences.
+ * Responsibilities: Build deterministic report sections from metrics and summary artifacts without recomputing evaluator logic.
  * Scope: Used by the `report` and `eval` commands for all supported sources.
  * Usage: Call `renderSummaryReport()` with a summary artifact, or `renderReport()` as a convenience wrapper.
- * Invariants/Assumptions: Incident evidence stays redacted and truncated for public-safe reporting.
+ * Invariants/Assumptions: Incident evidence stays redacted and truncated, and score labels are presented as heuristic proxies rather than correctness claims.
  */
 
+import { getConfig } from "./config/index.js";
 import {
   buildSummaryArtifact,
   buildSummaryInputsFromArtifacts,
@@ -22,15 +23,11 @@ function renderLines<T>(
   items: readonly T[],
   emptyMessage: string,
   renderItem: (item: T) => string,
-): string {
-  if (items.length === 0) {
-    return emptyMessage;
-  }
-
-  return items.map(renderItem).join("\n");
+): string[] {
+  return items.length > 0 ? items.map(renderItem) : [emptyMessage];
 }
 
-function renderLabelLines(summary: SummaryArtifact): string {
+function renderLabelLines(summary: SummaryArtifact): string[] {
   return renderLines(
     summary.labels,
     "- No labels were detected.",
@@ -38,7 +35,7 @@ function renderLabelLines(summary: SummaryArtifact): string {
   );
 }
 
-function renderRateLines(summary: SummaryArtifact): string {
+function renderRateLines(summary: SummaryArtifact): string[] {
   return [
     `- Incidents / 100 turns: ${summary.rates.incidentsPer100Turns}`,
     `- Writes / 100 turns: ${summary.rates.writesPer100Turns}`,
@@ -46,33 +43,22 @@ function renderRateLines(summary: SummaryArtifact): string {
     `- Interruptions / 100 turns: ${summary.rates.interruptionsPer100Turns}`,
     `- Reinjections / 100 turns: ${summary.rates.reinjectionsPer100Turns}`,
     `- Praise / 100 turns: ${summary.rates.praisePer100Turns}`,
-  ].join("\n");
+  ];
 }
 
-function renderComplianceLines(metrics: MetricsRecord): string {
-  return metrics.complianceSummary
-    .map(
-      (rule) =>
-        `- ${rule.rule}: pass ${rule.passCount}, fail ${rule.failCount}, n/a ${rule.notApplicableCount}, unknown ${rule.unknownCount}`,
-    )
-    .join("\n");
+function renderComplianceLines(metrics: MetricsRecord): string[] {
+  return metrics.complianceSummary.map(
+    (rule) =>
+      `- ${rule.rule}: pass ${rule.passCount}, fail ${rule.failCount}, n/a ${rule.notApplicableCount}, unknown ${rule.unknownCount}`,
+  );
 }
 
-function renderSessionLines(summary: SummaryArtifact): string {
+function renderSessionLines(summary: SummaryArtifact): string[] {
   return renderLines(
     summary.topSessions,
     "- No session insights were available.",
     (session) =>
-      `- ${session.sessionId}: ${session.archetypeLabel}, friction ${session.frictionScore}, score ${session.complianceScore}, dominant labels ${session.dominantLabels.join(", ") || "none"}`,
-  );
-}
-
-function renderVictoryLapLines(summary: SummaryArtifact): string {
-  return renderLines(
-    summary.victoryLaps,
-    "- No clean verified delivery sessions were available in this slice.",
-    (session) =>
-      `- ${session.sessionId}: ${session.archetypeLabel}, score ${session.complianceScore}, verifications ${session.verificationPassedCount}, incidents ${session.incidentCount}`,
+      `- ${session.sessionId}: ${session.archetypeLabel}, friction ${session.frictionScore}, proxy score ${session.complianceScore}, dominant labels ${session.dominantLabels.join(", ") || "none"}`,
   );
 }
 
@@ -89,14 +75,17 @@ function renderScoreCardLine(
   card: SummaryArtifact["scoreCards"][number],
 ): string {
   if (
-    card.title === "Proof Score" &&
+    card.title === "Verification Proxy Score" &&
     summary.delivery.sessionsWithWrites === 0
   ) {
-    return `- ${card.title}: N/A (${`No write sessions were observed in this slice.`})`;
+    return `- ${card.title}: N/A (No write sessions were observed in this slice.)`;
   }
 
-  if (card.title === "Discipline Score" && !hasApplicableDiscipline(summary)) {
-    return `- ${card.title}: N/A (${`No write-related compliance rules were exercised in this slice.`})`;
+  if (
+    card.title === "Workflow Proxy Score" &&
+    !hasApplicableDiscipline(summary)
+  ) {
+    return `- ${card.title}: N/A (No write-related compliance rules were exercised in this slice.)`;
   }
 
   return `- ${card.title}: ${card.score}/100 (${card.detail})`;
@@ -105,44 +94,48 @@ function renderScoreCardLine(
 function formatComparativeSliceValue(
   summary: SummaryArtifact,
   slice: SummaryArtifact["comparativeSlices"][number],
-  field: "proofScore" | "disciplineScore" | "writeVerificationRate",
+  field:
+    | "verificationProxyScore"
+    | "workflowProxyScore"
+    | "writeSessionVerificationRate",
 ): string {
   if (slice.key !== "selected_corpus") {
-    return field === "writeVerificationRate"
+    return field === "writeSessionVerificationRate"
       ? `${slice[field]}%`
       : `${slice[field]}`;
   }
 
   if (
-    field === "writeVerificationRate" &&
+    field === "writeSessionVerificationRate" &&
     summary.delivery.sessionsWithWrites === 0
   ) {
     return "N/A";
   }
 
-  if (field === "proofScore" && summary.delivery.sessionsWithWrites === 0) {
+  if (
+    field === "verificationProxyScore" &&
+    summary.delivery.sessionsWithWrites === 0
+  ) {
     return "N/A";
   }
 
-  if (field === "disciplineScore" && !hasApplicableDiscipline(summary)) {
+  if (field === "workflowProxyScore" && !hasApplicableDiscipline(summary)) {
     return "N/A";
   }
 
-  return field === "writeVerificationRate"
+  return field === "writeSessionVerificationRate"
     ? `${slice[field]}%`
     : `${slice[field]}`;
 }
 
-function renderComparativeSliceLines(summary: SummaryArtifact): string {
-  return summary.comparativeSlices
-    .map(
-      (slice) =>
-        `- ${slice.label}: sessions ${slice.sessionCount}, proof ${formatComparativeSliceValue(summary, slice, "proofScore")}, flow ${slice.flowScore}, discipline ${formatComparativeSliceValue(summary, slice, "disciplineScore")}, write verification ${formatComparativeSliceValue(summary, slice, "writeVerificationRate")}, incidents/100 turns ${slice.incidentsPer100Turns}`,
-    )
-    .join("\n");
+function renderComparativeSliceLines(summary: SummaryArtifact): string[] {
+  return summary.comparativeSlices.map(
+    (slice) =>
+      `- ${slice.label}: sessions ${slice.sessionCount}, verification proxy ${formatComparativeSliceValue(summary, slice, "verificationProxyScore")}, flow proxy ${slice.flowProxyScore}, workflow proxy ${formatComparativeSliceValue(summary, slice, "workflowProxyScore")}, write-session verification ${formatComparativeSliceValue(summary, slice, "writeSessionVerificationRate")}, incidents/100 turns ${slice.incidentsPer100Turns}`,
+  );
 }
 
-function renderOpportunityLines(summary: SummaryArtifact): string {
+function renderOpportunityLines(summary: SummaryArtifact): string[] {
   return renderLines(
     summary.opportunities,
     "- No deterministic improvement opportunities were identified.",
@@ -150,7 +143,7 @@ function renderOpportunityLines(summary: SummaryArtifact): string {
   );
 }
 
-function renderIncidentLines(summary: SummaryArtifact): string {
+function renderIncidentLines(summary: SummaryArtifact): string[] {
   return renderLines(
     summary.topIncidents,
     "- No labeled incidents detected.",
@@ -163,14 +156,30 @@ function renderIncidentLines(summary: SummaryArtifact): string {
   );
 }
 
-function renderInventoryLines(metrics: MetricsRecord): string {
+function renderInventoryLines(metrics: MetricsRecord): string[] {
   return metrics.inventory
     .filter((record) => record.discovered || record.required)
     .map(
       (record) =>
         `- ${record.provider} ${record.required ? "required" : "optional"} ${record.kind}: ${record.discovered ? "present" : "missing"} at \`${record.path}\``,
-    )
-    .join("\n");
+    );
+}
+
+function renderMethodologyLines(metrics: MetricsRecord): string[] {
+  const lines = [
+    "- This report is a deterministic transcript analytics summary with heuristic policy proxies, not a rigorous correctness evaluator.",
+    "- Labels are transcript-visible heuristics and should be treated as operator-friction signals, not ground-truth task outcomes.",
+    "- Compliance scores are proxies based on observed transcript events and do not prove actual repository correctness.",
+    "- Calibration, benchmark validation, and optional enrichment joins are intentionally deferred beyond this hardening release.",
+  ];
+
+  if (metrics.parseWarningCount > 0) {
+    lines.push(
+      `- Parse warnings: ${metrics.parseWarningCount}. Some malformed transcript lines were skipped, so results should be treated as partial for affected sessions.`,
+    );
+  }
+
+  return lines;
 }
 
 /**
@@ -200,9 +209,14 @@ export function renderSummaryReport(
   const providers = [
     ...new Set(metrics.inventory.map((record) => record.provider)),
   ];
+  const skin = getConfig().reporting.skin;
+  const title =
+    skin === "showcase"
+      ? "# Transcript Analytics Engine Report"
+      : "# Transcript Analytics Report";
 
-  return [
-    "# Agent Evaluator Report",
+  const lines = [
+    title,
     "",
     `- Evaluator version: \`${metrics.evaluatorVersion}\``,
     `- Schema version: \`${metrics.schemaVersion}\``,
@@ -211,6 +225,7 @@ export function renderSummaryReport(
     `- Sessions: \`${metrics.sessionCount}\``,
     `- Turns: \`${metrics.turnCount}\``,
     `- Incidents: \`${metrics.incidentCount}\``,
+    `- Parse warnings: \`${metrics.parseWarningCount}\``,
     "",
     "## Headline Insights",
     "",
@@ -218,67 +233,94 @@ export function renderSummaryReport(
       (card) => `- ${card.title}: ${card.value} (${card.detail})`,
     ),
     "",
-    "## Show-Off Stats",
-    "",
-    ...summary.bragCards.map(
-      (card) => `- ${card.title}: ${card.value} (${card.detail})`,
-    ),
-    "",
-    "## Shareable Scoreboard",
+    skin === "showcase" ? "## Shareable Scoreboard" : "## Heuristic Scorecards",
     "",
     ...summary.scoreCards.map((card) => renderScoreCardLine(summary, card)),
     "",
     "## Recent Momentum",
     "",
-    renderLines(
+    ...renderLines(
       sections.recentMomentum,
       "- Not enough sessions in this slice for recent-vs-corpus momentum comparisons yet.",
       (card) => `- ${card.title}: ${card.value} (${card.detail})`,
     ),
     "",
-    "## Badges",
-    "",
-    summary.achievementBadges.length > 0
-      ? summary.achievementBadges.map((badge) => `- ${badge}`).join("\n")
-      : "- No badges earned for this slice yet.",
-    "",
+  ];
+
+  if (skin === "showcase") {
+    lines.push(
+      "## Showcase Highlights",
+      "",
+      ...summary.highlightCards.map(
+        (card) => `- ${card.title}: ${card.value} (${card.detail})`,
+      ),
+      "",
+      "## Recognitions",
+      "",
+      ...(summary.recognitions.length > 0
+        ? summary.recognitions.map((recognition) => `- ${recognition}`)
+        : ["- No recognitions earned for this slice yet."]),
+      "",
+    );
+  }
+
+  lines.push(
     "## Operational Rates",
     "",
-    renderRateLines(summary),
+    ...renderRateLines(summary),
     "",
     "## Comparative Slices",
     "",
-    renderComparativeSliceLines(summary),
+    ...renderComparativeSliceLines(summary),
     "",
     "## Label Counts",
     "",
-    renderLabelLines(summary),
+    ...renderLabelLines(summary),
     "",
     "## Sessions To Review First",
     "",
-    renderSessionLines(summary),
+    ...renderSessionLines(summary),
     "",
-    "## Victory Lap Sessions",
-    "",
-    renderVictoryLapLines(summary),
-    "",
+  );
+
+  if (skin === "showcase") {
+    lines.push(
+      "## Verified Delivery Spotlights",
+      "",
+      ...renderLines(
+        summary.verifiedDeliverySpotlights,
+        "- No clean verified delivery sessions were available in this slice.",
+        (session) =>
+          `- ${session.sessionId}: ${session.archetypeLabel}, score ${session.complianceScore}, verifications ${session.verificationPassedCount}, incidents ${session.incidentCount}`,
+      ),
+      "",
+    );
+  }
+
+  lines.push(
     "## Deterministic Opportunities",
     "",
-    renderOpportunityLines(summary),
+    ...renderOpportunityLines(summary),
     "",
     "## Compliance Summary",
     "",
-    renderComplianceLines(metrics),
+    ...renderComplianceLines(metrics),
     "",
     "## Top Incidents",
     "",
-    renderIncidentLines(summary),
+    ...renderIncidentLines(summary),
+    "",
+    "## Methodology And Limitations",
+    "",
+    ...renderMethodologyLines(metrics),
     "",
     "## Inventory",
     "",
-    renderInventoryLines(metrics),
+    ...renderInventoryLines(metrics),
     "",
-    "_Incident evidence is redacted and truncated for compact, public-safe reporting._",
+    "_Incident evidence is redacted and truncated for compact reporting. Preview sanitization reduces common sensitive data exposure but is not a guarantee of full anonymization._",
     "",
-  ].join("\n");
+  );
+
+  return lines.join("\n");
 }

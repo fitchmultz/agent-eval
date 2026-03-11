@@ -19,11 +19,11 @@ export const labelTaxonomy = [
 
 export const severityValues = ["info", "low", "medium", "high"] as const;
 export const confidenceValues = ["low", "medium", "high"] as const;
+export const labelFamilyValues = ["incident", "cue", "positive"] as const;
 export const sessionArchetypeValues = [
   "verified_delivery",
   "unverified_delivery",
-  "high_friction_recovery",
-  "interrupted_non_write",
+  "high_friction_verified_delivery",
   "analysis_only",
 ] as const;
 export { sourceProviderValues };
@@ -36,15 +36,7 @@ export const sourceKindValues = [
   "shell_snapshot",
   "session_env",
 ] as const;
-export const toolCategoryValues = [
-  "read",
-  "write",
-  "verification",
-  "search",
-  "planning",
-  "delegation",
-  "other",
-] as const;
+export const toolCategoryValues = ["write", "verification", "other"] as const;
 export const complianceRuleValues = [
   "scope_confirmed_before_major_write",
   "cwd_or_repo_echoed_before_write",
@@ -62,6 +54,7 @@ export const complianceStatusValues = [
 export type LabelName = (typeof labelTaxonomy)[number];
 export type Severity = (typeof severityValues)[number];
 export type Confidence = (typeof confidenceValues)[number];
+export type LabelFamily = (typeof labelFamilyValues)[number];
 export type SessionArchetype = (typeof sessionArchetypeValues)[number];
 export type SourceProvider = (typeof sourceProviderValues)[number];
 export type SourceKind = (typeof sourceKindValues)[number];
@@ -80,6 +73,7 @@ export const sourceRefSchema = z.object({
 
 export const labelRecordSchema = z.object({
   label: z.enum(labelTaxonomy),
+  family: z.enum(labelFamilyValues),
   severity: z.enum(severityValues),
   confidence: z.enum(confidenceValues),
   rationale: z.string().min(1),
@@ -141,10 +135,14 @@ export const sessionMetricsSchema = z.object({
   turnCount: z.int().nonnegative(),
   labeledTurnCount: z.int().nonnegative(),
   incidentCount: z.int().nonnegative(),
+  parseWarningCount: z.int().nonnegative(),
   writeCount: z.int().nonnegative(),
   verificationCount: z.int().nonnegative(),
   verificationPassedCount: z.int().nonnegative(),
   verificationFailedCount: z.int().nonnegative(),
+  postWriteVerificationAttempted: z.boolean(),
+  postWriteVerificationPassed: z.boolean(),
+  endedVerified: z.boolean(),
   complianceScore: z.int().min(0).max(100),
   complianceRules: z.array(complianceRuleResultSchema),
 });
@@ -184,6 +182,7 @@ export const metricsSchema = z.object({
   sessionCount: z.int().nonnegative(),
   turnCount: z.int().nonnegative(),
   incidentCount: z.int().nonnegative(),
+  parseWarningCount: z.int().nonnegative(),
   labelCounts: labelCountSchema,
   complianceSummary: z.array(complianceAggregateSchema),
   sessions: z.array(sessionMetricsSchema),
@@ -208,6 +207,7 @@ const sessionHighlightSchema = z.object({
   incidentCount: z.int().nonnegative(),
   labeledTurnCount: z.int().nonnegative(),
   writeCount: z.int().nonnegative(),
+  endedVerified: z.boolean(),
   verificationPassedCount: z.int().nonnegative(),
   dominantLabels: z.array(z.enum(labelTaxonomy)),
   note: z.string().min(1),
@@ -220,6 +220,7 @@ const summaryCoreSchema = z.object({
   sessions: z.int().nonnegative(),
   turns: z.int().nonnegative(),
   incidents: z.int().nonnegative(),
+  parseWarningCount: z.int().nonnegative(),
   labels: z.array(
     z.object({
       label: z.enum(labelTaxonomy),
@@ -243,8 +244,8 @@ const summaryCoreSchema = z.object({
   }),
   delivery: z.object({
     sessionsWithWrites: z.int().nonnegative(),
-    verifiedWriteSessions: z.int().nonnegative(),
-    writeVerificationRate: z.number().nonnegative(),
+    sessionsEndingVerified: z.int().nonnegative(),
+    writeSessionVerificationRate: z.number().nonnegative(),
   }),
   comparativeSlices: z.array(
     z.object({
@@ -253,10 +254,10 @@ const summaryCoreSchema = z.object({
       sessionCount: z.int().nonnegative(),
       turnCount: z.int().nonnegative(),
       incidentCount: z.int().nonnegative(),
-      proofScore: z.int().min(0).max(100),
-      flowScore: z.int().min(0).max(100),
-      disciplineScore: z.int().min(0).max(100),
-      writeVerificationRate: z.number().nonnegative(),
+      verificationProxyScore: z.int().min(0).max(100),
+      flowProxyScore: z.int().min(0).max(100),
+      workflowProxyScore: z.int().min(0).max(100),
+      writeSessionVerificationRate: z.number().nonnegative(),
       incidentsPer100Turns: z.number().nonnegative(),
     }),
   ),
@@ -283,9 +284,9 @@ const summaryPresentationSchema = z.object({
       tone: summaryCardToneSchema,
     }),
   ),
-  bragCards: z.array(valueCardSchema),
-  achievementBadges: z.array(z.string().min(1)),
-  victoryLaps: z.array(sessionHighlightSchema),
+  highlightCards: z.array(valueCardSchema),
+  recognitions: z.array(z.string().min(1)),
+  verifiedDeliverySpotlights: z.array(sessionHighlightSchema),
   opportunities: z.array(
     z.object({
       title: z.string().min(1),

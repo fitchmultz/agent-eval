@@ -7,8 +7,8 @@
 import { describe, expect, it } from "vitest";
 import type { SessionMetrics } from "../src/schema.js";
 import {
+  filterEndedVerifiedWriteSessions,
   filterQuietSessions,
-  filterVerifiedWriteSessions,
   filterWriteSessions,
 } from "../src/session-filters.js";
 
@@ -21,10 +21,14 @@ function createSessionMetrics(
     turnCount: 10,
     labeledTurnCount: 2,
     incidentCount: 0,
+    parseWarningCount: 0,
     writeCount: 0,
     verificationCount: 0,
     verificationPassedCount: 0,
     verificationFailedCount: 0,
+    postWriteVerificationAttempted: false,
+    postWriteVerificationPassed: false,
+    endedVerified: false,
     complianceScore: 100,
     complianceRules: [],
     ...overrides,
@@ -68,13 +72,14 @@ describe("filterWriteSessions", () => {
   });
 });
 
-describe("filterVerifiedWriteSessions", () => {
-  it("should return only write sessions with verificationPassedCount > 0", () => {
+describe("filterEndedVerifiedWriteSessions", () => {
+  it("should return only write sessions that ended verified", () => {
     const sessions: SessionMetrics[] = [
       createSessionMetrics({
         sessionId: "s1",
         writeCount: 5,
         verificationPassedCount: 2,
+        endedVerified: true,
       }),
       createSessionMetrics({
         sessionId: "s2",
@@ -90,10 +95,11 @@ describe("filterVerifiedWriteSessions", () => {
         sessionId: "s4",
         writeCount: 3,
         verificationPassedCount: 1,
+        endedVerified: true,
       }),
     ];
 
-    const result = filterVerifiedWriteSessions(sessions);
+    const result = filterEndedVerifiedWriteSessions(sessions);
     expect(result).toHaveLength(2);
     expect(result.map((s) => s.sessionId)).toContain("s1");
     expect(result.map((s) => s.sessionId)).toContain("s4");
@@ -105,10 +111,11 @@ describe("filterVerifiedWriteSessions", () => {
         sessionId: "s1",
         writeCount: 0,
         verificationPassedCount: 2,
+        endedVerified: true,
       }),
     ];
 
-    expect(filterVerifiedWriteSessions(sessions)).toHaveLength(0);
+    expect(filterEndedVerifiedWriteSessions(sessions)).toHaveLength(0);
   });
 
   it("should return empty array when no sessions match", () => {
@@ -125,11 +132,11 @@ describe("filterVerifiedWriteSessions", () => {
       }),
     ];
 
-    expect(filterVerifiedWriteSessions(sessions)).toHaveLength(0);
+    expect(filterEndedVerifiedWriteSessions(sessions)).toHaveLength(0);
   });
 
   it("should handle empty input", () => {
-    expect(filterVerifiedWriteSessions([])).toHaveLength(0);
+    expect(filterEndedVerifiedWriteSessions([])).toHaveLength(0);
   });
 });
 
@@ -177,6 +184,7 @@ describe("filter composition", () => {
         sessionId: "s1",
         writeCount: 5,
         verificationPassedCount: 2,
+        endedVerified: true,
         incidentCount: 0,
       }),
       createSessionMetrics({
@@ -195,12 +203,12 @@ describe("filter composition", () => {
 
     // First filter to write sessions, then to verified
     const writeSessions = filterWriteSessions(sessions);
-    const verifiedWriteSessions = filterVerifiedWriteSessions(sessions);
+    const sessionsEndingVerified = filterEndedVerifiedWriteSessions(sessions);
     const quietSessions = filterQuietSessions(sessions);
 
     expect(writeSessions).toHaveLength(2);
-    expect(verifiedWriteSessions).toHaveLength(1);
-    expect(verifiedWriteSessions[0]?.sessionId).toBe("s1");
+    expect(sessionsEndingVerified).toHaveLength(1);
+    expect(sessionsEndingVerified[0]?.sessionId).toBe("s1");
     expect(quietSessions).toHaveLength(2);
   });
 });

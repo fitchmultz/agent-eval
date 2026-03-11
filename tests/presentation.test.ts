@@ -1,7 +1,7 @@
 /**
  * Purpose: Verify reports and presentation outputs are derived from one canonical summary model.
  * Responsibilities: Build a summary once, then assert the markdown, HTML, and SVG outputs stay aligned with it.
- * Scope: Deterministic presentation contract for public-safe evaluator outputs.
+ * Scope: Deterministic presentation contract for public-facing redaction evaluator outputs.
  * Usage: Executed by Vitest via `pnpm test`.
  * Invariants/Assumptions: Synthetic incidents and metrics are enough because these tests exercise pure derived-output functions.
  */
@@ -26,6 +26,7 @@ const metrics: MetricsRecord = {
   sessionCount: 2,
   turnCount: 8,
   incidentCount: 2,
+  parseWarningCount: 0,
   labelCounts: {
     verification_request: 3,
     context_reinjection: 1,
@@ -74,10 +75,14 @@ const metrics: MetricsRecord = {
       turnCount: 4,
       labeledTurnCount: 2,
       incidentCount: 1,
+      parseWarningCount: 0,
       writeCount: 1,
       verificationCount: 1,
       verificationPassedCount: 1,
       verificationFailedCount: 0,
+      postWriteVerificationAttempted: true,
+      postWriteVerificationPassed: true,
+      endedVerified: true,
       complianceScore: 100,
       complianceRules: [],
     },
@@ -87,10 +92,14 @@ const metrics: MetricsRecord = {
       turnCount: 4,
       labeledTurnCount: 1,
       incidentCount: 1,
+      parseWarningCount: 0,
       writeCount: 0,
       verificationCount: 0,
       verificationPassedCount: 0,
       verificationFailedCount: 0,
+      postWriteVerificationAttempted: false,
+      postWriteVerificationPassed: false,
+      endedVerified: false,
       complianceScore: 100,
       complianceRules: [],
     },
@@ -118,6 +127,7 @@ const incidents: IncidentRecord[] = [
     labels: [
       {
         label: "verification_request",
+        family: "cue",
         severity: "medium",
         confidence: "high",
         rationale: "request",
@@ -145,6 +155,7 @@ const incidents: IncidentRecord[] = [
     labels: [
       {
         label: "context_reinjection",
+        family: "cue",
         severity: "low",
         confidence: "high",
         rationale: "re-anchor",
@@ -179,6 +190,7 @@ const rawTurns: RawTurnRecord[] = [
     labels: [
       {
         label: "verification_request",
+        family: "cue",
         severity: "medium",
         confidence: "high",
         rationale: "request",
@@ -206,6 +218,7 @@ const rawTurns: RawTurnRecord[] = [
     labels: [
       {
         label: "context_reinjection",
+        family: "cue",
         severity: "low",
         confidence: "high",
         rationale: "re-anchor",
@@ -232,23 +245,23 @@ describe("presentation", () => {
     expect(summary.incidents).toBe(2);
     expect(summary.labels[0]?.label).toBe("verification_request");
     expect(summary.topSessions[0]?.archetype).toBe("verified_delivery");
-    expect(summary.topSessions[0]?.archetypeLabel).toBe("Clean Ship");
+    expect(summary.topSessions[0]?.archetypeLabel).toBe("Verified Delivery");
     expect(summary.rates.verificationRequestsPer100Turns).toBe(37.5);
-    expect(summary.bragCards[0]?.title).toBe("Proof-Backed Ships");
+    expect(summary.highlightCards[0]?.title).toBe("Verified Deliveries");
     expect(summary.comparativeSlices[0]?.label).toBe("Selected Corpus");
-    expect(summary.scoreCards[0]?.title).toBe("Proof Score");
+    expect(summary.scoreCards[0]?.title).toBe("Verification Proxy Score");
     expect(summary.scoreCards[0]?.score).toBe(100);
-    expect(summary.achievementBadges).toContain("Low-Drama Operator");
-    expect(summary.victoryLaps[0]?.sessionId).toBe("session-1");
+    expect(summary.recognitions).toContain("Low-Interruption Corpus");
+    expect(summary.verifiedDeliverySpotlights[0]?.sessionId).toBe("session-1");
     expect(summary.opportunities[0]?.title).toContain("verification");
     expect(summary.topIncidents[0]?.turnSpan).toBe(2);
-    expect(presentation.reportHtml).toContain("Agent Evaluator Report");
-    expect(presentation.reportHtml).toContain("label-counts.svg");
+    expect(presentation.reportHtml).toContain("Transcript Analytics Report");
+    expect(presentation.reportHtml).toContain("<svg");
     expect(presentation.reportHtml).toContain("Sessions To Review First");
-    expect(presentation.reportHtml).toContain("Shareable Scoreboard");
+    expect(presentation.reportHtml).toContain("Heuristic Scorecards");
     expect(presentation.reportHtml).toContain("Recent Momentum");
     expect(presentation.reportHtml).toContain("Comparative Slices");
-    expect(presentation.reportHtml).toContain("Victory Lap Sessions");
+    expect(presentation.reportHtml).not.toContain("Victory Lap Sessions");
     expect(presentation.labelChartSvg).toContain("<svg");
     expect(presentation.complianceChartSvg).toContain("Compliance Pass Counts");
     expect(presentation.severityChartSvg).toContain("Incident Severity");
@@ -264,14 +277,15 @@ describe("presentation", () => {
 
     expect(canonicalMarkdown).toBe(convenienceMarkdown);
     expect(canonicalMarkdown).toContain("## Headline Insights");
-    expect(canonicalMarkdown).toContain("## Show-Off Stats");
-    expect(canonicalMarkdown).toContain("## Shareable Scoreboard");
+    expect(canonicalMarkdown).toContain("## Heuristic Scorecards");
     expect(canonicalMarkdown).toContain("## Recent Momentum");
-    expect(canonicalMarkdown).toContain("## Badges");
     expect(canonicalMarkdown).toContain("## Comparative Slices");
     expect(canonicalMarkdown).toContain("## Sessions To Review First");
-    expect(canonicalMarkdown).toContain("## Victory Lap Sessions");
     expect(canonicalMarkdown).toContain("## Deterministic Opportunities");
-    expect(canonicalMarkdown).toContain("Clean Ship");
+    expect(canonicalMarkdown).toContain("## Methodology And Limitations");
+    expect(canonicalMarkdown).not.toContain("## Show-Off Stats");
+    expect(canonicalMarkdown).not.toContain("## Badges");
+    expect(canonicalMarkdown).not.toContain("## Victory Lap Sessions");
+    expect(canonicalMarkdown).toContain("Verified Delivery");
   });
 });

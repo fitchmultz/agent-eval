@@ -57,4 +57,5 @@ export type {
   ParsedTurn,
   ParseOptions,
   ParserContext,
+  ScoringEvent,
 } from "./types.js";

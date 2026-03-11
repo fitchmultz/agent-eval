@@ -25,11 +25,12 @@ export interface SummaryCoreData {
   labels: Array<{ label: LabelName; count: number }>;
   severities: Array<{ severity: Severity; count: number }>;
   compliance: SummaryArtifact["compliance"];
+  parseWarningCount: SummaryArtifact["parseWarningCount"];
   rates: SummaryArtifact["rates"];
   delivery: SummaryArtifact["delivery"];
   comparativeSlices: SummaryArtifact["comparativeSlices"];
   topSessions: SummaryArtifact["topSessions"];
-  victoryLaps: SummaryArtifact["victoryLaps"];
+  verifiedDeliverySpotlights: SummaryArtifact["verifiedDeliverySpotlights"];
   topIncidents: SummaryArtifact["topIncidents"];
 }
 
@@ -42,15 +43,16 @@ export interface SessionInsightRow {
   incidentCount: number;
   labeledTurnCount: number;
   writeCount: number;
+  endedVerified: boolean;
   verificationPassedCount: number;
   dominantLabels: LabelName[];
   note: string;
 }
 
 export interface ScoreSnapshot {
-  proofScore: number;
-  flowScore: number;
-  disciplineScore: number;
-  writeVerificationRate: number;
+  verificationProxyScore: number;
+  flowProxyScore: number;
+  workflowProxyScore: number;
+  writeSessionVerificationRate: number;
   incidentsPer100Turns: number;
 }

@@ -8,7 +8,7 @@
 import { clusterIncidents } from "./clustering.js";
 import { scoreCompliance } from "./compliance.js";
 import { getConfig } from "./config/index.js";
-import { labelTurn } from "./labels.js";
+import { isIncidentLabel, labelTurn } from "./labels.js";
 import { createMessagePreviews } from "./sanitization.js";
 import type {
   ComplianceRuleResult,
@@ -17,6 +17,7 @@ import type {
   ToolCallSummary,
 } from "./schema.js";
 import { categorizeToolCall } from "./tool-classification.js";
+import { extractCommandTextFromArgumentsText } from "./tool-command-text.js";
 import type { ParsedSession } from "./transcript/index.js";
 import { redactPath } from "./utils/path-redaction.js";
 import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
@@ -30,10 +31,14 @@ export interface SessionMetrics {
   turnCount: number;
   labeledTurnCount: number;
   incidentCount: number;
+  parseWarningCount: number;
   writeCount: number;
   verificationCount: number;
   verificationPassedCount: number;
   verificationFailedCount: number;
+  postWriteVerificationAttempted: boolean;
+  postWriteVerificationPassed: boolean;
+  endedVerified: boolean;
   complianceScore: number;
   complianceRules: ComplianceRuleResult[];
 }
@@ -55,9 +60,7 @@ function summarizeToolCall(
   toolName: string,
   argumentsText?: string,
 ): ToolCallSummary {
-  const commandText = argumentsText?.includes('"cmd"')
-    ? argumentsText
-    : undefined;
+  const commandText = extractCommandTextFromArgumentsText(argumentsText);
   const categorization = categorizeToolCall(toolName, commandText);
 
   return {
@@ -132,7 +135,11 @@ function buildSessionMetrics(
     verificationCount: number;
     verificationPassedCount: number;
     verificationFailedCount: number;
+    postWriteVerificationAttempted: boolean;
+    postWriteVerificationPassed: boolean;
+    endedVerified: boolean;
   },
+  parseWarningCount: number,
   incidents: IncidentRecord[],
   labeledTurnCount: number,
 ): SessionMetrics {
@@ -142,10 +149,14 @@ function buildSessionMetrics(
     turnCount: session.turns.length,
     labeledTurnCount,
     incidentCount: incidents.length,
+    parseWarningCount,
     writeCount: compliance.writeCount,
     verificationCount: compliance.verificationCount,
     verificationPassedCount: compliance.verificationPassedCount,
     verificationFailedCount: compliance.verificationFailedCount,
+    postWriteVerificationAttempted: compliance.postWriteVerificationAttempted,
+    postWriteVerificationPassed: compliance.postWriteVerificationPassed,
+    endedVerified: compliance.endedVerified,
     complianceScore: compliance.score,
     complianceRules: compliance.rules,
   };
@@ -175,11 +186,16 @@ export async function processSession(
   const compliance = scoreCompliance(session);
 
   // Get turns with labels for clustering
-  const labeledTurns = turns.filter((turn) => turn.labels.length > 0);
+  const incidentTurns = turns
+    .map((turn) => ({
+      ...turn,
+      labels: turn.labels.filter(isIncidentLabel),
+    }))
+    .filter((turn) => turn.labels.length > 0);
 
   // Cluster incidents from labeled turns
   const incidents = clusterIncidents(
-    labeledTurns,
+    incidentTurns,
     { maxTurnGap: getConfig().clustering.maxTurnGap },
     EVALUATOR_VERSION,
     SCHEMA_VERSION,
@@ -194,6 +210,7 @@ export async function processSession(
     metrics: buildSessionMetrics(
       session,
       compliance,
+      session.parseWarningCount ?? 0,
       incidents,
       labeledTurnCount,
     ),

@@ -111,10 +111,10 @@ export function buildScoreSnapshot(
 ): ScoreSnapshot {
   if (sessions.length === 0) {
     return {
-      proofScore: 0,
-      flowScore: 0,
-      disciplineScore: 0,
-      writeVerificationRate: 0,
+      verificationProxyScore: 0,
+      flowProxyScore: 0,
+      workflowProxyScore: 0,
+      writeSessionVerificationRate: 0,
       incidentsPer100Turns: 0,
     };
   }
@@ -125,23 +125,23 @@ export function buildScoreSnapshot(
   // Flow score: inverse of friction (100 - friction score normalized to 0-100)
   const avgFrictionScore =
     sessions.reduce((sum, s) => sum + s.frictionScore, 0) / sessions.length;
-  const flowScore = Math.max(0, 100 - avgFrictionScore * 10);
+  const flowProxyScore = Math.max(0, 100 - avgFrictionScore * 10);
 
-  // Discipline: sessions with few incidents relative to turns
+  // Verification proxy: share of write sessions that ended verified
   const totalWriteSessions = sessions.filter((s) => s.writeCount > 0).length;
-  const verifiedWriteSessions = sessions.filter(
-    (s) => s.verificationPassedCount > 0,
+  const endedVerifiedWriteSessions = sessions.filter(
+    (s) => s.endedVerified,
   ).length;
-  const writeVerificationRate =
+  const writeSessionVerificationRate =
     totalWriteSessions > 0
-      ? Math.round((verifiedWriteSessions / totalWriteSessions) * 100)
+      ? Math.round((endedVerifiedWriteSessions / totalWriteSessions) * 100)
       : 0;
 
   return {
-    proofScore: Math.round(avgComplianceScore),
-    flowScore: Math.round(flowScore),
-    disciplineScore: Math.round(avgComplianceScore * 0.8 + flowScore * 0.2),
-    writeVerificationRate,
+    verificationProxyScore: writeSessionVerificationRate,
+    flowProxyScore: Math.round(flowProxyScore),
+    workflowProxyScore: Math.round(avgComplianceScore),
+    writeSessionVerificationRate,
     incidentsPer100Turns: safeRate(incidentCount, turnCount),
   };
 }

@@ -8,8 +8,8 @@ import { buildScoreSnapshot } from "./comparative-slices.js";
 import { BADGES, OPPORTUNITIES } from "./constants/index.js";
 import type { MetricsRecord, SummaryArtifact } from "./schema.js";
 import {
+  filterEndedVerifiedWriteSessions,
   filterQuietSessions,
-  filterVerifiedWriteSessions,
   filterWriteSessions,
 } from "./session-filters.js";
 import { countLabel, safeRate, toneForScore } from "./summary/index.js";
@@ -22,12 +22,12 @@ import type { SessionInsightRow } from "./summary/types.js";
  * but are not part of the deterministic core metrics.
  */
 export interface SummaryDecorations {
-  /** Score cards for proof, flow, and discipline scores */
+  /** Score cards for verification, flow, and workflow proxy scores */
   scoreCards: SummaryArtifact["scoreCards"];
-  /** Brag cards highlighting achievements (verified writes, quiet runs) */
-  bragCards: SummaryArtifact["bragCards"];
-  /** Achievement badges earned by the corpus */
-  achievementBadges: SummaryArtifact["achievementBadges"];
+  /** Highlight cards for operator-facing achievements */
+  highlightCards: SummaryArtifact["highlightCards"];
+  /** Deterministic recognitions earned by the corpus */
+  recognitions: SummaryArtifact["recognitions"];
   /** Deterministic improvement opportunities identified */
   opportunities: SummaryArtifact["opportunities"];
 }
@@ -39,43 +39,47 @@ function buildScoreCards(
 
   return [
     {
-      title: "Proof Score",
-      score: snapshot.proofScore,
+      title: "Verification Proxy Score",
+      score: snapshot.verificationProxyScore,
       detail:
         "How often write sessions ended with a passing verification signal.",
-      tone: toneForScore(snapshot.proofScore),
+      tone: toneForScore(snapshot.verificationProxyScore),
     },
     {
-      title: "Flow Score",
-      score: snapshot.flowScore,
+      title: "Flow Proxy Score",
+      score: snapshot.flowProxyScore,
       detail:
         "Higher is calmer. This penalizes interrupts, context reinjection, and explicit drift complaints.",
-      tone: toneForScore(snapshot.flowScore),
+      tone: toneForScore(snapshot.flowProxyScore),
     },
     {
-      title: "Discipline Score",
-      score: snapshot.disciplineScore,
+      title: "Workflow Proxy Score",
+      score: snapshot.workflowProxyScore,
       detail:
         "Average pass rate across scope, cwd/repo echo, short planning, and post-write verification rules.",
-      tone: toneForScore(snapshot.disciplineScore),
+      tone: toneForScore(snapshot.workflowProxyScore),
     },
   ];
 }
 
-function buildBragCards(metrics: MetricsRecord): SummaryArtifact["bragCards"] {
-  const verifiedWriteSessions = filterVerifiedWriteSessions(metrics.sessions);
+function buildHighlightCards(
+  metrics: MetricsRecord,
+): SummaryArtifact["highlightCards"] {
+  const endedVerifiedWriteSessions = filterEndedVerifiedWriteSessions(
+    metrics.sessions,
+  );
   const quietSessions = filterQuietSessions(metrics.sessions);
 
   return [
     {
-      title: "Proof-Backed Ships",
-      value: `${verifiedWriteSessions.length}`,
+      title: "Verified Deliveries",
+      value: `${endedVerifiedWriteSessions.length}`,
       detail:
         "Sessions that ended with both code changes and a passing verification signal.",
-      tone: verifiedWriteSessions.length > 0 ? "good" : "neutral",
+      tone: endedVerifiedWriteSessions.length > 0 ? "good" : "neutral",
     },
     {
-      title: "Quiet Runs",
+      title: "Low-Incident Sessions",
       value: `${quietSessions.length}`,
       detail:
         quietSessions.length > 0
@@ -84,7 +88,7 @@ function buildBragCards(metrics: MetricsRecord): SummaryArtifact["bragCards"] {
       tone: quietSessions.length > 0 ? "good" : "neutral",
     },
     {
-      title: "Battle-Tested Runs",
+      title: "Corpus Coverage",
       value: `${metrics.sessionCount}`,
       detail: "Sessions included in this deterministic corpus slice.",
       tone: metrics.sessionCount >= 1000 ? "good" : "neutral",
@@ -92,15 +96,17 @@ function buildBragCards(metrics: MetricsRecord): SummaryArtifact["bragCards"] {
   ];
 }
 
-function buildAchievementBadges(
+function buildRecognitions(
   metrics: MetricsRecord,
   topSessions: readonly SessionInsightRow[],
-): SummaryArtifact["achievementBadges"] {
-  const badges: string[] = [];
+): SummaryArtifact["recognitions"] {
+  const recognitions: string[] = [];
   const sessionsWithWrites = filterWriteSessions(metrics.sessions);
-  const verifiedWriteSessions = filterVerifiedWriteSessions(metrics.sessions);
+  const endedVerifiedWriteSessions = filterEndedVerifiedWriteSessions(
+    metrics.sessions,
+  );
   const verificationRate = safeRate(
-    verifiedWriteSessions.length,
+    endedVerifiedWriteSessions.length,
     sessionsWithWrites.length,
   );
   const interruptionRate = safeRate(
@@ -110,26 +116,26 @@ function buildAchievementBadges(
   const driftSignals = countLabel(metrics.labelCounts, "context_drift");
 
   if (metrics.sessionCount >= BADGES.MIN_SESSIONS_FOR_BATTLE_TESTED) {
-    badges.push("Battle-Tested Corpus");
+    recognitions.push("Battle-Tested Corpus");
   }
   if (verificationRate >= BADGES.MIN_VERIFICATION_RATE) {
-    badges.push("Proof-Backed Builder");
+    recognitions.push("Strong Verification Proxy");
   }
   if (interruptionRate <= BADGES.MAX_INTERRUPTION_RATE) {
-    badges.push("Low-Drama Operator");
+    recognitions.push("Low-Interruption Corpus");
   }
   if (driftSignals === 0) {
-    badges.push("Zero Drift Complaints");
+    recognitions.push("Zero Drift Complaints");
   }
   if (
     topSessions.some(
-      (session) => session.archetype === "high_friction_recovery",
+      (session) => session.archetype === "high_friction_verified_delivery",
     )
   ) {
-    badges.push("Recovery Specialist");
+    recognitions.push("High-Friction Recovery Evidence");
   }
 
-  return badges;
+  return recognitions;
 }
 
 function buildOpportunities(
@@ -188,9 +194,9 @@ function buildOpportunities(
  * Builds optional presentation decorations on top of the summary core.
  *
  * Creates UI-friendly elements including:
- * - Score cards (Proof, Flow, Discipline scores with tones)
- * - Brag cards (proof-backed ships, quiet runs, battle-tested runs)
- * - Achievement badges (earned based on corpus characteristics)
+ * - Score cards (verification, flow, workflow proxy scores with tones)
+ * - Highlight cards (verified deliveries, quiet runs, corpus coverage)
+ * - Recognitions (earned based on corpus characteristics)
  * - Improvement opportunities (deterministic suggestions)
  *
  * These decorations are kept separate from core metrics to maintain
@@ -206,8 +212,8 @@ export function buildSummaryDecorations(
 ): SummaryDecorations {
   return {
     scoreCards: buildScoreCards(metrics),
-    bragCards: buildBragCards(metrics),
-    achievementBadges: buildAchievementBadges(metrics, topSessions),
+    highlightCards: buildHighlightCards(metrics),
+    recognitions: buildRecognitions(metrics, topSessions),
     opportunities: buildOpportunities(metrics, topSessions),
   };
 }

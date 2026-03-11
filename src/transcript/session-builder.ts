@@ -11,6 +11,7 @@ import type {
   ParsedSession,
   ParsedTurn,
   ParserContext,
+  ScoringEvent,
   SourceRef,
 } from "./types.js";
 
@@ -25,6 +26,35 @@ export function createTurn(turnIndex: number): ParsedTurn {
     toolCalls: [],
     sourceRefs: [],
   };
+}
+
+/**
+ * Appends an ordered scoring event to the parser context.
+ */
+export function appendScoringEvent(
+  context: Pick<
+    ParserContext,
+    "currentTurn" | "nextScoringSequenceIndex" | "scoringEvents" | "sessionId"
+  >,
+  event: Omit<ScoringEvent, "sequenceIndex" | "sessionId" | "turnIndex"> & {
+    turnIndex?: number;
+  },
+): number {
+  const sequenceIndex = context.nextScoringSequenceIndex;
+  context.scoringEvents.push({
+    sessionId: context.sessionId,
+    turnIndex: event.turnIndex ?? context.currentTurn.turnIndex,
+    sequenceIndex,
+    timestamp: event.timestamp,
+    cwd: event.cwd,
+    kind: event.kind,
+    text: event.text,
+    toolName: event.toolName,
+    commandText: event.commandText,
+    status: event.status,
+  });
+  context.nextScoringSequenceIndex += 1;
+  return sequenceIndex;
 }
 
 /**
@@ -139,6 +169,7 @@ export function buildParsedSession(
     provider,
     path,
     turns: context.turns,
+    scoringEvents: context.scoringEvents,
   };
 
   if (context.parentSessionId) {

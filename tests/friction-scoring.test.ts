@@ -19,8 +19,6 @@ describe("getLabelWeight", () => {
     expect(getLabelWeight("test_build_lint_failure_complaint")).toBe(5);
     expect(getLabelWeight("interrupt")).toBe(2);
     expect(getLabelWeight("regression_report")).toBe(5);
-    expect(getLabelWeight("context_reinjection")).toBe(2);
-    expect(getLabelWeight("verification_request")).toBe(2);
     expect(getLabelWeight("stalled_or_guessing")).toBe(5);
   });
 
@@ -40,10 +38,9 @@ describe("calculateFrictionScore", () => {
     const labelCounts: Record<LabelName, number> = {
       ...createEmptySessionLabelMap(),
       context_drift: 2, // weight 4 -> 8
-      interrupt: 3, // weight 2 -> 6
     };
     const score = calculateFrictionScore(labelCounts, 100);
-    expect(score).toBe(14);
+    expect(score).toBe(8);
   });
 
   it("applies compliance penalty for scores below 100", () => {
@@ -99,7 +96,7 @@ describe("dominantLabelsForSession", () => {
       praise: 2,
     };
     const dominant = dominantLabelsForSession(labelCounts);
-    expect(dominant).toEqual(["context_drift", "interrupt", "praise"]);
+    expect(dominant).toEqual(["context_drift"]);
   });
 
   it("returns up to 3 labels", () => {
@@ -112,8 +109,8 @@ describe("dominantLabelsForSession", () => {
       verification_request: 1,
     };
     const dominant = dominantLabelsForSession(labelCounts);
-    expect(dominant).toHaveLength(3);
-    expect(dominant).toEqual(["context_drift", "interrupt", "praise"]);
+    expect(dominant).toHaveLength(2);
+    expect(dominant).toEqual(["context_drift", "regression_report"]);
   });
 
   it("sorts alphabetically when counts are equal", () => {
@@ -124,7 +121,7 @@ describe("dominantLabelsForSession", () => {
     };
     // "context_drift" < "interrupt" alphabetically
     const dominant = dominantLabelsForSession(labelCounts);
-    expect(dominant).toEqual(["context_drift", "interrupt"]);
+    expect(dominant).toEqual(["context_drift"]);
   });
 
   it("only includes labels with count > 0", () => {
@@ -134,6 +131,6 @@ describe("dominantLabelsForSession", () => {
       context_drift: 0,
     };
     const dominant = dominantLabelsForSession(labelCounts);
-    expect(dominant).toEqual(["interrupt"]);
+    expect(dominant).toEqual([]);
   });
 });

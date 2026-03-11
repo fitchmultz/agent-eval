@@ -21,12 +21,12 @@ const mockDiscoverArtifacts = vi.fn();
 const mockParseTranscriptFile = vi.fn();
 const mockProcessSession = vi.fn();
 const mockAggregateMetrics = vi.fn();
-const mockClusterIncidents = vi.fn();
-const mockBuildSummaryInputsFromArtifacts = vi.fn();
+const mockBuildMetricsRecord = vi.fn();
 const mockBuildSummaryArtifact = vi.fn();
 const mockBuildPresentationArtifacts = vi.fn();
 const mockRenderSummaryReport = vi.fn();
 const mockGetHomeDirectory = vi.fn();
+const mockProbeSessionOrder = vi.fn();
 
 vi.mock("../src/discovery.js", () => ({
   discoverArtifacts: mockDiscoverArtifacts,
@@ -42,15 +42,11 @@ vi.mock("../src/session-processor.js", () => ({
 
 vi.mock("../src/metrics-aggregation.js", () => ({
   aggregateMetrics: mockAggregateMetrics,
-}));
-
-vi.mock("../src/clustering.js", () => ({
-  clusterIncidents: mockClusterIncidents,
+  buildMetricsRecord: mockBuildMetricsRecord,
 }));
 
 vi.mock("../src/insights.js", () => ({
   buildSummaryArtifact: mockBuildSummaryArtifact,
-  buildSummaryInputsFromArtifacts: mockBuildSummaryInputsFromArtifacts,
 }));
 
 vi.mock("../src/presentation.js", () => ({
@@ -62,7 +58,11 @@ vi.mock("../src/report.js", () => ({
 }));
 
 vi.mock("../src/utils/environment.js", () => ({
-  getHomeDirectory: mockGetHomeDirectory,
+  getValidatedHomeDirectory: mockGetHomeDirectory,
+}));
+
+vi.mock("../src/transcript/session-order.js", () => ({
+  probeSessionOrder: mockProbeSessionOrder,
 }));
 
 const { evaluateArtifacts, parseArtifacts } = await import(
@@ -116,6 +116,7 @@ function createIncident(sessionId: string): IncidentRecord {
     labels: [
       {
         label: "interrupt",
+        family: "cue",
         severity: "low",
         confidence: "high",
         rationale: "test",
@@ -143,6 +144,7 @@ function createMetrics(sessionIds: string[]): MetricsRecord {
     sessionCount: sessionIds.length,
     turnCount: sessionIds.length,
     incidentCount: 0,
+    parseWarningCount: 0,
     labelCounts: {},
     complianceSummary: [],
     sessions: sessionIds.map((sessionId) => ({
@@ -151,10 +153,14 @@ function createMetrics(sessionIds: string[]): MetricsRecord {
       turnCount: 1,
       labeledTurnCount: 0,
       incidentCount: 0,
+      parseWarningCount: 0,
       writeCount: 0,
       verificationCount: 0,
       verificationPassedCount: 0,
       verificationFailedCount: 0,
+      postWriteVerificationAttempted: false,
+      postWriteVerificationPassed: false,
+      endedVerified: false,
       complianceScore: 100,
       complianceRules: [],
     })),
@@ -170,6 +176,7 @@ function createSummary(): SummaryArtifact {
     sessions: 1,
     turns: 1,
     incidents: 1,
+    parseWarningCount: 0,
     labels: [],
     severities: [],
     compliance: [],
@@ -183,16 +190,16 @@ function createSummary(): SummaryArtifact {
     },
     delivery: {
       sessionsWithWrites: 0,
-      verifiedWriteSessions: 0,
-      writeVerificationRate: 0,
+      sessionsEndingVerified: 0,
+      writeSessionVerificationRate: 0,
     },
     comparativeSlices: [],
     topSessions: [],
     topIncidents: [],
     scoreCards: [],
-    bragCards: [],
-    achievementBadges: [],
-    victoryLaps: [],
+    highlightCards: [],
+    recognitions: [],
+    verifiedDeliverySpotlights: [],
     opportunities: [],
   };
 }
@@ -211,17 +218,6 @@ describe("evaluator", () => {
     vi.resetAllMocks();
     resetConfig();
     mockGetHomeDirectory.mockReturnValue("/home/user");
-    mockBuildSummaryInputsFromArtifacts.mockReturnValue({
-      sessionLabelCounts: new Map(),
-      topIncidents: [],
-      severityCounts: {
-        info: 0,
-        low: 1,
-        medium: 0,
-        high: 0,
-      },
-      writeTurnCount: 0,
-    });
     mockBuildSummaryArtifact.mockReturnValue(createSummary());
     mockBuildPresentationArtifacts.mockReturnValue({
       reportHtml: "<html></html>",
@@ -230,6 +226,25 @@ describe("evaluator", () => {
       severityChartSvg: "<svg>severity</svg>",
     });
     mockRenderSummaryReport.mockReturnValue("# Report");
+    mockProbeSessionOrder.mockImplementation(async (path: string) => ({
+      path,
+      startedAt: undefined,
+      earliestTimestamp: undefined,
+      mtimeMs: Number(path.match(/(\d+)/)?.[1] ?? 0),
+    }));
+    mockBuildMetricsRecord.mockImplementation((parts, inventory) => ({
+      evaluatorVersion: "1.0.0",
+      schemaVersion: "1.0.0",
+      generatedAt: "2026-03-10T00:00:00.000Z",
+      sessionCount: parts.sessionMetrics.length,
+      turnCount: parts.turnCount,
+      incidentCount: parts.incidentCount,
+      parseWarningCount: parts.parseWarningCount,
+      labelCounts: parts.labelCounts,
+      complianceSummary: [],
+      sessions: parts.sessionMetrics,
+      inventory,
+    }));
   });
 
   afterEach(() => {
@@ -262,8 +277,6 @@ describe("evaluator", () => {
     mockAggregateMetrics.mockReturnValue(
       createMetrics(["session-1", "session-2", "session-3"]),
     );
-    mockClusterIncidents.mockReturnValue([]);
-
     const result = await evaluateArtifacts({
       source: "codex",
       home: "~/.codex",
@@ -307,8 +320,6 @@ describe("evaluator", () => {
     mockAggregateMetrics.mockReturnValue(
       createMetrics(["session-3", "session-4"]),
     );
-    mockClusterIncidents.mockReturnValue([]);
-
     await evaluateArtifacts({
       source: "codex",
       home: "~/.codex",
@@ -321,12 +332,7 @@ describe("evaluator", () => {
     ]);
   });
 
-  it("recalculates incident counts from clustered corpus incidents", async () => {
-    const clustered = [
-      createIncident("session-1"),
-      createIncident("session-1"),
-    ];
-
+  it("uses per-session incidents without reclustering the flattened corpus", async () => {
     mockDiscoverArtifacts.mockResolvedValue({
       provider: "codex",
       homePath: "/home/user/.codex",
@@ -337,11 +343,13 @@ describe("evaluator", () => {
     mockProcessSession.mockReturnValue({
       sessionId: "session-1",
       turns: [createRawTurn("session-1")],
-      incidents: [],
+      incidents: [createIncident("session-1"), createIncident("session-1")],
       metrics: createMetrics(["session-1"]).sessions[0],
     });
-    mockAggregateMetrics.mockReturnValue(createMetrics(["session-1"]));
-    mockClusterIncidents.mockReturnValue(clustered);
+    mockAggregateMetrics.mockReturnValue({
+      ...createMetrics(["session-1"]),
+      incidentCount: 2,
+    });
 
     const result = await evaluateArtifacts({
       source: "codex",
@@ -349,11 +357,8 @@ describe("evaluator", () => {
     });
 
     expect(result.metrics.incidentCount).toBe(2);
-    expect(result.metrics.sessions[0]?.incidentCount).toBe(2);
-    expect(mockBuildSummaryInputsFromArtifacts).toHaveBeenCalledWith(
-      result.rawTurns,
-      clustered,
-    );
+    expect(result.incidents).toHaveLength(2);
+    expect(mockAggregateMetrics).toHaveBeenCalledTimes(1);
   });
 
   it("parses artifacts without running scoring or presentation generation", async () => {
@@ -379,7 +384,6 @@ describe("evaluator", () => {
     expect(result.sessionCount).toBe(1);
     expect(result.rawTurns).toHaveLength(1);
     expect(mockAggregateMetrics).not.toHaveBeenCalled();
-    expect(mockClusterIncidents).not.toHaveBeenCalled();
     expect(mockBuildSummaryArtifact).not.toHaveBeenCalled();
     expect(mockBuildPresentationArtifacts).not.toHaveBeenCalled();
     expect(mockRenderSummaryReport).not.toHaveBeenCalled();
@@ -423,8 +427,6 @@ describe("evaluator", () => {
   });
 
   it("uses the same canonical pipeline in summary mode but omits raw artifacts", async () => {
-    const clustered = [createIncident("session-1")];
-
     mockDiscoverArtifacts.mockResolvedValue({
       provider: "codex",
       homePath: "/home/user/.codex",
@@ -438,8 +440,6 @@ describe("evaluator", () => {
       incidents: [],
       metrics: createMetrics(["session-1"]).sessions[0],
     });
-    mockAggregateMetrics.mockReturnValue(createMetrics(["session-1"]));
-    mockClusterIncidents.mockReturnValue(clustered);
 
     const result = await evaluateArtifacts({
       source: "codex",
@@ -451,6 +451,8 @@ describe("evaluator", () => {
     expect(result.incidents).toBeUndefined();
     expect(result.summary).toEqual(createSummary());
     expect(result.report).toBe("# Report");
+    expect(mockAggregateMetrics).not.toHaveBeenCalled();
+    expect(mockBuildMetricsRecord).toHaveBeenCalled();
     expect(mockBuildPresentationArtifacts).toHaveBeenCalledWith(
       result.metrics,
       result.summary,

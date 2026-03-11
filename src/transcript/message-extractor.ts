@@ -4,6 +4,7 @@
  * Notes: Handles both user and assistant message formats.
  */
 
+import { appendScoringEvent } from "./session-builder.js";
 import { asRecord, asString, getValue } from "./type-guards.js";
 import type { ParserContext, SourceRef } from "./types.js";
 
@@ -48,8 +49,20 @@ export function handleMessageResponse(
 
   if (role === "user") {
     context.currentTurn.userMessages.push(text);
+    appendScoringEvent(context, {
+      kind: "user_message",
+      text,
+      timestamp: context.currentTurn.startedAt,
+      cwd: context.currentTurn.cwd,
+    });
   } else if (role === "assistant") {
     context.currentTurn.assistantMessages.push(text);
+    appendScoringEvent(context, {
+      kind: "assistant_message",
+      text,
+      timestamp: context.currentTurn.startedAt,
+      cwd: context.currentTurn.cwd,
+    });
   }
 
   context.currentTurn.sourceRefs.push(sourceRef);

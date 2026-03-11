@@ -70,6 +70,33 @@ function redactInventory(inventory: InventoryRecord[]): InventoryRecord[] {
   }));
 }
 
+export interface MetricsRecordParts {
+  sessionMetrics: MetricsRecord["sessions"];
+  labelCounts: LabelCountRecord;
+  turnCount: number;
+  incidentCount: number;
+  parseWarningCount: number;
+}
+
+export function buildMetricsRecord(
+  parts: MetricsRecordParts,
+  inventory: InventoryRecord[],
+): MetricsRecord {
+  return {
+    evaluatorVersion: EVALUATOR_VERSION,
+    schemaVersion: SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    sessionCount: parts.sessionMetrics.length,
+    turnCount: parts.turnCount,
+    incidentCount: parts.incidentCount,
+    parseWarningCount: parts.parseWarningCount,
+    labelCounts: parts.labelCounts,
+    complianceSummary: aggregateComplianceSummary(parts.sessionMetrics),
+    sessions: parts.sessionMetrics,
+    inventory: redactInventory(inventory),
+  };
+}
+
 /**
  * Aggregates metrics from processed sessions into a MetricsRecord.
  * @param sessions - Array of processed sessions
@@ -82,20 +109,20 @@ export function aggregateMetrics(
 ): MetricsRecord {
   const labelCounts = aggregateLabelCounts(sessions);
   const sessionMetrics = sessions.map((s) => s.metrics);
-  const complianceSummary = aggregateComplianceSummary(sessionMetrics);
 
-  return {
-    evaluatorVersion: EVALUATOR_VERSION,
-    schemaVersion: SCHEMA_VERSION,
-    generatedAt: new Date().toISOString(),
-    sessionCount: sessions.length,
-    turnCount: sessions.reduce((sum, s) => sum + s.turns.length, 0),
-    incidentCount: sessions.reduce((sum, s) => sum + s.incidents.length, 0),
-    labelCounts,
-    complianceSummary,
-    sessions: sessionMetrics,
-    inventory: redactInventory(inventory),
-  };
+  return buildMetricsRecord(
+    {
+      sessionMetrics,
+      labelCounts,
+      turnCount: sessions.reduce((sum, s) => sum + s.turns.length, 0),
+      incidentCount: sessions.reduce((sum, s) => sum + s.incidents.length, 0),
+      parseWarningCount: sessionMetrics.reduce(
+        (sum, session) => sum + session.parseWarningCount,
+        0,
+      ),
+    },
+    inventory,
+  );
 }
 
 /**

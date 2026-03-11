@@ -34,7 +34,10 @@ export {
   createArchetypeNote,
   determineArchetype,
 } from "./session-archetype.js";
-export { buildTopSessions, buildVictoryLaps } from "./session-ranking.js";
+export {
+  buildTopSessions,
+  buildVerifiedDeliverySpotlights,
+} from "./session-ranking.js";
 export type {
   ScoreSnapshot,
   SessionInsightRow,
@@ -67,7 +70,7 @@ export {
  * ```typescript
  * const inputs = buildSummaryInputsFromArtifacts(rawTurns, incidents);
  * const summary = buildSummaryArtifact(metrics, inputs);
- * console.log(`Verification rate: ${summary.delivery.writeVerificationRate}%`);
+ * console.log(`Verification rate: ${summary.delivery.writeSessionVerificationRate}%`);
  * ```
  */
 export function buildSummaryArtifact(

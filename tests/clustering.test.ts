@@ -1,12 +1,36 @@
 /**
  * Purpose: Verifies labeled turns cluster into incidents conservatively by session, gap, and overlapping labels.
  * Entrypoint: Executed by Vitest via `pnpm test`.
- * Notes: Uses synthetic turns so incident behavior stays deterministic and public-safe.
+ * Notes: Uses synthetic turns so incident behavior stays deterministic and public-facing redaction.
  */
 import { describe, expect, it } from "vitest";
 
 import { clusterIncidents } from "../src/clustering.js";
 import type { RawTurnRecord } from "../src/schema.js";
+
+function createLabel(
+  label: RawTurnRecord["labels"][number]["label"],
+  overrides: Partial<RawTurnRecord["labels"][number]> = {},
+): RawTurnRecord["labels"][number] {
+  const family =
+    label === "context_drift" ||
+    label === "test_build_lint_failure_complaint" ||
+    label === "regression_report" ||
+    label === "stalled_or_guessing"
+      ? "incident"
+      : label === "praise"
+        ? "positive"
+        : "cue";
+
+  return {
+    label,
+    family,
+    severity: "low",
+    confidence: "high",
+    rationale: "test",
+    ...overrides,
+  };
+}
 
 function createMockTurn(overrides: Partial<RawTurnRecord> = {}): RawTurnRecord {
   return {
@@ -53,12 +77,11 @@ describe("clusterIncidents", () => {
           assistantMessagePreviews: [],
           toolCalls: [],
           labels: [
-            {
-              label: "test_build_lint_failure_complaint",
+            createLabel("test_build_lint_failure_complaint", {
               severity: "high",
               confidence: "high",
               rationale: "failure",
-            },
+            }),
           ],
           sourceRefs: [
             {
@@ -81,12 +104,11 @@ describe("clusterIncidents", () => {
           assistantMessagePreviews: [],
           toolCalls: [],
           labels: [
-            {
-              label: "test_build_lint_failure_complaint",
+            createLabel("test_build_lint_failure_complaint", {
               severity: "high",
               confidence: "medium",
               rationale: "failure",
-            },
+            }),
           ],
           sourceRefs: [
             {
@@ -126,12 +148,7 @@ describe("clusterIncidents", () => {
             turnId: "turn-1",
             turnIndex: 0,
             labels: [
-              {
-                label: "interrupt",
-                severity: "low",
-                confidence: "high",
-                rationale: "User interrupted",
-              },
+              createLabel("interrupt", { rationale: "User interrupted" }),
             ],
           }),
         ],
@@ -153,27 +170,13 @@ describe("clusterIncidents", () => {
             sessionId: "session-1",
             turnId: "turn-1",
             turnIndex: 0,
-            labels: [
-              {
-                label: "interrupt",
-                severity: "low",
-                confidence: "high",
-                rationale: "Interrupt",
-              },
-            ],
+            labels: [createLabel("interrupt", { rationale: "Interrupt" })],
           }),
           createMockTurn({
             sessionId: "session-2",
             turnId: "turn-2",
             turnIndex: 0,
-            labels: [
-              {
-                label: "interrupt",
-                severity: "low",
-                confidence: "high",
-                rationale: "Interrupt",
-              },
-            ],
+            labels: [createLabel("interrupt", { rationale: "Interrupt" })],
           }),
         ],
         { maxTurnGap: 2 },
@@ -192,26 +195,12 @@ describe("clusterIncidents", () => {
           createMockTurn({
             turnId: "turn-1",
             turnIndex: 0,
-            labels: [
-              {
-                label: "interrupt",
-                severity: "low",
-                confidence: "high",
-                rationale: "Interrupt",
-              },
-            ],
+            labels: [createLabel("interrupt", { rationale: "Interrupt" })],
           }),
           createMockTurn({
             turnId: "turn-2",
             turnIndex: 2, // Exactly at maxTurnGap of 2
-            labels: [
-              {
-                label: "interrupt",
-                severity: "low",
-                confidence: "high",
-                rationale: "Interrupt",
-              },
-            ],
+            labels: [createLabel("interrupt", { rationale: "Interrupt" })],
           }),
         ],
         { maxTurnGap: 2 },
@@ -229,26 +218,12 @@ describe("clusterIncidents", () => {
           createMockTurn({
             turnId: "turn-1",
             turnIndex: 0,
-            labels: [
-              {
-                label: "interrupt",
-                severity: "low",
-                confidence: "high",
-                rationale: "Interrupt",
-              },
-            ],
+            labels: [createLabel("interrupt", { rationale: "Interrupt" })],
           }),
           createMockTurn({
             turnId: "turn-2",
             turnIndex: 4, // Gap of 4 > maxTurnGap of 2
-            labels: [
-              {
-                label: "interrupt",
-                severity: "low",
-                confidence: "high",
-                rationale: "Interrupt",
-              },
-            ],
+            labels: [createLabel("interrupt", { rationale: "Interrupt" })],
           }),
         ],
         { maxTurnGap: 2 },
@@ -267,25 +242,17 @@ describe("clusterIncidents", () => {
           createMockTurn({
             turnId: "turn-1",
             turnIndex: 0,
-            labels: [
-              {
-                label: "interrupt",
-                severity: "low",
-                confidence: "high",
-                rationale: "Interrupt",
-              },
-            ],
+            labels: [createLabel("interrupt", { rationale: "Interrupt" })],
           }),
           createMockTurn({
             turnId: "turn-2",
             turnIndex: 1,
             labels: [
-              {
-                label: "context_drift",
+              createLabel("context_drift", {
                 severity: "high",
                 confidence: "medium",
                 rationale: "Drift",
-              },
+              }),
             ],
           }),
         ],
@@ -305,31 +272,20 @@ describe("clusterIncidents", () => {
           createMockTurn({
             turnId: "turn-1",
             turnIndex: 0,
-            labels: [
-              {
-                label: "interrupt",
-                severity: "low",
-                confidence: "high",
-                rationale: "Interrupt",
-              },
-            ],
+            labels: [createLabel("interrupt", { rationale: "Interrupt" })],
           }),
           createMockTurn({
             turnId: "turn-2",
             turnIndex: 1,
             labels: [
-              {
-                label: "interrupt",
-                severity: "low",
+              createLabel("interrupt", {
                 confidence: "medium",
                 rationale: "Another interrupt",
-              },
-              {
-                label: "context_reinjection",
+              }),
+              createLabel("context_reinjection", {
                 severity: "medium",
-                confidence: "high",
                 rationale: "Reinjection",
-              },
+              }),
             ],
           }),
         ],
@@ -351,14 +307,7 @@ describe("clusterIncidents", () => {
           createMockTurn({
             turnId: "turn-1",
             turnIndex: 0,
-            labels: [
-              {
-                label: "interrupt",
-                severity: "low",
-                confidence: "high",
-                rationale: "Interrupt",
-              },
-            ],
+            labels: [createLabel("interrupt", { rationale: "Interrupt" })],
           }),
           createMockTurn({
             turnId: "turn-2",
@@ -368,14 +317,7 @@ describe("clusterIncidents", () => {
           createMockTurn({
             turnId: "turn-3",
             turnIndex: 2,
-            labels: [
-              {
-                label: "interrupt",
-                severity: "low",
-                confidence: "high",
-                rationale: "Interrupt",
-              },
-            ],
+            labels: [createLabel("interrupt", { rationale: "Interrupt" })],
           }),
         ],
         { maxTurnGap: 2 },
@@ -394,24 +336,20 @@ describe("clusterIncidents", () => {
             turnId: "turn-1",
             turnIndex: 0,
             labels: [
-              {
-                label: "interrupt",
-                severity: "low",
+              createLabel("interrupt", {
                 confidence: "medium",
                 rationale: "Low severity interrupt",
-              },
+              }),
             ],
           }),
           createMockTurn({
             turnId: "turn-2",
             turnIndex: 1,
             labels: [
-              {
-                label: "interrupt",
+              createLabel("interrupt", {
                 severity: "high",
-                confidence: "high",
                 rationale: "High severity interrupt",
-              },
+              }),
             ],
           }),
         ],
@@ -432,36 +370,30 @@ describe("clusterIncidents", () => {
             turnId: "turn-1",
             turnIndex: 0,
             labels: [
-              {
-                label: "test_build_lint_failure_complaint",
+              createLabel("test_build_lint_failure_complaint", {
                 severity: "high",
-                confidence: "high",
                 rationale: "Failure 1",
-              },
+              }),
             ],
           }),
           createMockTurn({
             turnId: "turn-2",
             turnIndex: 1,
             labels: [
-              {
-                label: "test_build_lint_failure_complaint",
+              createLabel("test_build_lint_failure_complaint", {
                 severity: "high",
-                confidence: "high",
                 rationale: "Failure 2",
-              },
+              }),
             ],
           }),
           createMockTurn({
             turnId: "turn-3",
             turnIndex: 2,
             labels: [
-              {
-                label: "test_build_lint_failure_complaint",
+              createLabel("test_build_lint_failure_complaint", {
                 severity: "high",
-                confidence: "high",
                 rationale: "Failure 3",
-              },
+              }),
             ],
           }),
         ],

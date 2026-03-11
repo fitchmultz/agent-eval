@@ -6,6 +6,8 @@
  * Invariants/Assumptions: Function-call and custom-tool-call records both remain supported because they exist in the current transcript corpus.
  */
 
+import { extractCommandTextFromArgumentsText } from "../tool-command-text.js";
+import { appendScoringEvent } from "./session-builder.js";
 import { asString, getValue } from "./type-guards.js";
 import type {
   JsonlEventRecord,
@@ -21,6 +23,14 @@ function addToolCallToCurrentTurn(
   sourceRef: SourceRef,
   context: ParserContext,
 ): void {
+  toolCall.scoringEventIndex = appendScoringEvent(context, {
+    kind: "tool_call",
+    toolName: toolCall.toolName,
+    commandText: extractCommandTextFromArgumentsText(toolCall.argumentsText),
+    status: toolCall.status,
+    timestamp: toolCall.timestamp,
+    cwd: context.currentTurn.cwd,
+  });
   context.pendingToolCalls.set(toolCall.callId, toolCall);
   context.currentTurn.toolCalls.push(toolCall);
   context.currentTurn.sourceRefs.push(sourceRef);
@@ -40,6 +50,15 @@ function updateToolCallOutput(
   if (toolCall && outputText) {
     toolCall.outputText = outputText;
     toolCall.status = normalizeToolOutput(outputText);
+    if (typeof toolCall.scoringEventIndex === "number") {
+      const scoringEvent = context.scoringEvents[toolCall.scoringEventIndex];
+      if (scoringEvent) {
+        context.scoringEvents[toolCall.scoringEventIndex] = {
+          ...scoringEvent,
+          status: toolCall.status,
+        };
+      }
+    }
   }
 
   context.currentTurn.sourceRefs.push(sourceRef);

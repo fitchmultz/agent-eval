@@ -35,10 +35,18 @@ export function buildPresentationArtifacts(
   metrics: MetricsRecord,
   summary: SummaryArtifact,
 ): PresentationArtifacts {
+  const labelChartSvg = renderLabelChart(summary);
+  const complianceChartSvg = renderComplianceChart(summary);
+  const severityChartSvg = renderSeverityChart(summary);
+
   return {
-    reportHtml: renderHtmlReport(summary, metrics),
-    labelChartSvg: renderLabelChart(summary),
-    complianceChartSvg: renderComplianceChart(summary),
-    severityChartSvg: renderSeverityChart(summary),
+    reportHtml: renderHtmlReport(summary, metrics, {
+      labelChartSvg,
+      complianceChartSvg,
+      severityChartSvg,
+    }),
+    labelChartSvg,
+    complianceChartSvg,
+    severityChartSvg,
   };
 }
