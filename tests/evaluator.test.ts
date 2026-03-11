@@ -84,7 +84,7 @@ function createInventory(): InventoryRecord[] {
 
 function createRawTurn(sessionId: string, turnIndex = 0): RawTurnRecord {
   return {
-    evaluatorVersion: "1.0.0",
+    engineVersion: "1.0.0",
     schemaVersion: "1.0.0",
     sessionId,
     turnId: `${sessionId}:turn:${turnIndex}`,
@@ -107,7 +107,7 @@ function createRawTurn(sessionId: string, turnIndex = 0): RawTurnRecord {
 
 function createIncident(sessionId: string): IncidentRecord {
   return {
-    evaluatorVersion: "1.0.0",
+    engineVersion: "1.0.0",
     schemaVersion: "1.0.0",
     incidentId: `${sessionId}:incident:0`,
     sessionId,
@@ -138,7 +138,7 @@ function createIncident(sessionId: string): IncidentRecord {
 
 function createMetrics(sessionIds: string[]): MetricsRecord {
   return {
-    evaluatorVersion: "1.0.0",
+    engineVersion: "1.0.0",
     schemaVersion: "1.0.0",
     generatedAt: "2026-03-10T00:00:00.000Z",
     sessionCount: sessionIds.length,
@@ -170,7 +170,7 @@ function createMetrics(sessionIds: string[]): MetricsRecord {
 
 function createSummary(): SummaryArtifact {
   return {
-    evaluatorVersion: "1.0.0",
+    engineVersion: "1.0.0",
     schemaVersion: "1.0.0",
     generatedAt: "2026-03-10T00:00:00.000Z",
     sessions: 1,
@@ -199,7 +199,7 @@ function createSummary(): SummaryArtifact {
     scoreCards: [],
     highlightCards: [],
     recognitions: [],
-    verifiedDeliverySpotlights: [],
+    endedVerifiedDeliverySpotlights: [],
     opportunities: [],
   };
 }
@@ -233,7 +233,7 @@ describe("evaluator", () => {
       mtimeMs: Number(path.match(/(\d+)/)?.[1] ?? 0),
     }));
     mockBuildMetricsRecord.mockImplementation((parts, inventory) => ({
-      evaluatorVersion: "1.0.0",
+      engineVersion: "1.0.0",
       schemaVersion: "1.0.0",
       generatedAt: "2026-03-10T00:00:00.000Z",
       sessionCount: parts.sessionMetrics.length,

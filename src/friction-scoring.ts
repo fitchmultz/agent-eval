@@ -25,6 +25,14 @@ export class FrictionScoringError extends Error {
   }
 }
 
+function isIncidentLabelName(
+  label: LabelName,
+): label is (typeof incidentLabelNames)[number] {
+  return incidentLabelNames.includes(
+    label as (typeof incidentLabelNames)[number],
+  );
+}
+
 /**
  * Validates that a label is in the taxonomy.
  * @param label - The label to validate
@@ -47,16 +55,18 @@ function validateLabel(label: string): asserts label is LabelName {
  * @returns The weight value for the label
  * @throws FrictionScoringError if the label is invalid or weight is not configured
  */
-export function getLabelWeight(label: LabelName): number {
+export function getIncidentLabelWeight(
+  label: (typeof incidentLabelNames)[number],
+): number {
   validateLabel(label);
 
-  const { labelWeights } = getConfig().scoring;
-  const weight = labelWeights[label];
+  const { incidentLabelWeights } = getConfig().scoring;
+  const weight = incidentLabelWeights[label];
 
   if (weight === undefined) {
     throw new FrictionScoringError(
       label,
-      "Weight not configured in scoring configuration",
+      "Incident friction weight not configured in scoring configuration",
     );
   }
 
@@ -115,11 +125,11 @@ export function calculateFrictionScore(
 
   // Calculate weighted sum using validated getters
   const weighted = labelTaxonomy.reduce((total, label) => {
-    if (!incidentLabelNames.includes(label)) {
+    if (!isIncidentLabelName(label)) {
       return total;
     }
     const count = getLabelCount(labelCounts, label);
-    const weight = getLabelWeight(label);
+    const weight = getIncidentLabelWeight(label);
     return total + count * weight;
   }, 0);
 
@@ -139,7 +149,7 @@ export function dominantLabelsForSession(
   labelCounts: Record<LabelName, number>,
 ): LabelName[] {
   return [...labelTaxonomy]
-    .filter((label) => incidentLabelNames.includes(label))
+    .filter(isIncidentLabelName)
     .filter((label) => {
       const count = labelCounts[label];
       return typeof count === "number" && !Number.isNaN(count) && count > 0;

@@ -1,5 +1,5 @@
 /**
- * Purpose: Compute the deterministic core summary data shared by every evaluator output.
+ * Purpose: Compute the deterministic core summary data shared by every analytics output.
  * Responsibilities: Turn metrics and aggregated inputs into stable rates, rankings, slices, and opportunities.
  * Scope: Internal summary math used by the public facade in insights.ts.
  * Usage: Called through `buildSummaryArtifact()` in normal evaluator flows.
@@ -14,8 +14,8 @@ import {
   filterWriteSessions,
 } from "./session-filters.js";
 import {
+  buildEndedVerifiedDeliverySpotlights,
   buildTopSessions,
-  buildVerifiedDeliverySpotlights,
 } from "./session-ranking.js";
 import { countLabel, safeRate } from "./summary/index.js";
 import type { SummaryCoreData, SummaryInputs } from "./summary/types.js";
@@ -54,8 +54,8 @@ export function buildSummaryCore(
     metrics.sessions,
   );
   const topSessions = buildTopSessions(metrics, inputs.sessionLabelCounts);
-  const verifiedDeliverySpotlights =
-    buildVerifiedDeliverySpotlights(topSessions);
+  const endedVerifiedDeliverySpotlights =
+    buildEndedVerifiedDeliverySpotlights(topSessions);
   const comparativeSlices = buildComparativeSlices(
     metrics,
     inputs.sessionLabelCounts,
@@ -113,7 +113,7 @@ export function buildSummaryCore(
     },
     comparativeSlices,
     topSessions: topSessions.slice(0, getConfig().previews.maxTopSessions),
-    verifiedDeliverySpotlights,
+    endedVerifiedDeliverySpotlights,
     topIncidents: inputs.topIncidents,
   };
 }

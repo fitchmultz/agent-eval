@@ -2,7 +2,7 @@
 
 Date grounded with `date`: `Fri Mar 6 11:46:22 MST 2026`
 
-This is an early Codex-specific discovery note from the initial exploration pass. It is kept as reference material, not as the current product contract. The implemented evaluator is now source-aware and also supports Claude Code homes.
+This is an early Codex-specific discovery note from the initial exploration pass. It is kept as reference material, not as the current product contract. The implemented analytics engine is now source-aware and also supports Claude Code homes.
 
 ## Summary
 
@@ -151,4 +151,4 @@ The portable methodology should treat transcript JSONL as required input and all
 - Schema and tool naming drift across CLI versions is expected.
 - SQLite filenames may be versioned and unstable.
 - Some threads are subagents and should be linked into parent-child trees instead of treated as unrelated sessions.
-- Local logs and command outputs may expose raw paths, prompts, or secrets, so the evaluator should normalize and redact before exporting.
+- Local logs and command outputs may expose raw paths, prompts, or secrets, so the analytics engine should normalize and redact before exporting.

@@ -273,11 +273,10 @@ export function scoreCompliance(session: ParsedSession): ComplianceScorecard {
     }
     return event.kind === "tool_call" && event.toolName === "update_plan";
   });
-  const hasSuccessfulPostWriteVerification =
-    lastPostWriteVerification?.status === "completed";
   const postWriteVerificationAttempted = postWriteVerificationEvents.length > 0;
-  const postWriteVerificationPassed = hasSuccessfulPostWriteVerification;
-  const endedVerified = hasSuccessfulPostWriteVerification;
+  const postWriteVerificationPassed =
+    lastPostWriteVerification?.status === "completed";
+  const endedVerified = postWriteVerificationPassed;
 
   rules.push(
     createRule(
@@ -297,12 +296,12 @@ export function scoreCompliance(session: ParsedSession): ComplianceScorecard {
     ),
     createRule(
       "verification_after_code_changes",
-      hasSuccessfulPostWriteVerification ? "pass" : "fail",
-      "Checks whether the last verification attempt after the final write succeeded.",
+      postWriteVerificationAttempted ? "pass" : "fail",
+      "Checks whether a verification attempt occurred after the final write.",
     ),
     createRule(
       "no_unverified_ending",
-      hasSuccessfulPostWriteVerification ? "pass" : "fail",
+      endedVerified ? "pass" : "fail",
       "Checks whether the session ended without leaving the final write unverified.",
     ),
   );

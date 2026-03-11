@@ -20,7 +20,7 @@ import type {
 } from "../src/schema.js";
 
 const metrics: MetricsRecord = {
-  evaluatorVersion: "0.1.0",
+  engineVersion: "0.1.0",
   schemaVersion: "1",
   generatedAt: "2026-03-06T19:00:00.000Z",
   sessionCount: 2,
@@ -118,7 +118,7 @@ const metrics: MetricsRecord = {
 
 const incidents: IncidentRecord[] = [
   {
-    evaluatorVersion: "0.1.0",
+    engineVersion: "0.1.0",
     schemaVersion: "1",
     incidentId: "incident-1",
     sessionId: "session-1",
@@ -146,7 +146,7 @@ const incidents: IncidentRecord[] = [
     ],
   },
   {
-    evaluatorVersion: "0.1.0",
+    engineVersion: "0.1.0",
     schemaVersion: "1",
     incidentId: "incident-2",
     sessionId: "session-2",
@@ -177,7 +177,7 @@ const incidents: IncidentRecord[] = [
 
 const rawTurns: RawTurnRecord[] = [
   {
-    evaluatorVersion: "0.1.0",
+    engineVersion: "0.1.0",
     schemaVersion: "1",
     sessionId: "session-1",
     turnId: "turn-1",
@@ -205,7 +205,7 @@ const rawTurns: RawTurnRecord[] = [
     ],
   },
   {
-    evaluatorVersion: "0.1.0",
+    engineVersion: "0.1.0",
     schemaVersion: "1",
     sessionId: "session-2",
     turnId: "turn-2",
@@ -245,14 +245,18 @@ describe("presentation", () => {
     expect(summary.incidents).toBe(2);
     expect(summary.labels[0]?.label).toBe("verification_request");
     expect(summary.topSessions[0]?.archetype).toBe("verified_delivery");
-    expect(summary.topSessions[0]?.archetypeLabel).toBe("Verified Delivery");
+    expect(summary.topSessions[0]?.archetypeLabel).toBe(
+      "Ended-Verified Delivery",
+    );
     expect(summary.rates.verificationRequestsPer100Turns).toBe(37.5);
-    expect(summary.highlightCards[0]?.title).toBe("Verified Deliveries");
+    expect(summary.highlightCards[0]?.title).toBe("Ended-Verified Deliveries");
     expect(summary.comparativeSlices[0]?.label).toBe("Selected Corpus");
     expect(summary.scoreCards[0]?.title).toBe("Verification Proxy Score");
     expect(summary.scoreCards[0]?.score).toBe(100);
     expect(summary.recognitions).toContain("Low-Interruption Corpus");
-    expect(summary.verifiedDeliverySpotlights[0]?.sessionId).toBe("session-1");
+    expect(summary.endedVerifiedDeliverySpotlights[0]?.sessionId).toBe(
+      "session-1",
+    );
     expect(summary.opportunities[0]?.title).toContain("verification");
     expect(summary.topIncidents[0]?.turnSpan).toBe(2);
     expect(presentation.reportHtml).toContain("Transcript Analytics Report");
@@ -286,6 +290,6 @@ describe("presentation", () => {
     expect(canonicalMarkdown).not.toContain("## Show-Off Stats");
     expect(canonicalMarkdown).not.toContain("## Badges");
     expect(canonicalMarkdown).not.toContain("## Victory Lap Sessions");
-    expect(canonicalMarkdown).toContain("Verified Delivery");
+    expect(canonicalMarkdown).toContain("Ended-Verified Delivery");
   });
 });

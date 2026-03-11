@@ -15,7 +15,7 @@ const baseCharts = {
 };
 
 const baseMetrics: MetricsRecord = {
-  evaluatorVersion: "0.1.0",
+  engineVersion: "0.1.0",
   schemaVersion: "1",
   generatedAt: "2026-03-06T19:00:00.000Z",
   sessionCount: 2,
@@ -67,7 +67,7 @@ const baseMetrics: MetricsRecord = {
 };
 
 const baseSummary: SummaryArtifact = {
-  evaluatorVersion: "0.1.0",
+  engineVersion: "0.1.0",
   schemaVersion: "1",
   generatedAt: "2026-03-06T19:00:00.000Z",
   sessions: 2,
@@ -105,7 +105,7 @@ const baseSummary: SummaryArtifact = {
     writeSessionVerificationRate: 100,
   },
   topSessions: [],
-  verifiedDeliverySpotlights: [],
+  endedVerifiedDeliverySpotlights: [],
   topIncidents: [],
   opportunities: [],
   highlightCards: [],
@@ -173,7 +173,7 @@ describe("renderHtmlReport", () => {
   it("escapes HTML in summary metadata", () => {
     const summaryWithHtml: SummaryArtifact = {
       ...baseSummary,
-      evaluatorVersion: "<script>alert(1)</script>",
+      engineVersion: "<script>alert(1)</script>",
     };
     const html = renderHtmlReport(summaryWithHtml, baseMetrics, baseCharts);
 
@@ -274,12 +274,12 @@ describe("renderHtmlReport", () => {
   it("renders badges when present", () => {
     const summaryWithBadges: SummaryArtifact = {
       ...baseSummary,
-      recognitions: ["Low-Interruption Corpus", "Verified Delivery"],
+      recognitions: ["Low-Interruption Corpus", "Ended-Verified Delivery"],
     };
     const html = renderHtmlReport(summaryWithBadges, baseMetrics, baseCharts);
 
     expect(html).not.toContain("Low-Interruption Corpus");
-    expect(html).not.toContain("Verified Delivery");
+    expect(html).not.toContain("Verified Delivery Spotlights");
   });
 
   it("renders brag cards when present", () => {
@@ -404,7 +404,7 @@ describe("renderHtmlReport", () => {
         {
           sessionId: "session-1",
           archetype: "verified_delivery",
-          archetypeLabel: "Verified Delivery",
+          archetypeLabel: "Ended-Verified Delivery",
           frictionScore: 2,
           complianceScore: 100,
           incidentCount: 0,
@@ -420,7 +420,7 @@ describe("renderHtmlReport", () => {
     const html = renderHtmlReport(summaryWithSessions, baseMetrics, baseCharts);
 
     expect(html).toContain("session-1");
-    expect(html).toContain("Verified Delivery");
+    expect(html).toContain("Ended-Verified Delivery");
     expect(html).toContain("Well executed session");
     expect(html).toContain("verification_request");
     expect(html).not.toContain("verified_delivery");
@@ -453,11 +453,11 @@ describe("renderHtmlReport", () => {
   it("renders victory laps when present", () => {
     const summaryWithVictory: SummaryArtifact = {
       ...baseSummary,
-      verifiedDeliverySpotlights: [
+      endedVerifiedDeliverySpotlights: [
         {
           sessionId: "session-1",
           archetype: "verified_delivery",
-          archetypeLabel: "Verified Delivery",
+          archetypeLabel: "Ended-Verified Delivery",
           frictionScore: 0,
           complianceScore: 100,
           incidentCount: 0,

@@ -35,7 +35,7 @@ function createMockMetricsRecord(
   overrides: Partial<MetricsRecord> = {},
 ): MetricsRecord {
   return {
-    evaluatorVersion: "1.0.0",
+    engineVersion: "1.0.0",
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
     sessionCount: 1,
@@ -56,7 +56,7 @@ function createMockSessionInsightRow(
   return {
     sessionId: "session-1",
     archetype: "verified_delivery",
-    archetypeLabel: "Verified Delivery",
+    archetypeLabel: "Ended-Verified Delivery",
     frictionScore: 2,
     complianceScore: 100,
     incidentCount: 0,
@@ -375,7 +375,7 @@ describe("summary-decorations", () => {
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
       const proofCard = decorations.highlightCards.find(
-        (c) => c.title === "Verified Deliveries",
+        (c) => c.title === "Ended-Verified Deliveries",
       );
       expect(proofCard?.value).toBe("2");
       expect(proofCard?.tone).toBe("good");
@@ -495,7 +495,7 @@ describe("summary-decorations", () => {
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
       const proofCard = decorations.highlightCards.find(
-        (c) => c.title === "Verified Deliveries",
+        (c) => c.title === "Ended-Verified Deliveries",
       );
       expect(proofCard?.value).toBe("0");
       expect(proofCard?.tone).toBe("neutral");
@@ -547,7 +547,9 @@ describe("summary-decorations", () => {
 
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
-      expect(decorations.recognitions).toContain("Strong Verification Proxy");
+      expect(decorations.recognitions).toContain(
+        "Strong Terminal Verification Proxy",
+      );
     });
 
     it("does not award Strong Verification Proxy when no sessions have verification passed", () => {
@@ -715,7 +717,9 @@ describe("summary-decorations", () => {
       const decorations = buildSummaryDecorations(metrics, topSessions);
 
       expect(decorations.recognitions).toContain("Battle-Tested Corpus");
-      expect(decorations.recognitions).toContain("Strong Verification Proxy");
+      expect(decorations.recognitions).toContain(
+        "Strong Terminal Verification Proxy",
+      );
       expect(decorations.recognitions).toContain("Low-Interruption Corpus");
       expect(decorations.recognitions).toContain("Zero Drift Complaints");
     });

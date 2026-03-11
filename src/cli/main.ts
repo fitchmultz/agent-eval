@@ -122,7 +122,7 @@ function buildProgram(): Command {
     )
     .option(
       "--output-dir <path>",
-      "Directory for generated evaluator artifacts (env: CODEX_EVAL_OUTPUT_DIR)",
+      "Directory for generated analytics artifacts (env: CODEX_EVAL_OUTPUT_DIR)",
       defaultOutputDir,
     )
     .option(

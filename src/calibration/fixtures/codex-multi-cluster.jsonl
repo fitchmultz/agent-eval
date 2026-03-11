@@ -1,0 +1,15 @@
+{"timestamp":"2026-03-10T17:00:00.000Z","type":"session_meta","payload":{"id":"benchmark-codex-multi-cluster","timestamp":"2026-03-10T17:00:00.000Z","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T17:00:01.000Z","type":"turn_context","payload":{"turn_id":"turn-1","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T17:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"You lost context and are in the wrong repo."}]}}
+{"timestamp":"2026-03-10T17:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I will re-check the repository."}]}}
+{"timestamp":"2026-03-10T17:00:04.000Z","type":"turn_context","payload":{"turn_id":"turn-2","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T17:00:05.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Stop guessing and make progress."}]}}
+{"timestamp":"2026-03-10T17:00:06.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I will inspect the repo again."}]}}
+{"timestamp":"2026-03-10T17:00:07.000Z","type":"turn_context","payload":{"turn_id":"turn-3","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T17:00:08.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Thanks for checking."}]}}
+{"timestamp":"2026-03-10T17:00:09.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Continuing."}]}}
+{"timestamp":"2026-03-10T17:00:10.000Z","type":"turn_context","payload":{"turn_id":"turn-4","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T17:00:11.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Still checking."}]}}
+{"timestamp":"2026-03-10T17:00:12.000Z","type":"turn_context","payload":{"turn_id":"turn-5","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T17:00:13.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"This broke and now fails."}]}}
+{"timestamp":"2026-03-10T17:00:14.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I will fix the regression."}]}}

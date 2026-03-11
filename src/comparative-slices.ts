@@ -110,7 +110,7 @@ function createSubsetMetrics(
   );
 
   return {
-    evaluatorVersion: metrics.evaluatorVersion,
+    engineVersion: metrics.engineVersion,
     schemaVersion: metrics.schemaVersion,
     generatedAt: metrics.generatedAt,
     sessionCount: sessions.length,

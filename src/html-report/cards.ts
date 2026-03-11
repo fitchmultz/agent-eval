@@ -231,21 +231,21 @@ export function renderSessionCards(summary: SummaryArtifact): string {
 }
 
 /**
- * Renders the verified delivery spotlight cards section.
+ * Renders the ended-verified delivery spotlight cards section.
  */
-export function renderVerifiedDeliverySpotlightCards(
+export function renderEndedVerifiedDeliverySpotlightCards(
   summary: SummaryArtifact,
 ): string {
-  if (summary.verifiedDeliverySpotlights.length === 0) {
+  if (summary.endedVerifiedDeliverySpotlights.length === 0) {
     return createEmptyState(
-      "No clean verified delivery sessions were available in this slice.",
+      "No clean ended-verified delivery sessions were available in this slice.",
     );
   }
 
-  return summary.verifiedDeliverySpotlights
+  return summary.endedVerifiedDeliverySpotlights
     .map(
       (session) => `
-      <article class="session-card verified-delivery-spotlight">
+      <article class="session-card ended-verified-delivery-spotlight">
         <div class="incident-meta">
           <span class="pill">${escapeHtml(session.archetypeLabel)}</span>
           <span class="pill">score ${session.complianceScore}</span>

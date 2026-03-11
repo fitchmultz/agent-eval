@@ -101,7 +101,7 @@ In a production or customer environment, I would extend this in a few directions
 - comparative rollouts across teams, tools, or time windows
 - governance reports tailored for engineering leadership and AI platform owners
 - richer policy proxy packs for verification behavior, risky write patterns, and workflow hygiene
-- source adapters for additional agent products while preserving the shared evaluation core
+- source adapters for additional agent products while preserving the shared analytics core
 
 The important part is that the architecture already supports that direction without needing to be rebuilt.
 

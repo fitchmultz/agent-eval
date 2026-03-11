@@ -17,7 +17,7 @@ import type {
 
 function createTestMetrics(overrides?: Partial<MetricsRecord>): MetricsRecord {
   return {
-    evaluatorVersion: "0.1.0",
+    engineVersion: "0.1.0",
     schemaVersion: "1",
     generatedAt: "2026-03-06T19:00:00.000Z",
     sessionCount: 2,
@@ -178,7 +178,7 @@ function createTestMetrics(overrides?: Partial<MetricsRecord>): MetricsRecord {
 function createTestRawTurns(): RawTurnRecord[] {
   return [
     {
-      evaluatorVersion: "0.1.0",
+      engineVersion: "0.1.0",
       schemaVersion: "1",
       sessionId: "session-1",
       turnId: "turn-1",
@@ -218,7 +218,7 @@ function createTestRawTurns(): RawTurnRecord[] {
 function createTestIncidents(): IncidentRecord[] {
   return [
     {
-      evaluatorVersion: "0.1.0",
+      engineVersion: "0.1.0",
       schemaVersion: "1",
       incidentId: "incident-1",
       sessionId: "session-1",
@@ -248,7 +248,7 @@ function createTestIncidents(): IncidentRecord[] {
 
 function createEmptyMetrics(): MetricsRecord {
   return {
-    evaluatorVersion: "0.1.0",
+    engineVersion: "0.1.0",
     schemaVersion: "1",
     generatedAt: "2026-03-06T19:00:00.000Z",
     sessionCount: 0,
@@ -328,7 +328,7 @@ describe("renderReport", () => {
 
     const report = renderReport(metrics, incidents, rawTurns);
 
-    expect(report).toContain("Evaluator version: `0.1.0`");
+    expect(report).toContain("Analytics engine version: `0.1.0`");
     expect(report).toContain("Schema version: `1`");
     expect(report).toContain("Sessions: `2`");
     expect(report).toContain("Turns: `10`");

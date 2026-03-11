@@ -13,10 +13,12 @@ import {
 
 describe("archetypeLabel", () => {
   it("returns correct labels for all archetypes", () => {
-    expect(archetypeLabel("verified_delivery")).toBe("Verified Delivery");
-    expect(archetypeLabel("unverified_delivery")).toBe("Unverified Delivery");
+    expect(archetypeLabel("verified_delivery")).toBe("Ended-Verified Delivery");
+    expect(archetypeLabel("unverified_delivery")).toBe(
+      "Unverified Ending Delivery",
+    );
     expect(archetypeLabel("high_friction_verified_delivery")).toBe(
-      "High-Friction Verified Delivery",
+      "High-Friction Ended-Verified Delivery",
     );
     expect(archetypeLabel("analysis_only")).toBe("Analysis Only");
   });

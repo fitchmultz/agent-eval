@@ -30,7 +30,7 @@ export interface SummaryCoreData {
   delivery: SummaryArtifact["delivery"];
   comparativeSlices: SummaryArtifact["comparativeSlices"];
   topSessions: SummaryArtifact["topSessions"];
-  verifiedDeliverySpotlights: SummaryArtifact["verifiedDeliverySpotlights"];
+  endedVerifiedDeliverySpotlights: SummaryArtifact["endedVerifiedDeliverySpotlights"];
   topIncidents: SummaryArtifact["topIncidents"];
 }
 

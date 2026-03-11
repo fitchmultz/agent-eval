@@ -13,7 +13,7 @@ import type { ProcessedSession } from "./session-processor.js";
 import { aggregateComplianceSummary } from "./utils/compliance-aggregation.js";
 import { getValidatedHomeDirectory } from "./utils/environment.js";
 import { redactPath } from "./utils/path-redaction.js";
-import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
+import { ENGINE_VERSION, SCHEMA_VERSION } from "./version.js";
 
 /**
  * Validates that a label is in the taxonomy.
@@ -83,7 +83,7 @@ export function buildMetricsRecord(
   inventory: InventoryRecord[],
 ): MetricsRecord {
   return {
-    evaluatorVersion: EVALUATOR_VERSION,
+    engineVersion: ENGINE_VERSION,
     schemaVersion: SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     sessionCount: parts.sessionMetrics.length,

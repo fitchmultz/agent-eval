@@ -55,7 +55,7 @@ export function createCodexSessionContent(sessionId: string): string {
         content: [
           {
             type: "output_text",
-            text: "I will run the tests and report back with proof.",
+            text: "I will run the tests and report back with terminal verification status.",
           },
         ],
       },
@@ -123,7 +123,7 @@ export function createClaudeSessionContent(sessionId: string): string {
         content: [
           {
             type: "text",
-            text: "I will run the tests and report back with proof.",
+            text: "I will run the tests and report back with terminal verification status.",
           },
           {
             type: "tool_use",

@@ -87,7 +87,7 @@ Observed subtype counts across a recent corpus sample also included:
 - `custom_tool_call_output`
 - `web_search_call`
 
-This means the evaluator should support at least old and new tool-call shapes.
+This means the analytics engine should support at least old and new tool-call shapes.
 
 #### `response_item.payload.type == "message"`
 
@@ -163,7 +163,7 @@ Observed example use:
 Observed caveats:
 
 - File writes may appear as `custom_tool_call` in older transcripts and `function_call` in newer ones.
-- The evaluator should normalize both into the same internal `ToolInvocation`.
+- The analytics engine should normalize both into the same internal `ToolInvocation`.
 
 #### `response_item.payload.type == "reasoning"`
 
@@ -357,7 +357,7 @@ Observed representative columns:
 
 Observed caveat:
 
-- This is useful only if the evaluator later wants an automation-specific view.
+- This is useful only if the analytics engine later wants an automation-specific view.
 
 ## 5. `shell_snapshots/*.sh`
 
@@ -374,7 +374,7 @@ Observed caveats:
 
 ## Shape Drift To Support
 
-The evaluator should explicitly support:
+The analytics engine should explicitly support:
 
 - Old tool call shape:
   - `response_item.payload.type == "custom_tool_call"`

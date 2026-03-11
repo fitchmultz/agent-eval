@@ -1,7 +1,7 @@
 /**
- * Purpose: Ranks sessions by friction and selects verified delivery spotlights for review.
- * Entrypoint: `buildTopSessions()` and `buildVerifiedDeliverySpotlights()` for session prioritization.
- * Notes: Verified delivery spotlights highlight the best terminally verified write sessions.
+ * Purpose: Ranks sessions by friction and selects ended-verified delivery spotlights for review.
+ * Entrypoint: `buildTopSessions()` and `buildEndedVerifiedDeliverySpotlights()` for session prioritization.
+ * Notes: Ended-verified delivery spotlights highlight the best terminally verified write sessions.
  */
 
 import { getConfig } from "./config/index.js";
@@ -68,11 +68,11 @@ export function buildTopSessions(
 }
 
 /**
- * Selects the top verified delivery sessions for highlighting.
+ * Selects the top ended-verified delivery sessions for highlighting.
  * @param topSessions - Array of ranked session insights
- * @returns Array of up to 6 best verified delivery sessions
+ * @returns Array of up to 6 best ended-verified delivery sessions
  */
-export function buildVerifiedDeliverySpotlights(
+export function buildEndedVerifiedDeliverySpotlights(
   topSessions: readonly SessionInsightRow[],
 ): SessionInsightRow[] {
   return topSessions

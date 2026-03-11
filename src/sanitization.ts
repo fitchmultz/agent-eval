@@ -1,6 +1,6 @@
 /**
- * Purpose: Redacts, ranks, and truncates free-form transcript text before it is emitted into evaluator artifacts.
- * Entrypoint: `createMessagePreviews()` is used by the evaluator and report pipeline when generating outputs.
+ * Purpose: Redacts, ranks, and truncates free-form transcript text before it is emitted into analytics artifacts.
+ * Entrypoint: `createMessagePreviews()` is used by the analytics pipeline and report layer when generating outputs.
  * Notes: v1 favors compact redacted previews and prioritizes human-authored signal over harness boilerplate.
  */
 

@@ -13,7 +13,7 @@ export function renderBenchmarkReport(results: BenchmarkResults): string {
     "# Calibration Benchmark",
     "",
     `- Benchmark version: \`${results.benchmarkVersion}\``,
-    `- Evaluator version: \`${results.evaluatorVersion}\``,
+    `- Analytics engine version: \`${results.engineVersion}\``,
     `- Schema version: \`${results.schemaVersion}\``,
     `- Cases: \`${results.caseCount}\``,
     "",
@@ -22,6 +22,12 @@ export function renderBenchmarkReport(results: BenchmarkResults): string {
     `- Ended verified accuracy: ${results.terminalVerificationMetrics.endedVerifiedAccuracy}%`,
     `- Post-write verification attempted accuracy: ${results.terminalVerificationMetrics.postWriteVerificationAttemptedAccuracy}%`,
     `- Post-write verification passed accuracy: ${results.terminalVerificationMetrics.postWriteVerificationPassedAccuracy}%`,
+    "",
+    "## Parse Warning Accuracy",
+    "",
+    `- Expected parse warnings: ${results.parseWarningMetrics.expectedCount}`,
+    `- Actual parse warnings: ${results.parseWarningMetrics.actualCount}`,
+    `- Case accuracy: ${results.parseWarningMetrics.accuracy}%`,
     "",
     "## Incident Matching",
     "",
@@ -49,7 +55,7 @@ export function renderBenchmarkReport(results: BenchmarkResults): string {
     "",
     ...results.cases.map(
       (testCase) =>
-        `- ${testCase.id}: parse warnings ${testCase.parseWarningCount}, ended verified expected ${testCase.expectedTerminalVerification.endedVerified} actual ${testCase.actualTerminalVerification.endedVerified}, incidents expected ${testCase.expectedIncidents.length} actual ${testCase.actualIncidents.length}`,
+        `- ${testCase.id}: parse warnings expected ${testCase.parseWarnings.expectedCount} actual ${testCase.parseWarnings.actualCount}, ended verified expected ${testCase.expectedTerminalVerification.endedVerified} actual ${testCase.actualTerminalVerification.endedVerified}, incidents expected ${testCase.incidentMetrics.expectedCount} actual ${testCase.incidentMetrics.actualCount}`,
     ),
     "",
   ];

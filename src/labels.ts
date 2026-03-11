@@ -1,7 +1,7 @@
 /**
  * Purpose: Applies user-message heuristics to infer label taxonomy, severity, and confidence.
  * Entrypoint: `labelTurn()` is used during evaluation to annotate normalized turns.
- * Notes: User-role messages are the primary label source by design for evaluator v1.
+ * Notes: User-role messages are the primary label source by design for analytics-engine v1.
  */
 import type { LabelRecord } from "./schema.js";
 
@@ -108,9 +108,12 @@ const labelRules: LabelRule[] = [
   },
 ];
 
-export const incidentLabelNames = labelRules
-  .filter((rule) => rule.family === "incident")
-  .map((rule) => rule.label);
+export const incidentLabelNames = [
+  "context_drift",
+  "test_build_lint_failure_complaint",
+  "regression_report",
+  "stalled_or_guessing",
+] as const;
 
 /**
  * Labels a turn based on user message heuristics.
@@ -125,7 +128,7 @@ export const incidentLabelNames = labelRules
  * - verification_request - User requested verification or validation
  * - stalled_or_guessing - User indicated agent appears stalled
  *
- * User-role messages are the primary label source by design for evaluator v1.
+ * User-role messages are the primary label source by design for analytics-engine v1.
  *
  * @param turn - The parsed turn to label
  * @returns Array of label records for the turn (empty if no patterns match)

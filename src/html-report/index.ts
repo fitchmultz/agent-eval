@@ -5,6 +5,7 @@
  */
 
 export {
+  renderEndedVerifiedDeliverySpotlightCards,
   renderHighlightCards,
   renderIncidentCards,
   renderInventoryList,
@@ -14,7 +15,6 @@ export {
   renderScoreCards,
   renderSessionCards,
   renderSummaryCards,
-  renderVerifiedDeliverySpotlightCards,
 } from "./cards.js";
 export { renderHtmlReport } from "./render.js";
 export { loadStyles, renderStyles } from "./styles.js";

@@ -72,7 +72,7 @@ function buildHighlightCards(
 
   return [
     {
-      title: "Verified Deliveries",
+      title: "Ended-Verified Deliveries",
       value: `${endedVerifiedWriteSessions.length}`,
       detail:
         "Sessions that ended with both code changes and a passing verification signal.",
@@ -119,7 +119,7 @@ function buildRecognitions(
     recognitions.push("Battle-Tested Corpus");
   }
   if (verificationRate >= BADGES.MIN_VERIFICATION_RATE) {
-    recognitions.push("Strong Verification Proxy");
+    recognitions.push("Strong Terminal Verification Proxy");
   }
   if (interruptionRate <= BADGES.MAX_INTERRUPTION_RATE) {
     recognitions.push("Low-Interruption Corpus");
@@ -183,7 +183,7 @@ function buildOpportunities(
     opportunities.push({
       title: "Block unverified deliveries",
       rationale:
-        "Some write sessions ended without a passing verification signal. The evaluator should keep emphasizing this as a policy breach, not just a metric.",
+        "Some write sessions ended without a passing verification signal. The analytics engine should keep surfacing this as a policy breach, not just a metric.",
     });
   }
 

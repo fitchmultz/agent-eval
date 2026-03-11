@@ -3,14 +3,14 @@
  * Responsibilities: Serialize CLI command results with stable machine-readable keys.
  * Scope: Used by the CLI for inspect/parse/eval output.
  * Usage: Import formatter helpers instead of hand-building stdout payloads in the CLI.
- * Invariants/Assumptions: Output remains JSON and includes evaluator/schema version fields.
+ * Invariants/Assumptions: Output remains JSON and includes engine/schema version fields.
  */
 
 import type { SourceProvider } from "../sources.js";
-import { EVALUATOR_VERSION, SCHEMA_VERSION } from "../version.js";
+import { ENGINE_VERSION, SCHEMA_VERSION } from "../version.js";
 
 interface InspectOutput {
-  evaluatorVersion: string;
+  engineVersion: string;
   schemaVersion: string;
   provider: SourceProvider;
   homePath: string;
@@ -26,7 +26,7 @@ interface InspectOutput {
 }
 
 interface ParseOutput {
-  evaluatorVersion: string;
+  engineVersion: string;
   schemaVersion: string;
   outputDir: string;
   sessionCount: number;
@@ -35,7 +35,7 @@ interface ParseOutput {
 }
 
 interface EvalOutput {
-  evaluatorVersion: string;
+  engineVersion: string;
   schemaVersion: string;
   outputDir: string;
   sessionCount: number;
@@ -44,12 +44,13 @@ interface EvalOutput {
 }
 
 interface BenchmarkOutput {
-  evaluatorVersion: string;
+  engineVersion: string;
   schemaVersion: string;
   outputDir: string;
   caseCount: number;
   endedVerifiedAccuracy: number;
   incidentPrecision: number;
+  parseWarningAccuracy: number;
 }
 
 /**
@@ -62,7 +63,7 @@ export function formatInspectOutput(
   inventory: InspectOutput["inventory"],
 ): string {
   const output: InspectOutput = {
-    evaluatorVersion: EVALUATOR_VERSION,
+    engineVersion: ENGINE_VERSION,
     schemaVersion: SCHEMA_VERSION,
     provider,
     homePath,
@@ -82,7 +83,7 @@ export function formatParseOutput(
   parseWarningCount: number,
 ): string {
   const output: ParseOutput = {
-    evaluatorVersion: EVALUATOR_VERSION,
+    engineVersion: ENGINE_VERSION,
     schemaVersion: SCHEMA_VERSION,
     outputDir,
     sessionCount,
@@ -102,7 +103,7 @@ export function formatEvalOutput(
   summaryOnly = false,
 ): string {
   const output: EvalOutput = {
-    evaluatorVersion: EVALUATOR_VERSION,
+    engineVersion: ENGINE_VERSION,
     schemaVersion: SCHEMA_VERSION,
     outputDir,
     sessionCount,
@@ -117,14 +118,16 @@ export function formatBenchmarkOutput(
   caseCount: number,
   endedVerifiedAccuracy: number,
   incidentPrecision: number,
+  parseWarningAccuracy: number,
 ): string {
   const output: BenchmarkOutput = {
-    evaluatorVersion: EVALUATOR_VERSION,
+    engineVersion: ENGINE_VERSION,
     schemaVersion: SCHEMA_VERSION,
     outputDir,
     caseCount,
     endedVerifiedAccuracy,
     incidentPrecision,
+    parseWarningAccuracy,
   };
   return JSON.stringify(output, null, 2);
 }

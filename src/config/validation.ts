@@ -7,8 +7,8 @@
  */
 
 import { z } from "zod";
-import { LABEL_WEIGHTS } from "../constants/index.js";
-import type { LabelName } from "../schema.js";
+import { INCIDENT_FRICTION_WEIGHTS } from "../constants/index.js";
+import type { incidentLabelNames } from "../labels.js";
 import type { EvaluatorConfig } from "./index.js";
 import type { DeepPartial } from "./loader.js";
 
@@ -29,14 +29,16 @@ export class ConfigValidationError extends Error {
 /** Positive integer schema */
 const positiveInt = z.number().int().positive();
 
-/** Label weights schema - validates all required labels (allows negative weights) */
-const labelWeightsSchema = z.record(z.string(), z.number()).refine(
-  (weights): weights is Record<LabelName, number> => {
-    const requiredLabels = Object.keys(LABEL_WEIGHTS) as LabelName[];
+/** Incident friction weights schema - validates all required incident labels */
+const incidentLabelWeightsSchema = z.record(z.string(), z.number()).refine(
+  (weights): weights is Record<(typeof incidentLabelNames)[number], number> => {
+    const requiredLabels = Object.keys(INCIDENT_FRICTION_WEIGHTS) as Array<
+      (typeof incidentLabelNames)[number]
+    >;
     return requiredLabels.every((label) => label in weights);
   },
   {
-    message: `Label weights must include all labels: ${Object.keys(LABEL_WEIGHTS).join(", ")}`,
+    message: `Incident friction weights must include all incident labels: ${Object.keys(INCIDENT_FRICTION_WEIGHTS).join(", ")}`,
   },
 );
 
@@ -73,7 +75,9 @@ const previewsSchema = z.object({
 
 /** Scoring configuration schema */
 const scoringSchema = z.object({
-  labelWeights: labelWeightsSchema.describe("Weights for each label type"),
+  incidentLabelWeights: incidentLabelWeightsSchema.describe(
+    "Weights for incident-family labels used in session friction scoring",
+  ),
   frictionThreshold: z
     .number()
     .nonnegative()

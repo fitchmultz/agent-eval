@@ -10,9 +10,9 @@ import { SCORING } from "./constants/index.js";
 import type { LabelName, SessionArchetype } from "./schema.js";
 
 const ARCHETYPE_LABELS: Record<SessionArchetype, string> = {
-  verified_delivery: "Verified Delivery",
-  unverified_delivery: "Unverified Delivery",
-  high_friction_verified_delivery: "High-Friction Verified Delivery",
+  verified_delivery: "Ended-Verified Delivery",
+  unverified_delivery: "Unverified Ending Delivery",
+  high_friction_verified_delivery: "High-Friction Ended-Verified Delivery",
   analysis_only: "Analysis Only",
 } as const;
 

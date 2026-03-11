@@ -173,9 +173,9 @@ export function mergeConfigs(
       result.scoring = {
         ...merged.scoring,
         ...current.scoring,
-        labelWeights: {
-          ...merged.scoring?.labelWeights,
-          ...current.scoring?.labelWeights,
+        incidentLabelWeights: {
+          ...merged.scoring?.incidentLabelWeights,
+          ...current.scoring?.incidentLabelWeights,
         },
       };
     }

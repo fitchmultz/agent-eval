@@ -21,7 +21,10 @@ test:
 build:
 	pnpm build
 
-ci: lint typecheck test build
+benchmark:
+	pnpm benchmark
+
+ci: lint typecheck test benchmark build
 
 clean:
 	rm -rf dist node_modules coverage

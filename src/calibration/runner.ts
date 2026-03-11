@@ -12,7 +12,7 @@ import { sanitizeMessageText } from "../sanitization.js";
 import { type LabelName, labelTaxonomy } from "../schema.js";
 import { processSession } from "../session-processor.js";
 import { parseTranscriptFile } from "../transcript/index.js";
-import { EVALUATOR_VERSION, SCHEMA_VERSION } from "../version.js";
+import { ENGINE_VERSION, SCHEMA_VERSION } from "../version.js";
 import { loadCalibrationCorpus } from "./corpus.js";
 import { renderBenchmarkReport } from "./report.js";
 import {
@@ -22,7 +22,7 @@ import {
   type CalibrationCaseResult,
 } from "./types.js";
 
-const BENCHMARK_VERSION = "1";
+const BENCHMARK_VERSION = "2";
 const BENCHMARK_HOME = "/Users/benchmark";
 
 function safeRate(numerator: number, denominator: number): number {
@@ -32,35 +32,75 @@ function safeRate(numerator: number, denominator: number): number {
   return Number(((numerator / denominator) * 100).toFixed(1));
 }
 
-function createEmptyLabelCounts(): Record<
-  (typeof labelTaxonomy)[number],
-  number
-> {
-  return Object.fromEntries(labelTaxonomy.map((label) => [label, 0])) as Record<
-    (typeof labelTaxonomy)[number],
-    number
-  >;
+function normalizeLabelInstances(
+  instances: readonly { turnIndex: number; label: LabelName }[],
+): Array<{ turnIndex: number; label: LabelName }> {
+  return [...instances].sort(
+    (left, right) =>
+      left.turnIndex - right.turnIndex || left.label.localeCompare(right.label),
+  );
 }
 
-function countActualLabels(
+function collectActualLabelInstances(
   processed: Awaited<ReturnType<typeof processSession>>,
-): Record<(typeof labelTaxonomy)[number], number> {
-  const counts = createEmptyLabelCounts();
-  for (const turn of processed.turns) {
-    for (const label of turn.labels) {
-      counts[label.label] += 1;
-    }
-  }
-  return counts;
+): Array<{ turnIndex: number; label: LabelName }> {
+  return normalizeLabelInstances(
+    processed.turns.flatMap((turn) =>
+      turn.labels.map((label) => ({
+        turnIndex: turn.turnIndex,
+        label: label.label,
+      })),
+    ),
+  );
 }
 
-function normalizeExpectedLabels(
-  testCase: CalibrationCase,
-): Record<(typeof labelTaxonomy)[number], number> {
-  return {
-    ...createEmptyLabelCounts(),
-    ...testCase.expectedLabelCounts,
-  };
+function labelInstanceKey(instance: {
+  turnIndex: number;
+  label: LabelName;
+}): string {
+  return `${instance.turnIndex}:${instance.label}`;
+}
+
+function buildLabelMetricsForCase(
+  expectedInstances: readonly { turnIndex: number; label: LabelName }[],
+  actualInstances: readonly { turnIndex: number; label: LabelName }[],
+): CalibrationCaseResult["labelMetrics"] {
+  const expectedKeys = new Set(expectedInstances.map(labelInstanceKey));
+  const actualKeys = new Set(actualInstances.map(labelInstanceKey));
+
+  return labelTaxonomy.map((label) => {
+    const expectedCount = expectedInstances.filter(
+      (instance) => instance.label === label,
+    ).length;
+    const actualCount = actualInstances.filter(
+      (instance) => instance.label === label,
+    ).length;
+    const truePositive = actualInstances.filter(
+      (instance) =>
+        instance.label === label &&
+        expectedKeys.has(labelInstanceKey(instance)),
+    ).length;
+    const falsePositive = actualInstances.filter(
+      (instance) =>
+        instance.label === label &&
+        !expectedKeys.has(labelInstanceKey(instance)),
+    ).length;
+    const falseNegative = expectedInstances.filter(
+      (instance) =>
+        instance.label === label && !actualKeys.has(labelInstanceKey(instance)),
+    ).length;
+
+    return {
+      label,
+      expectedCount,
+      actualCount,
+      truePositive,
+      falsePositive,
+      falseNegative,
+      precision: safeRate(truePositive, truePositive + falsePositive),
+      recall: safeRate(truePositive, truePositive + falseNegative),
+    };
+  });
 }
 
 function normalizeIncidents(
@@ -77,11 +117,127 @@ function normalizeIncidents(
   }));
 }
 
-function incidentKey(incident: {
-  turnIndices: number[];
-  labels: LabelName[];
-}): string {
-  return `${incident.turnIndices.join(",")}::${incident.labels.join(",")}`;
+function incidentKey(
+  caseId: string,
+  incident: {
+    turnIndices: number[];
+    labels: LabelName[];
+  },
+): string {
+  return `${caseId}::${incident.turnIndices.join(",")}::${incident.labels.join(",")}`;
+}
+
+function buildIncidentMetricsForCase(
+  caseId: string,
+  expectedIncidents: readonly { turnIndices: number[]; labels: LabelName[] }[],
+  actualIncidents: readonly { turnIndices: number[]; labels: LabelName[] }[],
+): CalibrationCaseResult["incidentMetrics"] {
+  const expectedKeys = new Set(
+    expectedIncidents.map((incident) => incidentKey(caseId, incident)),
+  );
+  const actualKeys = new Set(
+    actualIncidents.map((incident) => incidentKey(caseId, incident)),
+  );
+  const matchedCount = [...expectedKeys].filter((key) =>
+    actualKeys.has(key),
+  ).length;
+
+  return {
+    expectedCount: expectedIncidents.length,
+    actualCount: actualIncidents.length,
+    matchedCount,
+    precision: safeRate(matchedCount, actualIncidents.length),
+    recall: safeRate(matchedCount, expectedIncidents.length),
+  };
+}
+
+function aggregateLabelMetrics(
+  caseResults: readonly CalibrationCaseResult[],
+): BenchmarkResults["labelMetrics"] {
+  return labelTaxonomy.map((label) => {
+    const totals = caseResults.reduce(
+      (aggregate, testCase) => {
+        const metric = testCase.labelMetrics.find(
+          (entry) => entry.label === label,
+        );
+        return {
+          expectedCount: aggregate.expectedCount + (metric?.expectedCount ?? 0),
+          actualCount: aggregate.actualCount + (metric?.actualCount ?? 0),
+          truePositive: aggregate.truePositive + (metric?.truePositive ?? 0),
+          falsePositive: aggregate.falsePositive + (metric?.falsePositive ?? 0),
+          falseNegative: aggregate.falseNegative + (metric?.falseNegative ?? 0),
+        };
+      },
+      {
+        expectedCount: 0,
+        actualCount: 0,
+        truePositive: 0,
+        falsePositive: 0,
+        falseNegative: 0,
+      },
+    );
+
+    return {
+      label,
+      ...totals,
+      precision: safeRate(
+        totals.truePositive,
+        totals.truePositive + totals.falsePositive,
+      ),
+      recall: safeRate(
+        totals.truePositive,
+        totals.truePositive + totals.falseNegative,
+      ),
+    };
+  });
+}
+
+function aggregateIncidentMetrics(
+  caseResults: readonly CalibrationCaseResult[],
+): BenchmarkResults["incidentMetrics"] {
+  const expectedCount = caseResults.reduce(
+    (total, testCase) => total + testCase.incidentMetrics.expectedCount,
+    0,
+  );
+  const actualCount = caseResults.reduce(
+    (total, testCase) => total + testCase.incidentMetrics.actualCount,
+    0,
+  );
+  const matchedCount = caseResults.reduce(
+    (total, testCase) => total + testCase.incidentMetrics.matchedCount,
+    0,
+  );
+
+  return {
+    expectedCount,
+    actualCount,
+    matchedCount,
+    precision: safeRate(matchedCount, actualCount),
+    recall: safeRate(matchedCount, expectedCount),
+  };
+}
+
+function evaluateSanitizationChecks(testCase: CalibrationCase) {
+  return testCase.sanitizationChecks.map((check) => {
+    const sanitized = sanitizeMessageText(check.input, {
+      homeDirectory: BENCHMARK_HOME,
+      maxLength: 240,
+    });
+    const mustContainMisses = check.mustContain.filter(
+      (needle) => !sanitized.includes(needle),
+    );
+    const mustNotContainViolations = check.mustNotContain.filter((needle) =>
+      sanitized.includes(needle),
+    );
+    return {
+      input: check.input,
+      passed:
+        mustContainMisses.length === 0 && mustNotContainViolations.length === 0,
+      mustContainMisses,
+      mustNotContainViolations,
+      sanitized,
+    };
+  });
 }
 
 export async function runCalibrationBenchmark(outputDir?: string): Promise<{
@@ -97,40 +253,37 @@ export async function runCalibrationBenchmark(outputDir?: string): Promise<{
       strict: false,
     });
     const processed = await processSession(parsed, BENCHMARK_HOME);
-    const actualLabelCounts = countActualLabels(processed);
-    const actualIncidents = normalizeIncidents(processed.incidents);
+    const expectedLabelInstances = normalizeLabelInstances(
+      testCase.expectedLabelInstances,
+    );
+    const actualLabelInstances = collectActualLabelInstances(processed);
     const expectedIncidents = normalizeIncidents(testCase.expectedIncidents);
-    const sanitizationChecks = testCase.sanitizationChecks.map((check) => {
-      const sanitized = sanitizeMessageText(check.input, {
-        homeDirectory: BENCHMARK_HOME,
-        maxLength: 240,
-      });
-      const mustContainMisses = check.mustContain.filter(
-        (needle) => !sanitized.includes(needle),
-      );
-      const mustNotContainViolations = check.mustNotContain.filter((needle) =>
-        sanitized.includes(needle),
-      );
-      return {
-        input: check.input,
-        passed:
-          mustContainMisses.length === 0 &&
-          mustNotContainViolations.length === 0,
-        mustContainMisses,
-        mustNotContainViolations,
-        sanitized,
-      };
-    });
+    const actualIncidents = normalizeIncidents(processed.incidents);
 
     caseResults.push({
       id: testCase.id,
       provider: testCase.provider,
       fixture: testCase.fixture,
-      parseWarningCount: processed.metrics.parseWarningCount,
-      expectedLabelCounts: normalizeExpectedLabels(testCase),
-      actualLabelCounts,
+      parseWarnings: {
+        expectedCount: testCase.expectedParseWarningCount,
+        actualCount: processed.metrics.parseWarningCount,
+        passed:
+          testCase.expectedParseWarningCount ===
+          processed.metrics.parseWarningCount,
+      },
+      expectedLabelInstances,
+      actualLabelInstances,
+      labelMetrics: buildLabelMetricsForCase(
+        expectedLabelInstances,
+        actualLabelInstances,
+      ),
       expectedIncidents,
       actualIncidents,
+      incidentMetrics: buildIncidentMetricsForCase(
+        testCase.id,
+        expectedIncidents,
+        actualIncidents,
+      ),
       expectedTerminalVerification: testCase.expectedTerminalVerification,
       actualTerminalVerification: {
         postWriteVerificationAttempted:
@@ -139,57 +292,9 @@ export async function runCalibrationBenchmark(outputDir?: string): Promise<{
           processed.metrics.postWriteVerificationPassed,
         endedVerified: processed.metrics.endedVerified,
       },
-      sanitizationChecks,
+      sanitizationChecks: evaluateSanitizationChecks(testCase),
     });
   }
-
-  const labelMetrics = labelTaxonomy.map((label) => {
-    const expectedCount = caseResults.reduce(
-      (total, testCase) => total + (testCase.expectedLabelCounts[label] ?? 0),
-      0,
-    );
-    const actualCount = caseResults.reduce(
-      (total, testCase) => total + (testCase.actualLabelCounts[label] ?? 0),
-      0,
-    );
-    const truePositive = Math.min(expectedCount, actualCount);
-    const falsePositive = Math.max(0, actualCount - expectedCount);
-    const falseNegative = Math.max(0, expectedCount - actualCount);
-    return {
-      label,
-      expectedCount,
-      actualCount,
-      truePositive,
-      falsePositive,
-      falseNegative,
-      precision: safeRate(truePositive, truePositive + falsePositive),
-      recall: safeRate(truePositive, truePositive + falseNegative),
-    };
-  });
-
-  const expectedIncidentKeys = new Set(
-    caseResults.flatMap((testCase) =>
-      testCase.expectedIncidents.map((incident) =>
-        incidentKey({
-          turnIndices: incident.turnIndices,
-          labels: incident.labels,
-        }),
-      ),
-    ),
-  );
-  const actualIncidentKeys = new Set(
-    caseResults.flatMap((testCase) =>
-      testCase.actualIncidents.map((incident) =>
-        incidentKey({
-          turnIndices: incident.turnIndices,
-          labels: incident.labels,
-        }),
-      ),
-    ),
-  );
-  const matchedIncidentCount = [...expectedIncidentKeys].filter((key) =>
-    actualIncidentKeys.has(key),
-  ).length;
 
   const sanitizationResults = caseResults.flatMap(
     (testCase) => testCase.sanitizationChecks,
@@ -197,17 +302,11 @@ export async function runCalibrationBenchmark(outputDir?: string): Promise<{
 
   const results = benchmarkResultsSchema.parse({
     benchmarkVersion: BENCHMARK_VERSION,
-    evaluatorVersion: EVALUATOR_VERSION,
+    engineVersion: ENGINE_VERSION,
     schemaVersion: SCHEMA_VERSION,
     caseCount: caseResults.length,
-    labelMetrics,
-    incidentMetrics: {
-      expectedCount: expectedIncidentKeys.size,
-      actualCount: actualIncidentKeys.size,
-      matchedCount: matchedIncidentCount,
-      precision: safeRate(matchedIncidentCount, actualIncidentKeys.size),
-      recall: safeRate(matchedIncidentCount, expectedIncidentKeys.size),
-    },
+    labelMetrics: aggregateLabelMetrics(caseResults),
+    incidentMetrics: aggregateIncidentMetrics(caseResults),
     terminalVerificationMetrics: {
       caseCount: caseResults.length,
       endedVerifiedAccuracy: safeRate(
@@ -234,6 +333,24 @@ export async function runCalibrationBenchmark(outputDir?: string): Promise<{
               .postWriteVerificationPassed ===
             testCase.actualTerminalVerification.postWriteVerificationPassed,
         ).length,
+        caseResults.length,
+      ),
+    },
+    parseWarningMetrics: {
+      caseCount: caseResults.length,
+      expectedCount: caseResults.reduce(
+        (total, testCase) => total + testCase.parseWarnings.expectedCount,
+        0,
+      ),
+      actualCount: caseResults.reduce(
+        (total, testCase) => total + testCase.parseWarnings.actualCount,
+        0,
+      ),
+      matchedCaseCount: caseResults.filter(
+        (testCase) => testCase.parseWarnings.passed,
+      ).length,
+      accuracy: safeRate(
+        caseResults.filter((testCase) => testCase.parseWarnings.passed).length,
         caseResults.length,
       ),
     },

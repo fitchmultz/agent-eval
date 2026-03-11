@@ -66,6 +66,7 @@ cat artifacts/raw-turns.jsonl
 pnpm eval -- --source claude --home ~/.claude --output-dir artifacts
 pnpm report -- --source codex --home ~/.codex --output-dir artifacts
 pnpm exec tsx src/cli.ts eval --source claude --home ~/.claude --summary-only --session-limit 100
+pnpm benchmark
 ```
 
 Built binary:
@@ -94,7 +95,12 @@ open artifacts/report.html
 - full `eval` and `report` runs write `artifacts/raw-turns.jsonl`, `artifacts/incidents.jsonl`, `artifacts/metrics.json`, `artifacts/summary.json`, `artifacts/report.md`, `artifacts/report.html`, `artifacts/label-counts.svg`, `artifacts/compliance-summary.svg`, and `artifacts/severity-breakdown.svg`
 - `eval` and `report` with `--summary-only` skip `raw-turns.jsonl` and `incidents.jsonl` but keep the deterministic summary/report outputs
 
-Every machine-readable output includes `evaluatorVersion` and `schemaVersion`.
+Every machine-readable output includes `engineVersion` and `schemaVersion`.
+
+Benchmark outputs:
+
+- `artifacts/benchmark/benchmark-results.json`
+- `artifacts/benchmark/benchmark-report.md`
 
 ## Suggested workflow
 
@@ -110,6 +116,8 @@ Use `inspect` first to inventory what is available locally. Use `parse` when you
 
 `--summary-only` is the recommended mode for large corpora because it skips the heaviest JSONL exports while keeping the same deterministic methodology.
 
+Use `benchmark` to run the synthetic calibration corpus. It validates terminal verification, case-scoped label matching, incident matching, parse-warning handling, and sanitization behavior against deterministic expectations.
+
 ## Public repo notes
 
 - Tests use synthetic fixtures only; no private transcript corpora are committed.
@@ -124,6 +132,7 @@ Current strengths:
 - Multi-source discovery and parsing for Codex and Claude Code
 - Deterministic summaries, scorecards, badges, and comparative slices
 - Strong local test coverage with synthetic fixtures only
+- Synthetic benchmark harness covering terminal verification, incidents, parse warnings, and sanitization boundaries
 
 Current limitations:
 

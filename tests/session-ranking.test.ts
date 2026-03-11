@@ -6,8 +6,8 @@
 import { describe, expect, it } from "vitest";
 import type { LabelName, MetricsRecord } from "../src/schema.js";
 import {
+  buildEndedVerifiedDeliverySpotlights,
   buildTopSessions,
-  buildVerifiedDeliverySpotlights,
 } from "../src/session-ranking.js";
 import { createEmptySessionLabelMap } from "../src/summary/index.js";
 
@@ -60,7 +60,7 @@ function createPassingRules(): MetricsRecord["sessions"][number]["complianceRule
 describe("buildTopSessions", () => {
   it("returns empty array when no sessions", () => {
     const metrics: MetricsRecord = {
-      evaluatorVersion: "0.1.0",
+      engineVersion: "0.1.0",
       schemaVersion: "1",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: 0,
@@ -84,7 +84,7 @@ describe("buildTopSessions", () => {
       createSession("high-friction", { complianceScore: 50, incidentCount: 5 }),
     ];
     const metrics: MetricsRecord = {
-      evaluatorVersion: "0.1.0",
+      engineVersion: "0.1.0",
       schemaVersion: "1",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: sessions.length,
@@ -121,7 +121,7 @@ describe("buildTopSessions", () => {
       }),
     ];
     const metrics: MetricsRecord = {
-      evaluatorVersion: "0.1.0",
+      engineVersion: "0.1.0",
       schemaVersion: "1",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: 1,
@@ -138,13 +138,13 @@ describe("buildTopSessions", () => {
 
     const result = buildTopSessions(metrics, sessionLabelCounts);
     expect(result[0]?.archetype).toBe("verified_delivery");
-    expect(result[0]?.archetypeLabel).toBe("Verified Delivery");
+    expect(result[0]?.archetypeLabel).toBe("Ended-Verified Delivery");
   });
 
   it("includes dominant labels in results", () => {
     const sessions = [createSession("with-labels", { complianceScore: 100 })];
     const metrics: MetricsRecord = {
-      evaluatorVersion: "0.1.0",
+      engineVersion: "0.1.0",
       schemaVersion: "1",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: 1,
@@ -180,7 +180,7 @@ describe("buildTopSessions", () => {
       }),
     ];
     const metrics: MetricsRecord = {
-      evaluatorVersion: "0.1.0",
+      engineVersion: "0.1.0",
       schemaVersion: "1",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: 2,
@@ -209,7 +209,7 @@ describe("buildTopSessions", () => {
       createSession("session-a", { complianceScore: 100 }),
     ];
     const metrics: MetricsRecord = {
-      evaluatorVersion: "0.1.0",
+      engineVersion: "0.1.0",
       schemaVersion: "1",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: 2,
@@ -233,7 +233,7 @@ describe("buildTopSessions", () => {
   });
 });
 
-describe("buildVerifiedDeliverySpotlights", () => {
+describe("buildEndedVerifiedDeliverySpotlights", () => {
   it("returns empty array when no verified delivery sessions", () => {
     const topSessions = [
       {
@@ -252,7 +252,7 @@ describe("buildVerifiedDeliverySpotlights", () => {
       },
     ];
 
-    const result = buildVerifiedDeliverySpotlights(topSessions);
+    const result = buildEndedVerifiedDeliverySpotlights(topSessions);
     expect(result).toEqual([]);
   });
 
@@ -261,7 +261,7 @@ describe("buildVerifiedDeliverySpotlights", () => {
       {
         sessionId: "verified-1",
         archetype: "verified_delivery" as const,
-        archetypeLabel: "Verified Delivery",
+        archetypeLabel: "Ended-Verified Delivery",
         frictionScore: 2,
         complianceScore: 100,
         incidentCount: 0,
@@ -289,7 +289,7 @@ describe("buildVerifiedDeliverySpotlights", () => {
       {
         sessionId: "verified-2",
         archetype: "verified_delivery" as const,
-        archetypeLabel: "Verified Delivery",
+        archetypeLabel: "Ended-Verified Delivery",
         frictionScore: 1,
         complianceScore: 95,
         incidentCount: 1,
@@ -302,7 +302,7 @@ describe("buildVerifiedDeliverySpotlights", () => {
       },
     ];
 
-    const result = buildVerifiedDeliverySpotlights(topSessions);
+    const result = buildEndedVerifiedDeliverySpotlights(topSessions);
     expect(result).toHaveLength(2);
     expect(result.every((s) => s.archetype === "verified_delivery")).toBe(true);
   });
@@ -312,7 +312,7 @@ describe("buildVerifiedDeliverySpotlights", () => {
       {
         sessionId: "lower-compliance",
         archetype: "verified_delivery" as const,
-        archetypeLabel: "Verified Delivery",
+        archetypeLabel: "Ended-Verified Delivery",
         frictionScore: 1,
         complianceScore: 90,
         incidentCount: 0,
@@ -326,7 +326,7 @@ describe("buildVerifiedDeliverySpotlights", () => {
       {
         sessionId: "higher-compliance",
         archetype: "verified_delivery" as const,
-        archetypeLabel: "Verified Delivery",
+        archetypeLabel: "Ended-Verified Delivery",
         frictionScore: 1,
         complianceScore: 100,
         incidentCount: 0,
@@ -339,7 +339,7 @@ describe("buildVerifiedDeliverySpotlights", () => {
       },
     ];
 
-    const result = buildVerifiedDeliverySpotlights(topSessions);
+    const result = buildEndedVerifiedDeliverySpotlights(topSessions);
     expect(result[0]?.sessionId).toBe("higher-compliance");
     expect(result[1]?.sessionId).toBe("lower-compliance");
   });
@@ -348,7 +348,7 @@ describe("buildVerifiedDeliverySpotlights", () => {
     const topSessions = Array.from({ length: 10 }, (_, i) => ({
       sessionId: `verified-${i}`,
       archetype: "verified_delivery" as const,
-      archetypeLabel: "Verified Delivery",
+      archetypeLabel: "Ended-Verified Delivery",
       frictionScore: 1,
       complianceScore: 100 - i,
       incidentCount: 0,
@@ -360,7 +360,7 @@ describe("buildVerifiedDeliverySpotlights", () => {
       note: "test",
     }));
 
-    const result = buildVerifiedDeliverySpotlights(topSessions);
+    const result = buildEndedVerifiedDeliverySpotlights(topSessions);
     expect(result).toHaveLength(6);
   });
 });

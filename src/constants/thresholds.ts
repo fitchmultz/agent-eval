@@ -33,24 +33,16 @@ export const PREVIEWS = {
   MAX_TOP_SESSIONS: 8,
 } as const;
 
-/** Label weights for friction calculation */
-export const LABEL_WEIGHTS: {
+/** Incident-only label weights for session friction calculation */
+export const INCIDENT_FRICTION_WEIGHTS: {
   context_drift: number;
   test_build_lint_failure_complaint: number;
-  interrupt: number;
   regression_report: number;
-  praise: number;
-  context_reinjection: number;
-  verification_request: number;
   stalled_or_guessing: number;
 } = {
   context_drift: 4,
   test_build_lint_failure_complaint: 5,
-  interrupt: 2,
   regression_report: 5,
-  praise: -1,
-  context_reinjection: 2,
-  verification_request: 2,
   stalled_or_guessing: 5,
 } as const;
 

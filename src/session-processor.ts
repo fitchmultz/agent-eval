@@ -20,7 +20,7 @@ import { categorizeToolCall } from "./tool-classification.js";
 import { extractCommandTextFromArgumentsText } from "./tool-command-text.js";
 import type { ParsedSession } from "./transcript/index.js";
 import { redactPath } from "./utils/path-redaction.js";
-import { EVALUATOR_VERSION, SCHEMA_VERSION } from "./version.js";
+import { ENGINE_VERSION, SCHEMA_VERSION } from "./version.js";
 
 /**
  * Metrics for a single processed session.
@@ -91,7 +91,7 @@ function buildSessionTurns(
     }));
 
     turns.push({
-      evaluatorVersion: EVALUATOR_VERSION,
+      engineVersion: ENGINE_VERSION,
       schemaVersion: SCHEMA_VERSION,
       sessionId: session.sessionId,
       parentSessionId: session.parentSessionId,
@@ -197,7 +197,7 @@ export async function processSession(
   const incidents = clusterIncidents(
     incidentTurns,
     { maxTurnGap: getConfig().clustering.maxTurnGap },
-    EVALUATOR_VERSION,
+    ENGINE_VERSION,
     SCHEMA_VERSION,
   );
 

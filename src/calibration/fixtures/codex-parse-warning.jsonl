@@ -1,0 +1,11 @@
+{"timestamp":"2026-03-10T18:00:00.000Z","type":"session_meta","payload":{"id":"benchmark-codex-parse-warning","timestamp":"2026-03-10T18:00:00.000Z","cwd":"/workspace/demo"}}
+not-json
+{"timestamp":"2026-03-10T18:00:01.000Z","type":"turn_context","payload":{"turn_id":"turn-1","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T18:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Patch the docs and verify after writing."}]}}
+{"timestamp":"2026-03-10T18:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I will patch the docs and verify before finishing."}]}}
+{"timestamp":"2026-03-10T18:00:04.000Z","type":"response_item","payload":{"type":"function_call","name":"git_status","arguments":"{}","call_id":"call-1"}}
+{"timestamp":"2026-03-10T18:00:05.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-1","output":"Command succeeded"}}
+{"timestamp":"2026-03-10T18:00:06.000Z","type":"response_item","payload":{"type":"function_call","name":"apply_patch","arguments":"*** Begin Patch\n*** Update File: README.md\n+parse warning update\n*** End Patch","call_id":"call-2"}}
+{"timestamp":"2026-03-10T18:00:07.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-2","output":"Success"}}
+{"timestamp":"2026-03-10T18:00:08.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"pnpm test\"}","call_id":"call-3"}}
+{"timestamp":"2026-03-10T18:00:09.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-3","output":"Process exited with code 0"}}

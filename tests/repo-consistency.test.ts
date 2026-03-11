@@ -30,7 +30,7 @@ const stalePatterns = [
   "CODEX_EVAL_CODEX_HOME",
   "codexHome",
   "codex-eval",
-  "Local evaluator for Codex",
+  "Transcript-first analytics engine for developer AI agents",
   "Codex session artifacts",
 ] as const;
 

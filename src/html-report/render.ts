@@ -9,6 +9,7 @@
 import { getConfig } from "../config/index.js";
 import type { MetricsRecord, SummaryArtifact } from "../schema.js";
 import {
+  renderEndedVerifiedDeliverySpotlightCards,
   renderHighlightCards,
   renderIncidentCards,
   renderInventoryList,
@@ -18,7 +19,6 @@ import {
   renderScoreCards,
   renderSessionCards,
   renderSummaryCards,
-  renderVerifiedDeliverySpotlightCards,
 } from "./cards.js";
 import {
   renderComparativeSliceTable,
@@ -37,7 +37,7 @@ function renderMethodologyList(metrics: MetricsRecord): string {
     "This report is a deterministic transcript analytics summary with heuristic policy proxies, not a rigorous correctness evaluator.",
     "Labels represent transcript-visible heuristics and should be read as operator-friction signals, not ground-truth task outcomes.",
     "Compliance scores are event-order proxies based on observed transcript behavior and do not prove repository correctness.",
-    "Calibration, benchmark validation, and optional enrichment joins are intentionally deferred beyond this hardening release.",
+    "A synthetic benchmark harness validates key proxy behavior, but benchmark coverage remains limited and should not be treated as comprehensive external validation.",
   ];
 
   if (metrics.parseWarningCount > 0) {
@@ -90,7 +90,7 @@ export function renderHtmlReport(
         : "A deterministic, transcript-first analytics summary for developer-agent session artifacts. These outputs emphasize operator burden, verification habits, and transcript-visible workflow signals rather than correctness claims.",
     )}</p>`,
     `<div class="meta-row">
-      <span class="pill">evaluator ${escapeHtml(summary.evaluatorVersion)}</span>
+      <span class="pill">engine ${escapeHtml(summary.engineVersion)}</span>
       <span class="pill">schema ${escapeHtml(summary.schemaVersion)}</span>
       <span class="pill">sources ${escapeHtml(providers.join(", "))}</span>
       <span class="pill">${escapeHtml(summary.generatedAt)}</span>
@@ -123,7 +123,7 @@ export function renderHtmlReport(
     `<section><h2>Sessions To Review First</h2><div class="sessions-grid">${renderSessionCards(summary)}</div></section>`,
     ...(skin === "showcase"
       ? [
-          `<section><h2>Verified Delivery Spotlights</h2><div class="sessions-grid">${renderVerifiedDeliverySpotlightCards(summary)}</div></section>`,
+          `<section><h2>Ended-Verified Delivery Spotlights</h2><div class="sessions-grid">${renderEndedVerifiedDeliverySpotlightCards(summary)}</div></section>`,
         ]
       : []),
     `<section><h2>Top Incidents</h2><div class="incident-grid">${renderIncidentCards(summary)}</div></section>`,

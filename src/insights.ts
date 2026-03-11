@@ -1,7 +1,7 @@
 /**
  * Purpose: Build the canonical public summary artifact used across reports, charts, and tests.
  * Responsibilities: Re-export stable summary helpers and compose core math with presentation-oriented decorations.
- * Scope: Public summary facade for shared evaluator outputs.
+ * Scope: Public summary facade for shared analytics outputs.
  * Usage: Call `buildSummaryArtifact(metrics, buildSummaryInputsFromArtifacts(rawTurns, incidents))`.
  * Invariants/Assumptions: This module is the only supported summary facade; core math stays isolated in focused summary modules.
  */
@@ -26,7 +26,7 @@ export {
 export {
   calculateFrictionScore,
   dominantLabelsForSession,
-  getLabelWeight,
+  getIncidentLabelWeight,
 } from "./friction-scoring.js";
 export { insertTopIncident } from "./incident-selection.js";
 export {
@@ -35,8 +35,8 @@ export {
   determineArchetype,
 } from "./session-archetype.js";
 export {
+  buildEndedVerifiedDeliverySpotlights,
   buildTopSessions,
-  buildVerifiedDeliverySpotlights,
 } from "./session-ranking.js";
 export type {
   ScoreSnapshot,
@@ -81,7 +81,7 @@ export function buildSummaryArtifact(
   const decorations = buildSummaryDecorations(metrics, core.topSessions);
 
   return {
-    evaluatorVersion: metrics.evaluatorVersion,
+    engineVersion: metrics.engineVersion,
     schemaVersion: metrics.schemaVersion,
     generatedAt: metrics.generatedAt,
     sessions: metrics.sessionCount,

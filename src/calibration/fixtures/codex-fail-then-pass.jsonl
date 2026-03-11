@@ -1,0 +1,14 @@
+{"timestamp":"2026-03-10T14:00:00.000Z","type":"session_meta","payload":{"id":"benchmark-codex-fail-then-pass","timestamp":"2026-03-10T14:00:00.000Z","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T14:00:01.000Z","type":"turn_context","payload":{"turn_id":"turn-1","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T14:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Please patch the docs and verify before you finish."}]}}
+{"timestamp":"2026-03-10T14:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Plan: patch the docs, rerun tests, and stop only after the final verification passes."}]}}
+{"timestamp":"2026-03-10T14:00:04.000Z","type":"response_item","payload":{"type":"function_call","name":"git_status","arguments":"{}","call_id":"call-1"}}
+{"timestamp":"2026-03-10T14:00:05.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-1","output":"Command succeeded"}}
+{"timestamp":"2026-03-10T14:00:06.000Z","type":"response_item","payload":{"type":"function_call","name":"apply_patch","arguments":"*** Begin Patch\n*** Update File: README.md\n+first update\n*** End Patch","call_id":"call-2"}}
+{"timestamp":"2026-03-10T14:00:07.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-2","output":"Success"}}
+{"timestamp":"2026-03-10T14:00:08.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"pnpm test\"}","call_id":"call-3"}}
+{"timestamp":"2026-03-10T14:00:09.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-3","output":"Process exited with code 1"}}
+{"timestamp":"2026-03-10T14:00:10.000Z","type":"response_item","payload":{"type":"function_call","name":"apply_patch","arguments":"*** Begin Patch\n*** Update File: README.md\n+second update\n*** End Patch","call_id":"call-4"}}
+{"timestamp":"2026-03-10T14:00:11.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-4","output":"Success"}}
+{"timestamp":"2026-03-10T14:00:12.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"pnpm test\"}","call_id":"call-5"}}
+{"timestamp":"2026-03-10T14:00:13.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-5","output":"Process exited with code 0"}}

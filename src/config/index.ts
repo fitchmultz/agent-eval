@@ -16,11 +16,11 @@
 import {
   CLUSTERING,
   CONCURRENCY,
-  LABEL_WEIGHTS,
+  INCIDENT_FRICTION_WEIGHTS,
   PREVIEWS,
   SCORING,
 } from "../constants/index.js";
-import type { LabelName } from "../schema.js";
+import type { incidentLabelNames } from "../labels.js";
 import {
   type DeepPartial,
   loadConfigFile,
@@ -75,8 +75,8 @@ export interface EvaluatorConfig {
   };
   /** Scoring and weight settings for friction calculation */
   scoring: {
-    /** Weights for each label type when calculating friction scores */
-    labelWeights: Record<LabelName, number>;
+    /** Weights for incident-family labels when calculating session friction */
+    incidentLabelWeights: Record<(typeof incidentLabelNames)[number], number>;
     /** Threshold above which friction score is considered significant */
     frictionThreshold: number;
   };
@@ -108,7 +108,7 @@ const DEFAULT_CONFIG: EvaluatorConfig = {
     maxTopSessions: PREVIEWS.MAX_TOP_SESSIONS,
   },
   scoring: {
-    labelWeights: { ...LABEL_WEIGHTS },
+    incidentLabelWeights: { ...INCIDENT_FRICTION_WEIGHTS },
     frictionThreshold: SCORING.FRICTION_THRESHOLD,
   },
   reporting: {
@@ -137,7 +137,9 @@ export function setConfig(
     clustering: Partial<EvaluatorConfig["clustering"]>;
     previews: Partial<EvaluatorConfig["previews"]>;
     scoring: Partial<{
-      labelWeights: Partial<EvaluatorConfig["scoring"]["labelWeights"]>;
+      incidentLabelWeights: Partial<
+        EvaluatorConfig["scoring"]["incidentLabelWeights"]
+      >;
       frictionThreshold: number;
     }>;
     reporting: Partial<EvaluatorConfig["reporting"]>;
@@ -152,9 +154,9 @@ export function setConfig(
     scoring: {
       ...currentConfig.scoring,
       ...config.scoring,
-      labelWeights: {
-        ...currentConfig.scoring.labelWeights,
-        ...config.scoring?.labelWeights,
+      incidentLabelWeights: {
+        ...currentConfig.scoring.incidentLabelWeights,
+        ...config.scoring?.incidentLabelWeights,
       },
     },
     reporting: { ...currentConfig.reporting, ...config.reporting },

@@ -34,7 +34,7 @@ function createLabel(
 
 function createMockTurn(overrides: Partial<RawTurnRecord> = {}): RawTurnRecord {
   return {
-    evaluatorVersion: "0.1.0",
+    engineVersion: "0.1.0",
     schemaVersion: "1",
     sessionId: "session-1",
     turnId: "turn-1",
@@ -62,7 +62,7 @@ describe("clusterIncidents", () => {
     const incidents = clusterIncidents(
       [
         {
-          evaluatorVersion: "0.1.0",
+          engineVersion: "0.1.0",
           schemaVersion: "1",
           sessionId: "session-1",
           turnId: "turn-1",
@@ -93,7 +93,7 @@ describe("clusterIncidents", () => {
           ],
         },
         {
-          evaluatorVersion: "0.1.0",
+          engineVersion: "0.1.0",
           schemaVersion: "1",
           sessionId: "session-1",
           turnId: "turn-2",

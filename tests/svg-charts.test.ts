@@ -13,7 +13,7 @@ import {
 } from "../src/svg-charts.js";
 
 const baseSummary: SummaryArtifact = {
-  evaluatorVersion: "0.1.0",
+  engineVersion: "0.1.0",
   schemaVersion: "1",
   generatedAt: "2026-03-06T19:00:00.000Z",
   sessions: 2,
@@ -58,7 +58,7 @@ const baseSummary: SummaryArtifact = {
     writeSessionVerificationRate: 100,
   },
   topSessions: [],
-  verifiedDeliverySpotlights: [],
+  endedVerifiedDeliverySpotlights: [],
   topIncidents: [],
   opportunities: [],
   highlightCards: [],

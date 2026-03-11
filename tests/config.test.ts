@@ -40,14 +40,10 @@ describe("config", () => {
     it("returns label weights for all label types", () => {
       const config = getConfig();
 
-      expect(config.scoring.labelWeights).toEqual({
+      expect(config.scoring.incidentLabelWeights).toEqual({
         context_drift: 4,
         test_build_lint_failure_complaint: 5,
-        interrupt: 2,
         regression_report: 5,
-        praise: -1,
-        context_reinjection: 2,
-        verification_request: 2,
         stalled_or_guessing: 5,
       });
     });
@@ -93,7 +89,7 @@ describe("config", () => {
       setConfig({
         scoring: {
           frictionThreshold: 10,
-          labelWeights: {
+          incidentLabelWeights: {
             context_drift: 8,
           },
         },
@@ -101,8 +97,8 @@ describe("config", () => {
 
       const config = getConfig();
       expect(config.scoring.frictionThreshold).toBe(10);
-      expect(config.scoring.labelWeights.context_drift).toBe(8);
-      expect(config.scoring.labelWeights.praise).toBe(-1); // unchanged
+      expect(config.scoring.incidentLabelWeights.context_drift).toBe(8);
+      expect(config.scoring.incidentLabelWeights.regression_report).toBe(5); // unchanged
 
       resetConfig();
     });

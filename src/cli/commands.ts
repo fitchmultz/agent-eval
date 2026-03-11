@@ -105,6 +105,7 @@ export async function runBenchmarkCommand(
       results.caseCount,
       results.terminalVerificationMetrics.endedVerifiedAccuracy,
       results.incidentMetrics.precision,
+      results.parseWarningMetrics.accuracy,
     )}\n`,
   );
 }

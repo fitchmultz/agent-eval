@@ -89,7 +89,7 @@ export const toolCallSummarySchema = z.object({
 });
 
 export const rawTurnSchema = z.object({
-  evaluatorVersion: z.string().min(1),
+  engineVersion: z.string().min(1),
   schemaVersion: z.string().min(1),
   sessionId: z.string().min(1),
   parentSessionId: z.string().min(1).optional(),
@@ -107,7 +107,7 @@ export const rawTurnSchema = z.object({
 });
 
 export const incidentSchema = z.object({
-  evaluatorVersion: z.string().min(1),
+  engineVersion: z.string().min(1),
   schemaVersion: z.string().min(1),
   incidentId: z.string().min(1),
   sessionId: z.string().min(1),
@@ -176,7 +176,7 @@ export const labelCountSchema = z.object({
 });
 
 export const metricsSchema = z.object({
-  evaluatorVersion: z.string().min(1),
+  engineVersion: z.string().min(1),
   schemaVersion: z.string().min(1),
   generatedAt: z.string().min(1),
   sessionCount: z.int().nonnegative(),
@@ -214,7 +214,7 @@ const sessionHighlightSchema = z.object({
 });
 
 const summaryCoreSchema = z.object({
-  evaluatorVersion: z.string().min(1),
+  engineVersion: z.string().min(1),
   schemaVersion: z.string().min(1),
   generatedAt: z.string().min(1),
   sessions: z.int().nonnegative(),
@@ -286,7 +286,7 @@ const summaryPresentationSchema = z.object({
   ),
   highlightCards: z.array(valueCardSchema),
   recognitions: z.array(z.string().min(1)),
-  verifiedDeliverySpotlights: z.array(sessionHighlightSchema),
+  endedVerifiedDeliverySpotlights: z.array(sessionHighlightSchema),
   opportunities: z.array(
     z.object({
       title: z.string().min(1),

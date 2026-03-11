@@ -1,6 +1,6 @@
 /**
- * Purpose: Converts evaluator metrics and summary data into a concise markdown report for operators or showcase audiences.
- * Responsibilities: Build deterministic report sections from metrics and summary artifacts without recomputing evaluator logic.
+ * Purpose: Converts analytics metrics and summary data into a concise markdown report for operators or showcase audiences.
+ * Responsibilities: Build deterministic report sections from metrics and summary artifacts without recomputing analytics logic.
  * Scope: Used by the `report` and `eval` commands for all supported sources.
  * Usage: Call `renderSummaryReport()` with a summary artifact, or `renderReport()` as a convenience wrapper.
  * Invariants/Assumptions: Incident evidence stays redacted and truncated, and score labels are presented as heuristic proxies rather than correctness claims.
@@ -170,7 +170,7 @@ function renderMethodologyLines(metrics: MetricsRecord): string[] {
     "- This report is a deterministic transcript analytics summary with heuristic policy proxies, not a rigorous correctness evaluator.",
     "- Labels are transcript-visible heuristics and should be treated as operator-friction signals, not ground-truth task outcomes.",
     "- Compliance scores are proxies based on observed transcript events and do not prove actual repository correctness.",
-    "- Calibration, benchmark validation, and optional enrichment joins are intentionally deferred beyond this hardening release.",
+    "- A synthetic benchmark harness validates key proxy behavior, but benchmark coverage remains limited and should not be treated as comprehensive external validation.",
   ];
 
   if (metrics.parseWarningCount > 0) {
@@ -218,7 +218,7 @@ export function renderSummaryReport(
   const lines = [
     title,
     "",
-    `- Evaluator version: \`${metrics.evaluatorVersion}\``,
+    `- Analytics engine version: \`${metrics.engineVersion}\``,
     `- Schema version: \`${metrics.schemaVersion}\``,
     `- Generated at: \`${metrics.generatedAt}\``,
     `- Sources: \`${providers.join(", ")}\``,
@@ -285,11 +285,11 @@ export function renderSummaryReport(
 
   if (skin === "showcase") {
     lines.push(
-      "## Verified Delivery Spotlights",
+      "## Ended-Verified Delivery Spotlights",
       "",
       ...renderLines(
-        summary.verifiedDeliverySpotlights,
-        "- No clean verified delivery sessions were available in this slice.",
+        summary.endedVerifiedDeliverySpotlights,
+        "- No clean ended-verified delivery sessions were available in this slice.",
         (session) =>
           `- ${session.sessionId}: ${session.archetypeLabel}, score ${session.complianceScore}, verifications ${session.verificationPassedCount}, incidents ${session.incidentCount}`,
       ),

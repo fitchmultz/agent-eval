@@ -4,7 +4,7 @@ This document now reflects the schema the repo actually implements for v1, plus 
 
 ## Implemented V1 Model
 
-The evaluator currently normalizes supported developer-agent transcript artifacts into three primary output records plus one derived summary layer:
+The analytics engine currently normalizes supported developer-agent transcript artifacts into three primary output records plus one derived summary layer:
 
 - `RawTurnRecord`
   - one normalized turn-level record per reconstructed transcript turn
@@ -17,7 +17,7 @@ The evaluator currently normalizes supported developer-agent transcript artifact
   - includes label counts, compliance rollups, per-session metrics, and discovered inventory
 - `SummaryArtifact`
   - a deterministic derived summary for reporting and sharing
-  - includes counts, rates, delivery coverage, comparative slices, score cards, brag cards, badges, opportunities, top sessions, victory laps, and top incidents
+  - includes counts, rates, delivery coverage, comparative slices, score cards, highlight cards, recognitions, opportunities, top sessions, ended-verified spotlights, and top incidents
 
 ## Why This Is The Actual V1 Shape
 
@@ -44,7 +44,7 @@ The earlier exploration notes described a richer long-term normalized model. The
 Why deferred:
 
 - they add substantial parsing and maintenance complexity
-- the current deterministic evaluator does not need them to score the supported behaviors
+- the current deterministic analytics engine does not need them to score the supported behaviors
 - optional local enrichment stores are not yet merged deeply enough to justify those abstractions
 
 ## Current Schema Boundary

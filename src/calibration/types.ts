@@ -1,6 +1,6 @@
 /**
  * Purpose: Define schemas and types for the synthetic calibration corpus and benchmark results.
- * Responsibilities: Validate corpus cases, benchmark outputs, and sanitization expectations.
+ * Responsibilities: Validate corpus cases, benchmark outputs, case-scoped matching metrics, and sanitization expectations.
  * Scope: Shared by the calibration runner, report renderer, CLI command, and tests.
  * Usage: Import these types from the calibration package instead of redefining benchmark contracts.
  * Invariants/Assumptions: Calibration corpus remains synthetic, deterministic, and provider-specific without external dependencies.
@@ -10,10 +10,22 @@ import { z } from "zod";
 import { labelTaxonomy } from "../schema.js";
 
 const calibrationProviderSchema = z.enum(["codex", "claude"]);
-const expectedLabelCountsSchema = z.partialRecord(
-  z.enum(labelTaxonomy),
-  z.int().nonnegative(),
-);
+
+export const labelInstanceSchema = z.object({
+  turnIndex: z.int().nonnegative(),
+  label: z.enum(labelTaxonomy),
+});
+
+export const labelBenchmarkRecordSchema = z.object({
+  label: z.enum(labelTaxonomy),
+  expectedCount: z.int().nonnegative(),
+  actualCount: z.int().nonnegative(),
+  truePositive: z.int().nonnegative(),
+  falsePositive: z.int().nonnegative(),
+  falseNegative: z.int().nonnegative(),
+  precision: z.number(),
+  recall: z.number(),
+});
 
 export const sanitizationCheckSchema = z.object({
   input: z.string(),
@@ -32,28 +44,32 @@ export const terminalVerificationExpectationSchema = z.object({
   endedVerified: z.boolean(),
 });
 
+export const parseWarningExpectationSchema = z.object({
+  expectedCount: z.int().nonnegative(),
+  actualCount: z.int().nonnegative(),
+  passed: z.boolean(),
+});
+
+export const incidentBenchmarkRecordSchema = z.object({
+  expectedCount: z.int().nonnegative(),
+  actualCount: z.int().nonnegative(),
+  matchedCount: z.int().nonnegative(),
+  precision: z.number(),
+  recall: z.number(),
+});
+
 export const calibrationCaseSchema = z.object({
   id: z.string().min(1),
   provider: calibrationProviderSchema,
   fixture: z.string().min(1),
-  expectedLabelCounts: expectedLabelCountsSchema.default({}),
+  expectedLabelInstances: z.array(labelInstanceSchema).default([]),
   expectedIncidents: z.array(expectedIncidentSchema).default([]),
   expectedTerminalVerification: terminalVerificationExpectationSchema,
+  expectedParseWarningCount: z.int().nonnegative().default(0),
   sanitizationChecks: z.array(sanitizationCheckSchema).default([]),
 });
 
 export const calibrationCorpusSchema = z.array(calibrationCaseSchema);
-
-export const labelBenchmarkRecordSchema = z.object({
-  label: z.enum(labelTaxonomy),
-  expectedCount: z.int().nonnegative(),
-  actualCount: z.int().nonnegative(),
-  truePositive: z.int().nonnegative(),
-  falsePositive: z.int().nonnegative(),
-  falseNegative: z.int().nonnegative(),
-  precision: z.number(),
-  recall: z.number(),
-});
 
 export const sanitizationCheckResultSchema = z.object({
   input: z.string(),
@@ -67,11 +83,13 @@ export const calibrationCaseResultSchema = z.object({
   id: z.string(),
   provider: calibrationProviderSchema,
   fixture: z.string(),
-  parseWarningCount: z.int().nonnegative(),
-  expectedLabelCounts: expectedLabelCountsSchema,
-  actualLabelCounts: expectedLabelCountsSchema,
+  parseWarnings: parseWarningExpectationSchema,
+  expectedLabelInstances: z.array(labelInstanceSchema),
+  actualLabelInstances: z.array(labelInstanceSchema),
+  labelMetrics: z.array(labelBenchmarkRecordSchema),
   expectedIncidents: z.array(expectedIncidentSchema),
   actualIncidents: z.array(expectedIncidentSchema),
+  incidentMetrics: incidentBenchmarkRecordSchema,
   expectedTerminalVerification: terminalVerificationExpectationSchema,
   actualTerminalVerification: terminalVerificationExpectationSchema,
   sanitizationChecks: z.array(sanitizationCheckResultSchema),
@@ -79,22 +97,23 @@ export const calibrationCaseResultSchema = z.object({
 
 export const benchmarkResultsSchema = z.object({
   benchmarkVersion: z.string(),
-  evaluatorVersion: z.string(),
+  engineVersion: z.string(),
   schemaVersion: z.string(),
   caseCount: z.int().nonnegative(),
   labelMetrics: z.array(labelBenchmarkRecordSchema),
-  incidentMetrics: z.object({
-    expectedCount: z.int().nonnegative(),
-    actualCount: z.int().nonnegative(),
-    matchedCount: z.int().nonnegative(),
-    precision: z.number(),
-    recall: z.number(),
-  }),
+  incidentMetrics: incidentBenchmarkRecordSchema,
   terminalVerificationMetrics: z.object({
     caseCount: z.int().nonnegative(),
     endedVerifiedAccuracy: z.number(),
     postWriteVerificationAttemptedAccuracy: z.number(),
     postWriteVerificationPassedAccuracy: z.number(),
+  }),
+  parseWarningMetrics: z.object({
+    caseCount: z.int().nonnegative(),
+    expectedCount: z.int().nonnegative(),
+    actualCount: z.int().nonnegative(),
+    matchedCaseCount: z.int().nonnegative(),
+    accuracy: z.number(),
   }),
   sanitizationMetrics: z.object({
     checkCount: z.int().nonnegative(),

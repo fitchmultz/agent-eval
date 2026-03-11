@@ -1,7 +1,7 @@
 /**
  * Purpose: Clusters message-level labels into incident records using configurable turn-gap heuristics.
  * Entrypoint: `clusterIncidents()` is called by the evaluator after turn labeling.
- * Notes: Clustering is intentionally conservative to preserve precision in evaluator v1.
+ * Notes: Clustering is intentionally conservative to preserve precision in analytics-engine v1.
  */
 
 import { getConfig } from "./config/index.js";
@@ -66,7 +66,7 @@ function buildEvidencePreviews(turns: readonly RawTurnRecord[]): string[] {
  *
  * @param turns - All labeled turns from the evaluation (unlabeled turns are skipped)
  * @param options - Clustering options including maxTurnGap
- * @param evaluatorVersion - Version string for the evaluator (stored in incident records)
+ * @param engineVersion - Version string for the analytics engine (stored in incident records)
  * @param schemaVersion - Version string for the schema (stored in incident records)
  * @returns Array of incident records with merged labels and evidence previews
  *
@@ -84,7 +84,7 @@ function buildEvidencePreviews(turns: readonly RawTurnRecord[]): string[] {
 export function clusterIncidents(
   turns: readonly RawTurnRecord[],
   options: ClusterOptions,
-  evaluatorVersion: string,
+  engineVersion: string,
   schemaVersion: string,
 ): IncidentRecord[] {
   const incidents: IncidentRecord[] = [];
@@ -113,7 +113,7 @@ export function clusterIncidents(
       .filter((turnId): turnId is string => typeof turnId === "string");
 
     incidents.push({
-      evaluatorVersion,
+      engineVersion,
       schemaVersion,
       incidentId: `${first.sessionId}:incident:${incidents.length}`,
       sessionId: first.sessionId,

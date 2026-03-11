@@ -38,7 +38,7 @@ describe("aggregateMetrics", () => {
     sessionId: id,
     turns: [
       {
-        evaluatorVersion: "1.0.0",
+        engineVersion: "1.0.0",
         schemaVersion: "1.0.0",
         sessionId: id,
         turnIndex: 0,
@@ -63,7 +63,7 @@ describe("aggregateMetrics", () => {
       labelCount > 0
         ? [
             {
-              evaluatorVersion: "1.0.0",
+              engineVersion: "1.0.0",
               schemaVersion: "1.0.0",
               incidentId: `${id}:incident:0`,
               sessionId: id,
@@ -179,7 +179,7 @@ describe("aggregateMetrics", () => {
 
     const metrics = aggregateMetrics(sessions, mockInventory);
 
-    expect(metrics.evaluatorVersion).toBeDefined();
+    expect(metrics.engineVersion).toBeDefined();
     expect(metrics.schemaVersion).toBeDefined();
     expect(metrics.generatedAt).toBeDefined();
     expect(new Date(metrics.generatedAt).getTime()).not.toBeNaN();
@@ -202,7 +202,7 @@ describe("countLabel", () => {
   ): ProcessedSession => ({
     sessionId: "test",
     turns: Array.from({ length: count }, (_, i) => ({
-      evaluatorVersion: "1.0.0",
+      engineVersion: "1.0.0",
       schemaVersion: "1.0.0",
       sessionId: "test",
       turnIndex: i,
@@ -263,7 +263,7 @@ describe("countWriteTurns", () => {
   ): ProcessedSession => ({
     sessionId: "test",
     turns: Array.from({ length: writeTurnCount }, (_, i) => ({
-      evaluatorVersion: "1.0.0",
+      engineVersion: "1.0.0",
       schemaVersion: "1.0.0",
       sessionId: "test",
       turnIndex: i,
@@ -325,7 +325,7 @@ describe("countWriteTurns", () => {
         sessionId: "test",
         turns: [
           {
-            evaluatorVersion: "1.0.0",
+            engineVersion: "1.0.0",
             schemaVersion: "1.0.0",
             sessionId: "test",
             turnIndex: 0,

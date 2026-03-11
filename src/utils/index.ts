@@ -1,5 +1,5 @@
 /**
- * Purpose: Centralized utilities for the evaluator.
+ * Purpose: Centralized utilities for the analytics engine.
  * Entrypoint: Import from specific utility modules or this barrel export.
  */
 

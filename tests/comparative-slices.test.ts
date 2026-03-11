@@ -42,7 +42,7 @@ function createMockMetricsRecord(
   overrides: Partial<MetricsRecord> = {},
 ): MetricsRecord {
   return {
-    evaluatorVersion: "1.0.0",
+    engineVersion: "1.0.0",
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
     sessionCount: 1,

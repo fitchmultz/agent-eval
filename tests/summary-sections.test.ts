@@ -12,7 +12,7 @@ function createMockSummaryArtifact(
 ): SummaryArtifact {
   const now = new Date().toISOString();
   return {
-    evaluatorVersion: "1.0.0",
+    engineVersion: "1.0.0",
     schemaVersion: "1",
     generatedAt: now,
     sessions: 10,
@@ -53,7 +53,7 @@ function createMockSummaryArtifact(
       {
         sessionId: "session-1",
         archetype: "high_friction_verified_delivery",
-        archetypeLabel: "High-Friction Verified Delivery",
+        archetypeLabel: "High-Friction Ended-Verified Delivery",
         frictionScore: 12,
         complianceScore: 70,
         incidentCount: 3,
@@ -69,7 +69,7 @@ function createMockSummaryArtifact(
     scoreCards: [],
     highlightCards: [],
     recognitions: [],
-    verifiedDeliverySpotlights: [],
+    endedVerifiedDeliverySpotlights: [],
     opportunities: [],
     ...overrides,
   };
@@ -528,7 +528,7 @@ describe("summary-sections", () => {
           {
             sessionId: "high-friction-session",
             archetype: "high_friction_verified_delivery",
-            archetypeLabel: "High-Friction Verified Delivery",
+            archetypeLabel: "High-Friction Ended-Verified Delivery",
             frictionScore: 15,
             complianceScore: 60,
             incidentCount: 5,
@@ -550,7 +550,9 @@ describe("summary-sections", () => {
       expect(frictionCard).toBeDefined();
       expect(frictionCard?.value).toBe("high-friction-session");
       expect(frictionCard?.detail).toContain("15 friction points");
-      expect(frictionCard?.detail).toContain("High-Friction Verified Delivery");
+      expect(frictionCard?.detail).toContain(
+        "High-Friction Ended-Verified Delivery",
+      );
     });
 
     it("sets danger tone for high friction session", () => {
@@ -559,7 +561,7 @@ describe("summary-sections", () => {
           {
             sessionId: "high-friction-session",
             archetype: "high_friction_verified_delivery",
-            archetypeLabel: "High-Friction Verified Delivery",
+            archetypeLabel: "High-Friction Ended-Verified Delivery",
             frictionScore: 12, // Above HIGH_FRICTION_THRESHOLD of 8
             complianceScore: 60,
             incidentCount: 5,
@@ -587,7 +589,7 @@ describe("summary-sections", () => {
           {
             sessionId: "normal-session",
             archetype: "verified_delivery",
-            archetypeLabel: "Verified Delivery",
+            archetypeLabel: "Ended-Verified Delivery",
             frictionScore: 3, // Below HIGH_FRICTION_THRESHOLD of 8
             complianceScore: 95,
             incidentCount: 1,

@@ -3,9 +3,9 @@
     "id": "codex-ended-verified",
     "provider": "codex",
     "fixture": "codex-ended-verified.jsonl",
-    "expectedLabelCounts": {
-      "verification_request": 1
-    },
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "verification_request" }
+    ],
     "expectedIncidents": [],
     "expectedTerminalVerification": {
       "postWriteVerificationAttempted": true,
@@ -17,7 +17,7 @@
     "id": "codex-unverified-ending",
     "provider": "codex",
     "fixture": "codex-unverified-ending.jsonl",
-    "expectedLabelCounts": {},
+    "expectedLabelInstances": [],
     "expectedIncidents": [],
     "expectedTerminalVerification": {
       "postWriteVerificationAttempted": false,
@@ -29,11 +29,11 @@
     "id": "codex-cue-only",
     "provider": "codex",
     "fixture": "codex-cue-only.jsonl",
-    "expectedLabelCounts": {
-      "context_reinjection": 1,
-      "verification_request": 1,
-      "praise": 1
-    },
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "context_reinjection" },
+      { "turnIndex": 0, "label": "verification_request" },
+      { "turnIndex": 0, "label": "praise" }
+    ],
     "expectedIncidents": [],
     "expectedTerminalVerification": {
       "postWriteVerificationAttempted": false,
@@ -64,6 +64,17 @@
         "mustNotContain": [
           "[redacted-secret]"
         ]
+      },
+      {
+        "input": "Windows path C:\\Users\\demo\\project\\src\\index.ts should be hidden, but commit 1234567890abcdef should remain visible.",
+        "mustContain": [
+          "[redacted-path]",
+          "commit 1234567890abcdef should remain visible."
+        ],
+        "mustNotContain": [
+          "C:\\Users\\demo\\project\\src\\index.ts",
+          "[redacted-secret]"
+        ]
       }
     ]
   },
@@ -71,10 +82,12 @@
     "id": "codex-incident-cluster",
     "provider": "codex",
     "fixture": "codex-incident-cluster.jsonl",
-    "expectedLabelCounts": {
-      "stalled_or_guessing": 2,
-      "regression_report": 1
-    },
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "stalled_or_guessing" },
+      { "turnIndex": 1, "label": "interrupt" },
+      { "turnIndex": 1, "label": "stalled_or_guessing" },
+      { "turnIndex": 1, "label": "regression_report" }
+    ],
     "expectedIncidents": [
       {
         "turnIndices": [0, 1],
@@ -88,6 +101,114 @@
       "postWriteVerificationAttempted": false,
       "postWriteVerificationPassed": false,
       "endedVerified": false
+    }
+  },
+  {
+    "id": "codex-fail-then-pass",
+    "provider": "codex",
+    "fixture": "codex-fail-then-pass.jsonl",
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "verification_request" }
+    ],
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": true,
+      "postWriteVerificationPassed": true,
+      "endedVerified": true
+    }
+  },
+  {
+    "id": "codex-pass-then-fail",
+    "provider": "codex",
+    "fixture": "codex-pass-then-fail.jsonl",
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "verification_request" }
+    ],
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": true,
+      "postWriteVerificationPassed": false,
+      "endedVerified": false
+    }
+  },
+  {
+    "id": "codex-unknown-post-write",
+    "provider": "codex",
+    "fixture": "codex-unknown-post-write.jsonl",
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "verification_request" }
+    ],
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": true,
+      "postWriteVerificationPassed": false,
+      "endedVerified": false
+    }
+  },
+  {
+    "id": "codex-multi-cluster",
+    "provider": "codex",
+    "fixture": "codex-multi-cluster.jsonl",
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "context_drift" },
+      { "turnIndex": 1, "label": "interrupt" },
+      { "turnIndex": 1, "label": "stalled_or_guessing" },
+      { "turnIndex": 2, "label": "praise" },
+      { "turnIndex": 4, "label": "regression_report" }
+    ],
+    "expectedIncidents": [
+      {
+        "turnIndices": [0],
+        "labels": [
+          "context_drift"
+        ]
+      },
+      {
+        "turnIndices": [1],
+        "labels": [
+          "stalled_or_guessing"
+        ]
+      },
+      {
+        "turnIndices": [4],
+        "labels": [
+          "regression_report"
+        ]
+      }
+    ],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": false,
+      "postWriteVerificationPassed": false,
+      "endedVerified": false
+    }
+  },
+  {
+    "id": "codex-parse-warning",
+    "provider": "codex",
+    "fixture": "codex-parse-warning.jsonl",
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "verification_request" }
+    ],
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": true,
+      "postWriteVerificationPassed": true,
+      "endedVerified": true
+    },
+    "expectedParseWarningCount": 1
+  },
+  {
+    "id": "claude-ended-verified",
+    "provider": "claude",
+    "fixture": "claude-ended-verified.jsonl",
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "verification_request" }
+    ],
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": true,
+      "postWriteVerificationPassed": true,
+      "endedVerified": true
     }
   }
 ]
