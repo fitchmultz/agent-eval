@@ -1,0 +1,10 @@
+{"timestamp":"2026-03-10T10:00:00.000Z","type":"session_meta","payload":{"id":"benchmark-codex-ended-verified","timestamp":"2026-03-10T10:00:00.000Z","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T10:00:01.000Z","type":"turn_context","payload":{"turn_id":"turn-1","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T10:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Please update the README, run tests, and verify before finishing."}]}}
+{"timestamp":"2026-03-10T10:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Plan: inspect the repo, update the README, then run pnpm test before finishing."}]}}
+{"timestamp":"2026-03-10T10:00:04.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"git status\"}","call_id":"call-1"}}
+{"timestamp":"2026-03-10T10:00:05.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-1","output":"On branch main"}}
+{"timestamp":"2026-03-10T10:00:06.000Z","type":"response_item","payload":{"type":"function_call","name":"apply_patch","arguments":"*** Begin Patch\n*** Update File: README.md\n+updated\n*** End Patch","call_id":"call-2"}}
+{"timestamp":"2026-03-10T10:00:07.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-2","output":"Success"}}
+{"timestamp":"2026-03-10T10:00:08.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"pnpm test\"}","call_id":"call-3"}}
+{"timestamp":"2026-03-10T10:00:09.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-3","output":"Process exited with code 0"}}

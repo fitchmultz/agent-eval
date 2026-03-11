@@ -29,7 +29,9 @@ interface ParseOutput {
   evaluatorVersion: string;
   schemaVersion: string;
   outputDir: string;
+  sessionCount: number;
   rawTurnCount: number;
+  parseWarningCount: number;
 }
 
 interface EvalOutput {
@@ -39,6 +41,15 @@ interface EvalOutput {
   sessionCount: number;
   incidentCount: number;
   summaryOnly?: boolean;
+}
+
+interface BenchmarkOutput {
+  evaluatorVersion: string;
+  schemaVersion: string;
+  outputDir: string;
+  caseCount: number;
+  endedVerifiedAccuracy: number;
+  incidentPrecision: number;
 }
 
 /**
@@ -67,12 +78,16 @@ export function formatInspectOutput(
 export function formatParseOutput(
   outputDir: string,
   rawTurnCount: number,
+  sessionCount: number,
+  parseWarningCount: number,
 ): string {
   const output: ParseOutput = {
     evaluatorVersion: EVALUATOR_VERSION,
     schemaVersion: SCHEMA_VERSION,
     outputDir,
+    sessionCount,
     rawTurnCount,
+    parseWarningCount,
   };
   return JSON.stringify(output, null, 2);
 }
@@ -93,6 +108,23 @@ export function formatEvalOutput(
     sessionCount,
     incidentCount,
     summaryOnly,
+  };
+  return JSON.stringify(output, null, 2);
+}
+
+export function formatBenchmarkOutput(
+  outputDir: string,
+  caseCount: number,
+  endedVerifiedAccuracy: number,
+  incidentPrecision: number,
+): string {
+  const output: BenchmarkOutput = {
+    evaluatorVersion: EVALUATOR_VERSION,
+    schemaVersion: SCHEMA_VERSION,
+    outputDir,
+    caseCount,
+    endedVerifiedAccuracy,
+    incidentPrecision,
   };
   return JSON.stringify(output, null, 2);
 }

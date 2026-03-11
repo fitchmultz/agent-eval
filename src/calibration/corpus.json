@@ -1,0 +1,93 @@
+[
+  {
+    "id": "codex-ended-verified",
+    "provider": "codex",
+    "fixture": "codex-ended-verified.jsonl",
+    "expectedLabelCounts": {
+      "verification_request": 1
+    },
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": true,
+      "postWriteVerificationPassed": true,
+      "endedVerified": true
+    }
+  },
+  {
+    "id": "codex-unverified-ending",
+    "provider": "codex",
+    "fixture": "codex-unverified-ending.jsonl",
+    "expectedLabelCounts": {},
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": false,
+      "postWriteVerificationPassed": false,
+      "endedVerified": false
+    }
+  },
+  {
+    "id": "codex-cue-only",
+    "provider": "codex",
+    "fixture": "codex-cue-only.jsonl",
+    "expectedLabelCounts": {
+      "context_reinjection": 1,
+      "verification_request": 1,
+      "praise": 1
+    },
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": false,
+      "postWriteVerificationPassed": false,
+      "endedVerified": false
+    },
+    "sanitizationChecks": [
+      {
+        "input": "Token ghp_1234567890abcdefghijklmnop and path /Users/demo/project plus URL https://example.com/x and IP 10.0.0.1",
+        "mustContain": [
+          "[redacted-token]",
+          "[redacted-path]",
+          "[redacted-url]",
+          "[redacted-ip]"
+        ],
+        "mustNotContain": [
+          "ghp_1234567890abcdefghijklmnop",
+          "/Users/demo/project",
+          "https://example.com/x",
+          "10.0.0.1"
+        ]
+      },
+      {
+        "input": "Stable identifier alpha-bravo-charlie-delta-echo-foxtrot keeps context readable.",
+        "mustContain": [
+          "Stable identifier alpha-bravo-charlie-delta-echo-foxtrot keeps context readable."
+        ],
+        "mustNotContain": [
+          "[redacted-secret]"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "codex-incident-cluster",
+    "provider": "codex",
+    "fixture": "codex-incident-cluster.jsonl",
+    "expectedLabelCounts": {
+      "stalled_or_guessing": 2,
+      "regression_report": 1
+    },
+    "expectedIncidents": [
+      {
+        "turnIndices": [0, 1],
+        "labels": [
+          "regression_report",
+          "stalled_or_guessing"
+        ]
+      }
+    ],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": false,
+      "postWriteVerificationPassed": false,
+      "endedVerified": false
+    }
+  }
+]

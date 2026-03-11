@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Transcript-first evaluator for developer AI agents, including Codex and Claude Code sessions.",
+  "description": "Deterministic transcript analytics engine for developer AI session artifacts, with heuristic policy proxies.",
   "type": "module",
   "packageManager": "pnpm@10.30.3",
   "repository": {
@@ -29,7 +29,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "benchmark": "tsx src/cli.ts benchmark --output-dir artifacts/benchmark",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark",
     "dev": "tsx src/cli.ts",
     "format": "biome check --write .",
     "inspect": "tsx src/cli.ts inspect",

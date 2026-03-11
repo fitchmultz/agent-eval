@@ -5,6 +5,7 @@
  */
 
 export {
+  formatBenchmarkOutput,
   formatEvalOutput,
   formatInspectOutput,
   formatParseOutput,

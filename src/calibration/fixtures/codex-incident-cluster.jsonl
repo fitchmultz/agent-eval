@@ -1,0 +1,7 @@
+{"timestamp":"2026-03-10T13:00:00.000Z","type":"session_meta","payload":{"id":"benchmark-codex-incident-cluster","timestamp":"2026-03-10T13:00:00.000Z","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T13:00:01.000Z","type":"turn_context","payload":{"turn_id":"turn-1","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T13:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"You seem unsure and stalled."}]}}
+{"timestamp":"2026-03-10T13:00:03.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I will keep investigating."}]}}
+{"timestamp":"2026-03-10T13:00:04.000Z","type":"turn_context","payload":{"turn_id":"turn-2","cwd":"/workspace/demo"}}
+{"timestamp":"2026-03-10T13:00:05.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Stop guessing, this broke and now fails."}]}}
+{"timestamp":"2026-03-10T13:00:06.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I will fix the regression."}]}}

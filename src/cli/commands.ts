@@ -5,9 +5,11 @@
  */
 
 import { writeArtifacts, writeParseArtifacts } from "../artifact-writer.js";
+import { runCalibrationBenchmark } from "../calibration/index.js";
 import { discoverArtifacts } from "../discovery.js";
 import { evaluateArtifacts, parseArtifacts } from "../evaluator.js";
 import {
+  formatBenchmarkOutput,
   formatEvalOutput,
   formatInspectOutput,
   formatParseOutput,
@@ -51,9 +53,14 @@ export async function runParseCommand(
   signal: AbortSignal,
 ): Promise<void> {
   const result = await parseArtifacts(options, signal);
-  await writeParseArtifacts(result.rawTurns, options.outputDir);
+  await writeParseArtifacts(result, options.outputDir);
   process.stdout.write(
-    `${formatParseOutput(options.outputDir, result.rawTurns.length)}\n`,
+    `${formatParseOutput(
+      options.outputDir,
+      result.rawTurns.length,
+      result.sessionCount,
+      result.parseWarningCount,
+    )}\n`,
   );
 }
 
@@ -82,4 +89,22 @@ export async function runReportCommand(
   const result = await evaluateForCommand(options, signal, outputMode);
   await writeArtifacts(result, options.outputDir);
   process.stdout.write(result.report);
+}
+
+export async function runBenchmarkCommand(
+  options: GlobalOptions,
+  signal: AbortSignal,
+): Promise<void> {
+  if (signal.aborted) {
+    throw new DOMException("Operation aborted", "AbortError");
+  }
+  const { results } = await runCalibrationBenchmark(options.outputDir);
+  process.stdout.write(
+    `${formatBenchmarkOutput(
+      options.outputDir,
+      results.caseCount,
+      results.terminalVerificationMetrics.endedVerifiedAccuracy,
+      results.incidentMetrics.precision,
+    )}\n`,
+  );
 }

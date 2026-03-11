@@ -16,6 +16,7 @@ import {
 } from "../errors.js";
 import { throwIfAborted } from "../utils/abort.js";
 import {
+  runBenchmarkCommand,
   runEvalCommand,
   runInspectCommand,
   runParseCommand,
@@ -75,9 +76,20 @@ function registerCommands(program: Command, signal: AbortSignal): void {
     });
 
   program
+    .command("benchmark")
+    .description(
+      "Run the synthetic calibration corpus and emit benchmark artifacts.",
+    )
+    .action(async () => {
+      throwIfAborted(signal);
+      const options = await initializeCliConfig(program.opts<GlobalOptions>());
+      await runBenchmarkCommand(options, signal);
+    });
+
+  program
     .command("report")
     .description(
-      "Generate the markdown evaluator report and write all artifacts.",
+      "Generate the markdown transcript analytics report and write all artifacts.",
     )
     .action(async () => {
       throwIfAborted(signal);
@@ -94,7 +106,7 @@ function buildProgram(): Command {
   return new Command()
     .name("agent-eval")
     .description(
-      "Evaluate local developer-agent transcript artifacts and emit structured reports.",
+      "Analyze local developer-agent transcript artifacts and emit structured transcript analytics reports.",
     )
     .version("0.1.0")
     .showHelpAfterError()
@@ -112,6 +124,11 @@ function buildProgram(): Command {
       "--output-dir <path>",
       "Directory for generated evaluator artifacts (env: CODEX_EVAL_OUTPUT_DIR)",
       defaultOutputDir,
+    )
+    .option(
+      "--report-skin <skin>",
+      "Report presentation skin: operator or showcase (env: CODEX_EVAL_REPORT_SKIN)",
+      "operator",
     )
     .option(
       "--session-limit <count>",
@@ -147,6 +164,7 @@ function buildProgram(): Command {
         "    CODEX_EVAL_SOURCE              - Source provider (codex|claude)",
         "    CODEX_EVAL_SOURCE_HOME         - Source home directory",
         "    CODEX_EVAL_OUTPUT_DIR          - Output directory for artifacts",
+        "    CODEX_EVAL_REPORT_SKIN         - Report skin (operator|showcase)",
         "    CODEX_EVAL_CONCURRENCY_FULL    - Concurrency for full evaluation",
         "    CODEX_EVAL_CONCURRENCY_SUMMARY - Concurrency for summary evaluation",
         "    CODEX_EVAL_MAX_TURN_GAP        - Max turn gap for clustering",
@@ -157,8 +175,10 @@ function buildProgram(): Command {
         "  agent-eval parse --source codex --home ~/.codex --output-dir artifacts",
         "  cat artifacts/raw-turns.jsonl",
         "  agent-eval eval --source claude --home ~/.claude --output-dir artifacts",
+        "  agent-eval benchmark --output-dir artifacts/benchmark",
         "  agent-eval report --source codex --home ~/.codex --output-dir artifacts",
         "  agent-eval eval --source claude --home ~/.claude --summary-only --session-limit 25",
+        "  agent-eval report --source codex --home ~/.codex --report-skin showcase",
         "",
         "Exit codes:",
         "  0 success",
