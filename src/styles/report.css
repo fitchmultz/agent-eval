@@ -60,6 +60,17 @@ section { margin-top: 32px; }
 .metric-value { font-size: 2.4rem; margin-top: 14px; }
 .metric-detail { color: var(--muted); margin-top: 8px; }
 .panel { padding: 18px; overflow-x: auto; }
+.empty-hero {
+  background:
+    linear-gradient(135deg, rgba(15,118,110,0.12), rgba(244,162,89,0.12)),
+    var(--panel);
+  border: 1px solid rgba(15,118,110,0.18);
+}
+.empty-hero p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  max-width: 76ch;
+}
 .charts-grid, .sessions-grid, .incident-grid {
   display: grid;
   grid-template-columns: 1fr;

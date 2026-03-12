@@ -100,6 +100,10 @@ function buildRecognitions(
   metrics: MetricsRecord,
   topSessions: readonly SessionInsightRow[],
 ): SummaryArtifact["recognitions"] {
+  if (metrics.sessionCount === 0) {
+    return [];
+  }
+
   const recognitions: string[] = [];
   const sessionsWithWrites = filterWriteSessions(metrics.sessions);
   const endedVerifiedWriteSessions = filterEndedVerifiedWriteSessions(

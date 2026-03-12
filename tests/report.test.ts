@@ -340,6 +340,10 @@ describe("renderReport", () => {
     const report = renderReport(metrics, [], []);
 
     expect(report).toContain("# Transcript Analytics Report");
+    expect(report).toContain("## No Data Yet");
+    expect(report).toContain(
+      "The selected source home has the expected transcript layout, but no session JSONL files were discovered yet.",
+    );
     expect(report).toContain("No labels were detected");
     expect(report).toContain("- No session insights were available.");
     expect(report).toContain(
@@ -412,12 +416,28 @@ describe("renderReport", () => {
 
   it("renders sanitized incident evidence in markdown output", () => {
     const metrics = createTestMetrics();
-    const incidents = [
+    const incident = createTestIncidents()[0];
+    if (!incident) {
+      throw new Error("Expected a synthetic incident fixture.");
+    }
+    const incidents: IncidentRecord[] = [
       {
-        ...createTestIncidents()[0],
+        engineVersion: incident.engineVersion,
+        schemaVersion: incident.schemaVersion,
+        incidentId: incident.incidentId,
+        sessionId: incident.sessionId,
+        turnIds: incident.turnIds,
+        turnIndices: incident.turnIndices,
+        labels: incident.labels,
+        summary: incident.summary,
         evidencePreviews: [
           "Git access broke after the migration and [redacted-sensitive-content]",
         ],
+        severity: incident.severity,
+        confidence: incident.confidence,
+        firstSeenAt: incident.firstSeenAt,
+        lastSeenAt: incident.lastSeenAt,
+        sourceRefs: incident.sourceRefs,
       },
     ];
     const rawTurns = createTestRawTurns();
@@ -514,6 +534,20 @@ describe("renderSummaryReport", () => {
 
     expect(report).toContain("Verification Proxy Score: N/A");
     expect(report).toContain("Workflow Proxy Score: N/A");
+  });
+
+  it("omits the no-data callout once sessions exist", () => {
+    const metrics = createTestMetrics();
+    const summary = buildSummaryArtifact(metrics, {
+      sessionLabelCounts: new Map(),
+      topIncidents: [],
+      severityCounts: { info: 0, low: 0, medium: 0, high: 0 },
+      writeTurnCount: 3,
+    });
+
+    const report = renderSummaryReport(metrics, summary);
+
+    expect(report).not.toContain("## No Data Yet");
   });
 
   it("renders brag cards", () => {

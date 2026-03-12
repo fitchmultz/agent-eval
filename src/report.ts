@@ -19,6 +19,20 @@ import type {
 } from "./schema.js";
 import { buildSummarySections } from "./summary-sections.js";
 
+function renderNoDataLines(summary: SummaryArtifact): string[] {
+  if (summary.sessions > 0) {
+    return [];
+  }
+
+  return [
+    "## No Data Yet",
+    "",
+    "- The selected source home has the expected transcript layout, but no session JSONL files were discovered yet.",
+    "- This is a valid first-run or freshly bootstrapped state, so the report renders a deterministic empty corpus instead of treating it as a runtime failure.",
+    "",
+  ];
+}
+
 function renderLines<T>(
   items: readonly T[],
   emptyMessage: string,
@@ -227,6 +241,7 @@ export function renderSummaryReport(
     `- Incidents: \`${metrics.incidentCount}\``,
     `- Parse warnings: \`${metrics.parseWarningCount}\``,
     "",
+    ...renderNoDataLines(summary),
     "## Headline Insights",
     "",
     ...sections.headlineInsights.map(

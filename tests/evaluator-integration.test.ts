@@ -119,6 +119,45 @@ describe("evaluateArtifacts integration", () => {
     expect(result.rawTurns[0]?.sessionId).toBe("codex-session-1");
   });
 
+  it("evaluates a valid empty Codex home into a deterministic no-data full bundle", async () => {
+    const homeDir = join(testDirBase, "codex-empty-report");
+    await mkdir(join(homeDir, "sessions"), { recursive: true });
+
+    const result = await evaluateArtifacts({
+      source: "codex",
+      home: homeDir,
+    });
+
+    expect(result.metrics.sessionCount).toBe(0);
+    expect(result.summary.sessions).toBe(0);
+    expect(result.rawTurns).toEqual([]);
+    expect(result.incidents).toEqual([]);
+    expect(result.report).toContain("## No Data Yet");
+    expect(result.report).toContain("Sources: `codex`");
+    expect(result.presentation.reportHtml).toContain("No Data Yet");
+  });
+
+  it("evaluates a valid empty Codex home into a deterministic no-data summary bundle", async () => {
+    const homeDir = join(testDirBase, "codex-empty-summary");
+    await mkdir(join(homeDir, "sessions"), { recursive: true });
+
+    const result = await evaluateArtifacts({
+      source: "codex",
+      home: homeDir,
+      outputMode: "summary",
+    });
+
+    expect(result.metrics.sessionCount).toBe(0);
+    expect(result.summary.sessions).toBe(0);
+    expect(result.rawTurns).toBeUndefined();
+    expect(result.incidents).toBeUndefined();
+    expect(result.report).toContain("## No Data Yet");
+    expect(result.presentation.reportHtml).toContain(
+      "deterministic empty corpus",
+    );
+    expect(result.summary.recognitions).toEqual([]);
+  });
+
   it("normalizes equivalent Codex and Claude workflows to the same turn count", async () => {
     const codexHome = await createCodexHome(testDirBase, "codex-compare");
     const claudeHome = await createClaudeHome(testDirBase, "claude-compare");

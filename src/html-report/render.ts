@@ -51,6 +51,18 @@ function renderMethodologyList(metrics: MetricsRecord): string {
     .join("")}</ul>`;
 }
 
+function renderNoDataPanel(summary: SummaryArtifact): string {
+  if (summary.sessions > 0) {
+    return "";
+  }
+
+  return `<section><div class="panel empty-hero">
+    <h2>No Data Yet</h2>
+    <p>The selected source home has the expected transcript layout, but no session JSONL files were discovered yet.</p>
+    <p>This is a valid first-run or freshly bootstrapped state, so the report renders a deterministic empty corpus instead of treating it as a runtime failure.</p>
+  </div></section>`;
+}
+
 /**
  * Generates a complete HTML report from summary artifacts.
  */
@@ -98,6 +110,7 @@ export function renderHtmlReport(
       <span class="pill">parse warnings ${metrics.parseWarningCount}</span>
     </div>`,
     "</header>",
+    renderNoDataPanel(summary),
     `<section><div class="metric-grid">${renderSummaryCards(summary)}</div></section>`,
     `<section><h2>${escapeHtml(scoreHeading)}</h2><div class="metric-grid">${renderScoreCards(summary)}</div></section>`,
     `<section><h2>Recent Momentum</h2><div class="metric-grid">${renderMomentumCards(summary)}</div></section>`,

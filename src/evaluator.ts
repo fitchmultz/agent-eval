@@ -305,14 +305,16 @@ function buildSummaryModeMetrics(
   );
 }
 
-async function processDiscoveredSessions(
-  options: EvaluateOptions,
-  concurrency: number,
-  signal?: AbortSignal,
-): Promise<{
+interface DiscoveredSessionInputs {
   inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
-  processed: Awaited<ReturnType<typeof processSession>>[];
-}> {
+  sessionInventoryPath: string;
+  sessionFiles: readonly string[];
+}
+
+async function discoverSessionInputs(
+  options: EvaluateOptions,
+  signal?: AbortSignal,
+): Promise<DiscoveredSessionInputs> {
   throwIfAborted(signal);
 
   const discovered = await discoverArtifacts(options.home, {
@@ -333,23 +335,55 @@ async function processDiscoveredSessions(
       "missing-directory",
     );
   }
-  if (discovered.sessionFiles.length === 0) {
+
+  return {
+    inventory: discovered.inventory,
+    sessionInventoryPath: sessionInventory.path,
+    sessionFiles: discovered.sessionFiles,
+  };
+}
+
+async function processDiscoveredSessions(
+  options: EvaluateOptions,
+  concurrency: number,
+  allowEmptyCorpus = false,
+  signal?: AbortSignal,
+): Promise<{
+  inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
+  processed: Awaited<ReturnType<typeof processSession>>[];
+}> {
+  const { inventory, sessionInventoryPath, sessionFiles } =
+    await discoverSessionInputs(options, signal);
+
+  if (sessionFiles.length === 0) {
+    if (allowEmptyCorpus) {
+      return {
+        inventory,
+        processed: [],
+      };
+    }
     throw new MissingTranscriptInputError(
-      sessionInventory.path,
+      sessionInventoryPath,
       "no-jsonl-files",
     );
   }
 
   const sessionPaths = await selectSessionPaths(
-    discovered.sessionFiles,
+    sessionFiles,
     options.source,
     concurrency,
     options.sessionLimit,
     signal,
   );
   if (sessionPaths.length === 0) {
+    if (allowEmptyCorpus) {
+      return {
+        inventory,
+        processed: [],
+      };
+    }
     throw new MissingTranscriptInputError(
-      sessionInventory.path,
+      sessionInventoryPath,
       "no-jsonl-files",
     );
   }
@@ -371,7 +405,7 @@ async function processDiscoveredSessions(
   );
 
   return {
-    inventory: discovered.inventory,
+    inventory,
     processed,
   };
 }
@@ -379,48 +413,44 @@ async function processDiscoveredSessions(
 async function processSummarySessions(
   options: EvaluateOptions,
   concurrency: number,
+  allowEmptyCorpus = false,
   signal?: AbortSignal,
 ): Promise<{
   inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
   projections: SessionSummaryProjection[];
 }> {
-  throwIfAborted(signal);
+  const { inventory, sessionInventoryPath, sessionFiles } =
+    await discoverSessionInputs(options, signal);
 
-  const discovered = await discoverArtifacts(options.home, {
-    provider: options.source,
-    signal,
-  });
-  throwIfAborted(signal);
-
-  const sessionInventory = discovered.inventory.find(
-    (item) => item.kind === "session_jsonl",
-  );
-  if (!sessionInventory?.discovered) {
+  if (sessionFiles.length === 0) {
+    if (allowEmptyCorpus) {
+      return {
+        inventory,
+        projections: [],
+      };
+    }
     throw new MissingTranscriptInputError(
-      sessionInventory?.path ??
-        (options.source === "claude"
-          ? `${options.home}/projects`
-          : `${options.home}/sessions`),
-      "missing-directory",
-    );
-  }
-  if (discovered.sessionFiles.length === 0) {
-    throw new MissingTranscriptInputError(
-      sessionInventory.path,
+      sessionInventoryPath,
       "no-jsonl-files",
     );
   }
 
   const sessionPaths = await selectSessionPaths(
-    discovered.sessionFiles,
+    sessionFiles,
     options.source,
     concurrency,
     options.sessionLimit,
     signal,
   );
   if (sessionPaths.length === 0) {
+    if (allowEmptyCorpus) {
+      return {
+        inventory,
+        projections: [],
+      };
+    }
     throw new MissingTranscriptInputError(
-      sessionInventory.path,
+      sessionInventoryPath,
       "no-jsonl-files",
     );
   }
@@ -443,7 +473,7 @@ async function processSummarySessions(
   );
 
   return {
-    inventory: discovered.inventory,
+    inventory,
     projections,
   };
 }
@@ -451,6 +481,7 @@ async function processSummarySessions(
 async function collectParsedArtifacts(
   options: EvaluateOptions,
   concurrency: number,
+  allowEmptyCorpus = false,
   signal?: AbortSignal,
 ): Promise<{
   inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
@@ -460,6 +491,7 @@ async function collectParsedArtifacts(
   const { inventory, processed } = await processDiscoveredSessions(
     options,
     concurrency,
+    allowEmptyCorpus,
     signal,
   );
   throwIfAborted(signal);
@@ -481,6 +513,7 @@ export async function parseArtifacts(
   const parsed = await collectParsedArtifacts(
     options,
     getConfig().concurrency.full,
+    false,
     signal,
   );
 
@@ -512,6 +545,7 @@ export async function evaluateArtifacts(
     const { inventory, projections } = await processSummarySessions(
       { ...options, outputMode },
       concurrency,
+      true,
       signal,
     );
     const metrics = buildSummaryModeMetrics(projections, inventory);
@@ -533,6 +567,7 @@ export async function evaluateArtifacts(
   const parsed = await collectParsedArtifacts(
     { ...options, outputMode },
     concurrency,
+    true,
     signal,
   );
   throwIfAborted(signal);

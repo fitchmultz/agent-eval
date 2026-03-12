@@ -202,6 +202,39 @@ describe("CLI", () => {
     );
   });
 
+  it("renders a deterministic empty-state report for a valid empty home", async () => {
+    const homeDir = join(testDirBase, "report-empty");
+    const outputDir = join(homeDir, "artifacts");
+    await mkdir(join(homeDir, "sessions"), { recursive: true });
+    await mkdir(outputDir, { recursive: true });
+
+    const exitCode = await main([
+      "node",
+      "cli",
+      "report",
+      "--source",
+      "codex",
+      "--home",
+      homeDir,
+      "--output-dir",
+      outputDir,
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining("## No Data Yet"),
+    );
+    expect(await readFile(join(outputDir, "report.md"), "utf8")).toContain(
+      "The selected source home has the expected transcript layout, but no session JSONL files were discovered yet.",
+    );
+    expect(await readFile(join(outputDir, "metrics.json"), "utf8")).toContain(
+      '"sessionCount": 0',
+    );
+    expect(await readFile(join(outputDir, "report.html"), "utf8")).toContain(
+      "No Data Yet",
+    );
+  });
+
   it("falls back to the default source home when inspect is run without flags", async () => {
     const exitCode = await main(["node", "cli", "inspect"]);
 

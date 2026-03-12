@@ -248,6 +248,32 @@ describe("renderHtmlReport", () => {
     expect(html).toContain("Not enough sessions in this slice");
   });
 
+  it("shows a no-data hero when the selected corpus is empty", () => {
+    const html = renderHtmlReport(
+      {
+        ...baseSummary,
+        sessions: 0,
+        turns: 0,
+        incidents: 0,
+      },
+      {
+        ...baseMetrics,
+        sessionCount: 0,
+        turnCount: 0,
+        incidentCount: 0,
+        sessions: [],
+      },
+      baseCharts,
+    );
+
+    expect(html).toContain("No Data Yet");
+    expect(html).toContain(
+      "The selected source home has the expected transcript layout, but no session JSONL files were discovered yet.",
+    );
+    expect(html).toContain("deterministic empty corpus");
+    expect(html).toContain("empty-hero");
+  });
+
   it("includes all major sections", () => {
     const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
