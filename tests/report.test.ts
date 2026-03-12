@@ -410,6 +410,24 @@ describe("renderReport", () => {
     expect(report).toContain("verification_request across 1 turn(s)");
   });
 
+  it("renders sanitized incident evidence in markdown output", () => {
+    const metrics = createTestMetrics();
+    const incidents = [
+      {
+        ...createTestIncidents()[0],
+        evidencePreviews: [
+          "Git access broke after the migration and [redacted-sensitive-content]",
+        ],
+      },
+    ];
+    const rawTurns = createTestRawTurns();
+
+    const report = renderReport(metrics, incidents, rawTurns);
+
+    expect(report).toContain("[redacted-sensitive-content]");
+    expect(report).not.toContain("mitchfultz_id_ed25519");
+  });
+
   it("ends with redaction notice", () => {
     const metrics = createTestMetrics();
     const incidents = createTestIncidents();

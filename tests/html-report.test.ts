@@ -405,6 +405,32 @@ describe("renderHtmlReport", () => {
     expect(html).toContain("session-1");
   });
 
+  it("renders sanitized incident previews in html output", () => {
+    const summaryWithIncidents: SummaryArtifact = {
+      ...baseSummary,
+      topIncidents: [
+        {
+          incidentId: "inc-1",
+          sessionId: "session-1",
+          severity: "high",
+          confidence: "high",
+          turnSpan: 2,
+          summary: "Test incident",
+          evidencePreview:
+            "Git access broke after the migration and [redacted-sensitive-content]",
+        },
+      ],
+    };
+    const html = renderHtmlReport(
+      summaryWithIncidents,
+      baseMetrics,
+      baseCharts,
+    );
+
+    expect(html).toContain("[redacted-sensitive-content]");
+    expect(html).not.toContain("mitchfultz_id_ed25519");
+  });
+
   it("renders top sessions when present", () => {
     const summaryWithSessions: SummaryArtifact = {
       ...baseSummary,

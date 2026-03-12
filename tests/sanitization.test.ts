@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   createMessagePreviews,
   isLowSignalPreview,
+  isUnsafePreview,
   sanitizeMessageText,
 } from "../src/sanitization.js";
 
@@ -33,6 +34,29 @@ describe("sanitizeMessageText", () => {
     });
 
     expect(sanitized).toBe("[redacted...");
+  });
+
+  it("redacts ssh, identity, and abusive transcript fragments", () => {
+    const sanitized = sanitizeMessageText(
+      "DID YOU FUCKING DELETE MY SSH KEYS??? no such identity: ~/.ssh/mitchfultz_id_ed25519 Permission denied (publickey)",
+      {
+        maxLength: 200,
+      },
+    );
+
+    expect(sanitized).toContain("[redacted-sensitive-content]");
+    expect(sanitized).not.toContain("mitchfultz_id_ed25519");
+    expect(sanitized).not.toContain("SSH KEYS");
+    expect(sanitized).not.toContain("FUCKING");
+  });
+
+  it("redacts milder insulting phrasing for public previews", () => {
+    const sanitized = sanitizeMessageText("dumb question. obviously", {
+      maxLength: 200,
+    });
+
+    expect(sanitized).toContain("[redacted-abusive-language]");
+    expect(sanitized).not.toContain("dumb");
   });
 });
 
@@ -61,6 +85,23 @@ describe("createMessagePreviews", () => {
 
     expect(previews).toEqual([
       "Tests still fail after your patch. Please verify before ending.",
+    ]);
+  });
+
+  it("prefers safer evidence over sensitive transcript fragments", () => {
+    const previews = createMessagePreviews(
+      [
+        "See the following: DID YOU FUCKING DELETE MY SSH KEYS??? no such identity: ~/.ssh/mitchfultz_id_ed25519",
+        "Git pull failed after the deploy cutover and the repo now needs the SSH auth fix restored.",
+      ],
+      {
+        maxItems: 1,
+        maxLength: 140,
+      },
+    );
+
+    expect(previews).toEqual([
+      "Git pull failed after the deploy cutover and the repo now needs the SSH auth fix restored.",
     ]);
   });
 });
@@ -93,7 +134,52 @@ describe("isLowSignalPreview", () => {
       ),
     ).toBe(true);
     expect(
+      isLowSignalPreview(
+        "$comprehensive-codebase-audit $rp-reminder group the findings based on whether an agent can remediate them together or not.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "PLEASE IMPLEMENT THIS PLAN: ## Fix Legacy Config Upgrade Path",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "<skill> <name>rp-build</name> <path>~/.agents/skills/rp-build/SKILL.md</path> repoprompt_managed: true",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "<system message> Your job is to: 1. Analyze the requested change against the provided code.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "# MISSION You are Task Builder for this repository. ## AGENT SWARM INSTRUCTION",
+      ),
+    ).toBe(true);
+    expect(
       isLowSignalPreview("Please verify after the patch and rerun the tests."),
+    ).toBe(false);
+  });
+});
+
+describe("isUnsafePreview", () => {
+  it("flags sensitive-looking or aggressively redacted previews", () => {
+    expect(
+      isUnsafePreview(
+        "User reported [redacted-sensitive-content] after git auth failed.",
+      ),
+    ).toBe(true);
+    expect(
+      isUnsafePreview(
+        "Git pull failed because the SSH key setup was missing after the migration.",
+      ),
+    ).toBe(true);
+    expect(
+      isUnsafePreview(
+        "Tests still fail after the patch. Please verify before ending.",
+      ),
     ).toBe(false);
   });
 });

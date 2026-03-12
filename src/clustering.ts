@@ -6,7 +6,7 @@
 
 import { getConfig } from "./config/index.js";
 import { chooseMaxConfidence, chooseMaxSeverity } from "./ranking.js";
-import { isLowSignalPreview } from "./sanitization.js";
+import { isLowSignalPreview, selectBestPreviews } from "./sanitization.js";
 import type { IncidentRecord, LabelRecord, RawTurnRecord } from "./schema.js";
 
 /**
@@ -49,8 +49,10 @@ function sharesAnyLabel(
 function buildEvidencePreviews(turns: readonly RawTurnRecord[]): string[] {
   const previews = turns.flatMap((turn) => turn.userMessagePreviews);
   const preferred = previews.filter((preview) => !isLowSignalPreview(preview));
-  const selected = preferred.length > 0 ? preferred : previews;
-  return selected.slice(0, getConfig().previews.maxIncidentEvidence);
+  return selectBestPreviews(
+    preferred.length > 0 ? preferred : previews,
+    getConfig().previews.maxIncidentEvidence,
+  );
 }
 
 /**

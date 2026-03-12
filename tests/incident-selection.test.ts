@@ -113,6 +113,32 @@ describe("insertTopIncident", () => {
     expect(result[0]?.incidentId).toBe("high-signal");
   });
 
+  it("prefers safer evidence when severities are equal", () => {
+    const unsafe: TopIncident = createIncident({
+      incidentId: "unsafe",
+      sessionId: "session-1",
+      summary: "test incident",
+      severity: "high",
+      evidencePreview:
+        "User said [redacted-sensitive-content] after the SSH key issue.",
+      turnSpan: 3,
+    });
+
+    const safer: TopIncident = createIncident({
+      incidentId: "safer",
+      sessionId: "session-1",
+      summary: "test incident",
+      severity: "high",
+      evidencePreview:
+        "Git access broke after the migration and needs the auth setup restored.",
+      turnSpan: 2,
+    });
+
+    const result = insertTopIncident([unsafe], safer, 8);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.incidentId).toBe("safer");
+  });
+
   it("prefers wider turn span when severity and signal quality are equal", () => {
     const narrow: TopIncident = createIncident({
       incidentId: "narrow",

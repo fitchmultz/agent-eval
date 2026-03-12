@@ -129,9 +129,37 @@ describe("clusterIncidents", () => {
     expect(incidents[0]?.turnIndices).toEqual([0, 1]);
     expect(incidents[0]?.severity).toBe("high");
     expect(incidents[0]?.evidencePreviews).toEqual([
-      "Tests still fail",
       "Still failing after the last change",
+      "Tests still fail",
     ]);
+  });
+
+  it("prefers safer human evidence over unsafe transcript fragments", () => {
+    const incidents = clusterIncidents(
+      [
+        createMockTurn({
+          turnId: "turn-1",
+          turnIndex: 0,
+          userMessagePreviews: [
+            "DID YOU FUCKING DELETE MY SSH KEYS??? [redacted-ssh-path]",
+            "Git pull broke after the migration and the auth setup needs to be restored.",
+          ],
+          labels: [
+            createLabel("stalled_or_guessing", {
+              severity: "high",
+              rationale: "safety",
+            }),
+          ],
+        }),
+      ],
+      { maxTurnGap: 2 },
+      "0.1.0",
+      "1",
+    );
+
+    expect(incidents[0]?.evidencePreviews[0]).toBe(
+      "Git pull broke after the migration and the auth setup needs to be restored.",
+    );
   });
 
   describe("edge cases", () => {

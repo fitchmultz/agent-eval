@@ -5,7 +5,7 @@
  */
 
 import { severityRank } from "./ranking.js";
-import { isLowSignalPreview } from "./sanitization.js";
+import { isLowSignalPreview, isUnsafePreview } from "./sanitization.js";
 import type { SummaryArtifact } from "./schema.js";
 
 /**
@@ -25,10 +25,17 @@ function compareTopIncidents(
   const rightLowSignal = right.evidencePreview
     ? isLowSignalPreview(right.evidencePreview)
     : true;
+  const leftUnsafe = left.evidencePreview
+    ? isUnsafePreview(left.evidencePreview)
+    : true;
+  const rightUnsafe = right.evidencePreview
+    ? isUnsafePreview(right.evidencePreview)
+    : true;
 
   return (
     (severityRank.get(right.severity) ?? 0) -
       (severityRank.get(left.severity) ?? 0) ||
+    Number(leftUnsafe) - Number(rightUnsafe) ||
     Number(leftLowSignal) - Number(rightLowSignal) ||
     right.turnSpan - left.turnSpan ||
     left.summary.localeCompare(right.summary)

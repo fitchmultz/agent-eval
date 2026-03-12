@@ -28,6 +28,8 @@ const lowSignalPatterns = [
   /GLOBAL AGENTS GUIDANCE/i,
   /<codex reminder>/i,
   /<environment_context>/i,
+  /^<skill>/i,
+  /^<system message>/i,
   /<turn_aborted>/i,
   /<subagent_notification>/i,
   /^# Builder Mode Task/i,
@@ -38,6 +40,39 @@ const lowSignalPatterns = [
   /\bdirect push to `?origin\/main`?\b/i,
   /^Answer these questions\./i,
   /^<[^>]+>$/i,
+  /^\$[a-z0-9._-]+(?:\s+\$[a-z0-9._-]+)*(?:\s|$)/i,
+  /^please implement this plan:/i,
+  /^# mission\b/i,
+  /^group\s+\d+:/i,
+  /\bcopy this into a new agent session\b/i,
+  /\bagent swarm instruction\b/i,
+  /\breview criteria:\b/i,
+  /\byour job is to:\b/i,
+  /\brepoprompt_(?:managed|skill_path|skills_version):/i,
+];
+
+const unsafePreviewPatterns = [
+  /(?:^|\s)~?\/?\.ssh\//i,
+  /\bssh[- ]?key(?:s)?\b/i,
+  /\b(?:private|public)\s+key\b/i,
+  /\b(?:authorized_keys|known_hosts)\b/i,
+  /\bno such identity\b/i,
+  /\bpermission denied\s*\(?(?:publickey|keyboard-interactive)\)?/i,
+  /\b(?:id_(?:ed25519|rsa|ecdsa)|ed25519|rsa)\b/i,
+  /\b(passphrase|password|api[_ -]?key|access[_ -]?token|secret)\b/i,
+  /\[redacted-(?:ssh|identity|token|secret|email|path|ip|sensitive|unsafe|abusive)[^\]]*\]/i,
+];
+
+const profanityPatterns = [
+  /\bfuck(?:ing|ed|er|ers)?\b/gi,
+  /\bshit(?:ty|ted|ting)?\b/gi,
+  /\bbitch(?:es|ing)?\b/gi,
+  /\basshole\b/gi,
+  /\bdamn\b/gi,
+  /\bdumb\b/gi,
+  /\bstupid\b/gi,
+  /\bidiot(?:ic)?\b/gi,
+  /\bmoron(?:ic)?\b/gi,
 ];
 
 function normalizeWhitespace(text: string): string {
@@ -72,6 +107,38 @@ function redactAbsolutePaths(text: string): string {
     .replace(/\b[A-Z]:\\(?:[^\\\s]+\\)+[^\\\s]+\b/g, "[redacted-path]");
 }
 
+function redactSshAndIdentityDetails(text: string): string {
+  return text
+    .replace(
+      /\bno such identity:\s*(?:~?\/[^\s"'`]+|[^\s"'`]+)\b/gi,
+      "[redacted-ssh-identity]",
+    )
+    .replace(
+      /\bpermission denied\s*\(?(?:publickey|keyboard-interactive)\)?/gi,
+      "[redacted-ssh-auth]",
+    )
+    .replace(/\b(?:authorized_keys|known_hosts)\b/gi, "[redacted-ssh-file]")
+    .replace(
+      /\b(?:[\w.-]+_)?id_(?:ed25519|rsa|ecdsa)\b/gi,
+      "[redacted-ssh-key]",
+    )
+    .replace(
+      /\b(?:ssh[- ]?key(?:s)?|private key|public key)\b/gi,
+      "[redacted-ssh-key-reference]",
+    )
+    .replace(/(?:^|\s)~?\/?\.ssh\/[^\s"'`)]*/gi, (match) =>
+      match.replace(/~?\/?\.ssh\/[^\s"'`)]*/i, "[redacted-ssh-path]"),
+    );
+}
+
+function redactProfanity(text: string): string {
+  let redacted = text;
+  for (const pattern of profanityPatterns) {
+    redacted = redacted.replace(pattern, "[redacted-abusive-language]");
+  }
+  return redacted;
+}
+
 function redactTokenLikeValues(text: string): string {
   return text
     .replace(
@@ -85,6 +152,16 @@ function redactTokenLikeValues(text: string): string {
     )
     .replace(/\b[A-Fa-f0-9]{32,}\b/g, "[redacted-secret]")
     .replace(/\b[A-Za-z0-9+/=_-]{40,}\b/g, "[redacted-secret]");
+}
+
+function collapseSensitiveMarkers(text: string): string {
+  return text
+    .replace(
+      /(?:\[redacted-[^\]]+\][\s,;:.!?'"`()/-]*){2,}/g,
+      "[redacted-sensitive-content] ",
+    )
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function wordCount(text: string): number {
@@ -132,6 +209,24 @@ function previewSignalScore(preview: string): number {
     score -= 2;
   }
 
+  const instructionMarkupCount =
+    preview.match(/(?:^|\s)(?:##+|group\s+\d+:|\$[a-z0-9._-]+)/gi)?.length ?? 0;
+  if (instructionMarkupCount >= 2) {
+    score -= 4;
+  }
+
+  if (isUnsafePreview(preview)) {
+    score -= 10;
+  }
+
+  if (/\[redacted-sensitive-content\]/i.test(preview)) {
+    score -= 6;
+  }
+
+  if (/\[redacted-abusive-language\]/i.test(preview)) {
+    score -= 4;
+  }
+
   return score;
 }
 
@@ -153,6 +248,11 @@ function previewSignalScore(preview: string): number {
 export function isLowSignalPreview(preview: string): boolean {
   const normalized = normalizeWhitespace(preview);
   return lowSignalPatterns.some((pattern) => pattern.test(normalized));
+}
+
+export function isUnsafePreview(preview: string): boolean {
+  const normalized = normalizeWhitespace(preview);
+  return unsafePreviewPatterns.some((pattern) => pattern.test(normalized));
 }
 
 /**
@@ -179,11 +279,19 @@ export function sanitizeMessageText(
   options: Pick<PreviewOptions, "homeDirectory" | "maxLength">,
 ): string {
   const normalized = normalizeWhitespace(text);
-  const redacted = redactTokenLikeValues(
-    redactAbsolutePaths(
-      redactIpAddresses(
-        redactUrls(
-          redactEmailAddresses(redactPath(normalized, options.homeDirectory)),
+  const redacted = collapseSensitiveMarkers(
+    redactProfanity(
+      redactTokenLikeValues(
+        redactSshAndIdentityDetails(
+          redactAbsolutePaths(
+            redactIpAddresses(
+              redactUrls(
+                redactEmailAddresses(
+                  redactPath(normalized, options.homeDirectory),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     ),
@@ -229,6 +337,16 @@ export function createMessagePreviews(
   messages: readonly string[],
   options: PreviewOptions,
 ): string[] {
+  return selectBestPreviews(
+    messages.map((message) => sanitizeMessageText(message, options)),
+    options.maxItems,
+  );
+}
+
+export function selectBestPreviews(
+  previews: readonly string[],
+  maxItems: number,
+): string[] {
   const unique = new Map<
     string,
     {
@@ -238,8 +356,7 @@ export function createMessagePreviews(
     }
   >();
 
-  for (const [index, message] of messages.entries()) {
-    const preview = sanitizeMessageText(message, options);
+  for (const [index, preview] of previews.entries()) {
     if (preview.length === 0 || unique.has(preview)) {
       continue;
     }
@@ -258,7 +375,6 @@ export function createMessagePreviews(
         left.index - right.index ||
         left.preview.localeCompare(right.preview),
     )
-    .slice(0, options.maxItems)
-    .sort((left, right) => left.index - right.index)
+    .slice(0, maxItems)
     .map((entry) => entry.preview);
 }
