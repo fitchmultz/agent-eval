@@ -13,45 +13,13 @@ import {
   escapeHtml,
 } from "./templates.js";
 
-const WRITE_DISCIPLINE_RULES = new Set([
-  "scope_confirmed_before_major_write",
-  "cwd_or_repo_echoed_before_write",
-  "short_plan_before_large_change",
-  "verification_after_code_changes",
-]);
-
-function hasApplicableDiscipline(summary: SummaryArtifact): boolean {
-  return summary.compliance.some(
-    (rule) =>
-      WRITE_DISCIPLINE_RULES.has(rule.rule) &&
-      rule.passCount + rule.failCount > 0,
-  );
-}
-
-function formatScoreCardDisplay(
-  summary: SummaryArtifact,
-  card: SummaryArtifact["scoreCards"][number],
-): { score: number | string; detail: string; tone: typeof card.tone } {
-  if (
-    card.title === "Verification Proxy Score" &&
-    summary.delivery.sessionsWithWrites === 0
-  ) {
-    return {
-      score: "N/A",
-      detail: "No write sessions were observed in this slice.",
-      tone: "neutral",
-    };
-  }
-
-  if (
-    card.title === "Workflow Proxy Score" &&
-    !hasApplicableDiscipline(summary)
-  ) {
-    return {
-      score: "N/A",
-      detail: "No write-related compliance rules were exercised in this slice.",
-      tone: "neutral",
-    };
+function formatScoreCardDisplay(card: SummaryArtifact["scoreCards"][number]): {
+  score: number | string;
+  detail: string;
+  tone: typeof card.tone;
+} {
+  if (card.score === null) {
+    return { score: "N/A", detail: card.detail, tone: card.tone };
   }
 
   return {
@@ -140,7 +108,7 @@ export function renderScoreCards(summary: SummaryArtifact): string {
 
   return summary.scoreCards
     .map((card) => {
-      const display = formatScoreCardDisplay(summary, card);
+      const display = formatScoreCardDisplay(card);
       return createScoreCard(
         card.title,
         display.score,

@@ -76,76 +76,36 @@ function renderSessionLines(summary: SummaryArtifact): string[] {
   );
 }
 
-function hasApplicableDiscipline(summary: SummaryArtifact): boolean {
-  return summary.compliance.some(
-    (rule) =>
-      rule.rule !== "no_unverified_ending" &&
-      rule.passCount + rule.failCount > 0,
-  );
-}
-
 function renderScoreCardLine(
-  summary: SummaryArtifact,
   card: SummaryArtifact["scoreCards"][number],
 ): string {
-  if (
-    card.title === "Verification Proxy Score" &&
-    summary.delivery.sessionsWithWrites === 0
-  ) {
-    return `- ${card.title}: N/A (No write sessions were observed in this slice.)`;
-  }
-
-  if (
-    card.title === "Workflow Proxy Score" &&
-    !hasApplicableDiscipline(summary)
-  ) {
-    return `- ${card.title}: N/A (No write-related compliance rules were exercised in this slice.)`;
+  if (card.score === null) {
+    return `- ${card.title}: N/A (${card.detail})`;
   }
 
   return `- ${card.title}: ${card.score}/100 (${card.detail})`;
 }
 
 function formatComparativeSliceValue(
-  summary: SummaryArtifact,
   slice: SummaryArtifact["comparativeSlices"][number],
   field:
+    | "flowProxyScore"
     | "verificationProxyScore"
     | "workflowProxyScore"
     | "writeSessionVerificationRate",
 ): string {
-  if (slice.key !== "selected_corpus") {
-    return field === "writeSessionVerificationRate"
-      ? `${slice[field]}%`
-      : `${slice[field]}`;
-  }
-
-  if (
-    field === "writeSessionVerificationRate" &&
-    summary.delivery.sessionsWithWrites === 0
-  ) {
+  const value = slice[field];
+  if (value === null) {
     return "N/A";
   }
 
-  if (
-    field === "verificationProxyScore" &&
-    summary.delivery.sessionsWithWrites === 0
-  ) {
-    return "N/A";
-  }
-
-  if (field === "workflowProxyScore" && !hasApplicableDiscipline(summary)) {
-    return "N/A";
-  }
-
-  return field === "writeSessionVerificationRate"
-    ? `${slice[field]}%`
-    : `${slice[field]}`;
+  return field === "writeSessionVerificationRate" ? `${value}%` : `${value}`;
 }
 
 function renderComparativeSliceLines(summary: SummaryArtifact): string[] {
   return summary.comparativeSlices.map(
     (slice) =>
-      `- ${slice.label}: sessions ${slice.sessionCount}, verification proxy ${formatComparativeSliceValue(summary, slice, "verificationProxyScore")}, flow proxy ${slice.flowProxyScore}, workflow proxy ${formatComparativeSliceValue(summary, slice, "workflowProxyScore")}, write-session verification ${formatComparativeSliceValue(summary, slice, "writeSessionVerificationRate")}, incidents/100 turns ${slice.incidentsPer100Turns}`,
+      `- ${slice.label}: sessions ${slice.sessionCount}, verification proxy ${formatComparativeSliceValue(slice, "verificationProxyScore")}, flow proxy ${formatComparativeSliceValue(slice, "flowProxyScore")}, workflow proxy ${formatComparativeSliceValue(slice, "workflowProxyScore")}, write-session verification ${formatComparativeSliceValue(slice, "writeSessionVerificationRate")}, incidents/100 turns ${slice.incidentsPer100Turns}`,
   );
 }
 
@@ -250,7 +210,7 @@ export function renderSummaryReport(
     "",
     skin === "showcase" ? "## Shareable Scoreboard" : "## Heuristic Scorecards",
     "",
-    ...summary.scoreCards.map((card) => renderScoreCardLine(summary, card)),
+    ...summary.scoreCards.map((card) => renderScoreCardLine(card)),
     "",
     "## Recent Momentum",
     "",

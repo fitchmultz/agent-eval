@@ -428,15 +428,23 @@ describe("renderHtmlReport", () => {
         scoreCards: [
           {
             title: "Verification Proxy Score",
-            score: 0,
-            detail: "placeholder",
-            tone: "danger",
+            score: null,
+            detail: "No write sessions were observed in this slice.",
+            tone: "neutral",
+          },
+          {
+            title: "Flow Proxy Score",
+            score: null,
+            detail:
+              "No sessions were observed in this slice, so flow is not scoreable yet.",
+            tone: "neutral",
           },
           {
             title: "Workflow Proxy Score",
-            score: 0,
-            detail: "placeholder",
-            tone: "danger",
+            score: null,
+            detail:
+              "No write-related compliance rules were exercised in this slice.",
+            tone: "neutral",
           },
         ],
       },
@@ -456,6 +464,9 @@ describe("renderHtmlReport", () => {
     expect(html).toContain("Terminal Verification");
     expect(html).toContain(">N/A<");
     expect(html).toContain("No write sessions were observed in this slice.");
+    expect(html).toContain(
+      "No sessions were observed in this slice, so flow is not scoreable yet.",
+    );
     expect(html).toContain(
       "No write-related compliance rules were exercised in this slice.",
     );
@@ -631,6 +642,32 @@ describe("renderHtmlReport", () => {
 
     expect(html).toContain("Selected Corpus");
     expect(html).toContain("compliance-table");
+  });
+
+  it("renders N/A flow proxy in comparative slices when a slice has no corpus data", () => {
+    const html = renderHtmlReport(
+      {
+        ...baseSummary,
+        comparativeSlices: [
+          {
+            key: "selected_corpus",
+            label: "Selected Corpus",
+            sessionCount: 0,
+            turnCount: 0,
+            incidentCount: 0,
+            verificationProxyScore: null,
+            flowProxyScore: null,
+            workflowProxyScore: null,
+            writeSessionVerificationRate: null,
+            incidentsPer100Turns: 0,
+          },
+        ],
+      },
+      baseMetrics,
+      baseCharts,
+    );
+
+    expect(html).toContain('data-label="Flow Proxy">N/A<');
   });
 
   it("renders momentum cards when comparative slices available", () => {

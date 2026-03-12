@@ -353,6 +353,7 @@ describe("renderReport", () => {
     expect(report).toContain(
       "Selected Corpus: sessions 0, verification proxy N/A",
     );
+    expect(report).toContain("flow proxy N/A");
   });
 
   it("includes label counts correctly", () => {
@@ -533,6 +534,7 @@ describe("renderSummaryReport", () => {
     const report = renderSummaryReport(metrics, summary);
 
     expect(report).toContain("Verification Proxy Score: N/A");
+    expect(report).toContain("Flow Proxy Score: N/A");
     expect(report).toContain("Workflow Proxy Score: N/A");
   });
 

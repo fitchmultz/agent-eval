@@ -56,6 +56,30 @@ function formatSignedDelta(delta: number): string {
   return `${delta >= 0 ? "+" : ""}${delta}`;
 }
 
+function buildMomentumCard(
+  title: string,
+  detail: string,
+  corpusScore: number | null,
+  recentScore: number | null,
+): SummarySectionCard {
+  if (corpusScore === null || recentScore === null) {
+    return {
+      title,
+      value: "N/A",
+      detail: `${detail} Not scoreable for one of the compared slices yet.`,
+      tone: "neutral",
+    };
+  }
+
+  const delta = recentScore - corpusScore;
+  return {
+    title,
+    value: `${formatSignedDelta(delta)} pts`,
+    detail,
+    tone: toneForDelta(delta),
+  };
+}
+
 function buildHeadlineInsights(
   summary: SummaryArtifact,
 ): SummarySectionModel["headlineInsights"] {
@@ -122,31 +146,25 @@ function buildRecentMomentum(
     return [];
   }
 
-  const verificationProxyDelta =
-    recent.verificationProxyScore - corpus.verificationProxyScore;
-  const flowProxyDelta = recent.flowProxyScore - corpus.flowProxyScore;
-  const workflowProxyDelta =
-    recent.workflowProxyScore - corpus.workflowProxyScore;
-
   return [
-    {
-      title: "Verification Proxy Momentum",
-      value: `${formatSignedDelta(verificationProxyDelta)} pts`,
-      detail: `${recent.label} vs selected corpus on terminal verification outcomes.`,
-      tone: toneForDelta(verificationProxyDelta),
-    },
-    {
-      title: "Flow Proxy Momentum",
-      value: `${formatSignedDelta(flowProxyDelta)} pts`,
-      detail: `${recent.label} vs selected corpus on calmer sessions.`,
-      tone: toneForDelta(flowProxyDelta),
-    },
-    {
-      title: "Workflow Proxy Momentum",
-      value: `${formatSignedDelta(workflowProxyDelta)} pts`,
-      detail: `${recent.label} vs selected corpus on operating-rule compliance.`,
-      tone: toneForDelta(workflowProxyDelta),
-    },
+    buildMomentumCard(
+      "Verification Proxy Momentum",
+      `${recent.label} vs selected corpus on terminal verification outcomes.`,
+      corpus.verificationProxyScore,
+      recent.verificationProxyScore,
+    ),
+    buildMomentumCard(
+      "Flow Proxy Momentum",
+      `${recent.label} vs selected corpus on calmer sessions.`,
+      corpus.flowProxyScore,
+      recent.flowProxyScore,
+    ),
+    buildMomentumCard(
+      "Workflow Proxy Momentum",
+      `${recent.label} vs selected corpus on operating-rule compliance.`,
+      corpus.workflowProxyScore,
+      recent.workflowProxyScore,
+    ),
   ];
 }
 

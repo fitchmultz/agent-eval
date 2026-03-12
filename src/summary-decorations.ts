@@ -42,22 +42,37 @@ function buildScoreCards(
       title: "Verification Proxy Score",
       score: snapshot.verificationProxyScore,
       detail:
-        "How often write sessions ended with a passing verification signal.",
-      tone: toneForScore(snapshot.verificationProxyScore),
+        snapshot.verificationProxyScore === null
+          ? "No write sessions were observed in this slice."
+          : "How often write sessions ended with a passing verification signal.",
+      tone:
+        snapshot.verificationProxyScore === null
+          ? "neutral"
+          : toneForScore(snapshot.verificationProxyScore),
     },
     {
       title: "Flow Proxy Score",
       score: snapshot.flowProxyScore,
       detail:
-        "Higher is calmer. This penalizes interrupts, context reinjection, and explicit drift complaints.",
-      tone: toneForScore(snapshot.flowProxyScore),
+        snapshot.flowProxyScore === null
+          ? "No sessions were observed in this slice, so flow is not scoreable yet."
+          : "Higher is calmer. This penalizes interrupts, context reinjection, and explicit drift complaints.",
+      tone:
+        snapshot.flowProxyScore === null
+          ? "neutral"
+          : toneForScore(snapshot.flowProxyScore),
     },
     {
       title: "Workflow Proxy Score",
       score: snapshot.workflowProxyScore,
       detail:
-        "Average pass rate across scope, cwd/repo echo, short planning, and post-write verification rules.",
-      tone: toneForScore(snapshot.workflowProxyScore),
+        snapshot.workflowProxyScore === null
+          ? "No write-related compliance rules were exercised in this slice."
+          : "Average pass rate across scope, cwd/repo echo, short planning, and post-write verification rules.",
+      tone:
+        snapshot.workflowProxyScore === null
+          ? "neutral"
+          : toneForScore(snapshot.workflowProxyScore),
     },
   ];
 }

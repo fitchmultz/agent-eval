@@ -50,9 +50,9 @@ export interface SessionInsightRow {
 }
 
 export interface ScoreSnapshot {
-  verificationProxyScore: number;
-  flowProxyScore: number;
-  workflowProxyScore: number;
-  writeSessionVerificationRate: number;
+  verificationProxyScore: number | null;
+  flowProxyScore: number | null;
+  workflowProxyScore: number | null;
+  writeSessionVerificationRate: number | null;
   incidentsPer100Turns: number;
 }

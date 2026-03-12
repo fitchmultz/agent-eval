@@ -921,6 +921,45 @@ describe("summary-sections", () => {
       expect(disciplineMomentum?.value).toBe("+20 pts");
     });
 
+    it("renders N/A momentum when either slice has an unavailable proxy", () => {
+      const summary = createMockSummaryArtifact({
+        comparativeSlices: [
+          {
+            key: "selected_corpus",
+            label: "Selected Corpus",
+            sessionCount: 0,
+            turnCount: 0,
+            incidentCount: 0,
+            verificationProxyScore: null,
+            flowProxyScore: null,
+            workflowProxyScore: null,
+            writeSessionVerificationRate: null,
+            incidentsPer100Turns: 0,
+          },
+          {
+            key: "recent_100",
+            label: "Recent 100",
+            sessionCount: 100,
+            turnCount: 1000,
+            incidentCount: 5,
+            verificationProxyScore: 80,
+            flowProxyScore: 85,
+            workflowProxyScore: 90,
+            writeSessionVerificationRate: 80,
+            incidentsPer100Turns: 0.5,
+          },
+        ],
+      });
+
+      const sections = buildSummarySections(summary);
+      const flowMomentum = sections.recentMomentum.find(
+        (m) => m.title === "Flow Proxy Momentum",
+      );
+
+      expect(flowMomentum?.value).toBe("N/A");
+      expect(flowMomentum?.tone).toBe("neutral");
+    });
+
     it("returns all three momentum cards in order", () => {
       const summary = createMockSummaryArtifact({
         comparativeSlices: [

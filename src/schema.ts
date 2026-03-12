@@ -254,10 +254,10 @@ const summaryCoreSchema = z.object({
       sessionCount: z.int().nonnegative(),
       turnCount: z.int().nonnegative(),
       incidentCount: z.int().nonnegative(),
-      verificationProxyScore: z.int().min(0).max(100),
-      flowProxyScore: z.int().min(0).max(100),
-      workflowProxyScore: z.int().min(0).max(100),
-      writeSessionVerificationRate: z.number().nonnegative(),
+      verificationProxyScore: z.int().min(0).max(100).nullable(),
+      flowProxyScore: z.int().min(0).max(100).nullable(),
+      workflowProxyScore: z.int().min(0).max(100).nullable(),
+      writeSessionVerificationRate: z.number().nonnegative().nullable(),
       incidentsPer100Turns: z.number().nonnegative(),
     }),
   ),
@@ -279,7 +279,7 @@ const summaryPresentationSchema = z.object({
   scoreCards: z.array(
     z.object({
       title: z.string().min(1),
-      score: z.int().min(0).max(100),
+      score: z.int().min(0).max(100).nullable(),
       detail: z.string().min(1),
       tone: summaryCardToneSchema,
     }),

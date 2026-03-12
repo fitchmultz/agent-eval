@@ -33,16 +33,28 @@ function applicablePassRate(
   return safeRate(rule.passCount, rule.passCount + rule.failCount);
 }
 
+function hasApplicableWriteDiscipline(metrics: MetricsRecord): boolean {
+  return metrics.complianceSummary.some(
+    (rule) =>
+      rule.rule !== "no_unverified_ending" &&
+      rule.passCount + rule.failCount > 0,
+  );
+}
+
 export function buildScoreSnapshot(metrics: MetricsRecord): ScoreSnapshot {
   const sessionsWithWrites = filterWriteSessions(metrics.sessions);
   const endedVerifiedWriteSessions = filterEndedVerifiedWriteSessions(
     metrics.sessions,
   );
-  const writeSessionVerificationRate = safeRate(
-    endedVerifiedWriteSessions.length,
-    sessionsWithWrites.length,
-  );
-  const verificationProxyScore = Math.round(writeSessionVerificationRate);
+  const hasWriteSessions = sessionsWithWrites.length > 0;
+  const hasCorpusData = metrics.sessionCount > 0;
+  const writeSessionVerificationRate = hasWriteSessions
+    ? safeRate(endedVerifiedWriteSessions.length, sessionsWithWrites.length)
+    : null;
+  const verificationProxyScore =
+    writeSessionVerificationRate === null
+      ? null
+      : Math.round(writeSessionVerificationRate);
   const flowPenalty =
     safeRate(countLabel(metrics.labelCounts, "interrupt"), metrics.turnCount) *
       FLOW_PENALTY_MULTIPLIERS.INTERRUPT +
@@ -56,14 +68,18 @@ export function buildScoreSnapshot(metrics: MetricsRecord): ScoreSnapshot {
       metrics.turnCount,
     ) *
       FLOW_PENALTY_MULTIPLIERS.CONTEXT_DRIFT;
-  const flowProxyScore = Math.max(0, Math.round(100 - flowPenalty));
-  const workflowProxyScore = Math.round(
-    (applicablePassRate(metrics, "scope_confirmed_before_major_write") +
-      applicablePassRate(metrics, "cwd_or_repo_echoed_before_write") +
-      applicablePassRate(metrics, "short_plan_before_large_change") +
-      applicablePassRate(metrics, "verification_after_code_changes")) /
-      4,
-  );
+  const flowProxyScore = hasCorpusData
+    ? Math.max(0, Math.round(100 - flowPenalty))
+    : null;
+  const workflowProxyScore = hasApplicableWriteDiscipline(metrics)
+    ? Math.round(
+        (applicablePassRate(metrics, "scope_confirmed_before_major_write") +
+          applicablePassRate(metrics, "cwd_or_repo_echoed_before_write") +
+          applicablePassRate(metrics, "short_plan_before_large_change") +
+          applicablePassRate(metrics, "verification_after_code_changes")) /
+          4,
+      )
+    : null;
 
   return {
     verificationProxyScore,

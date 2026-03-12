@@ -145,7 +145,7 @@ describe("comparative-slices", () => {
 
       // No labels means no penalties, flow score should be 100
       expect(snapshot.flowProxyScore).toBe(100);
-      expect(snapshot.verificationProxyScore).toBe(0); // No write sessions with verification
+      expect(snapshot.verificationProxyScore).toBeNull();
     });
 
     it("handles empty sessions array", () => {
@@ -157,10 +157,10 @@ describe("comparative-slices", () => {
 
       const snapshot = buildScoreSnapshot(metrics);
 
-      expect(snapshot.verificationProxyScore).toBe(0);
-      expect(snapshot.flowProxyScore).toBe(100); // No penalties when empty
-      expect(snapshot.workflowProxyScore).toBe(0);
-      expect(snapshot.writeSessionVerificationRate).toBe(0);
+      expect(snapshot.verificationProxyScore).toBeNull();
+      expect(snapshot.flowProxyScore).toBeNull();
+      expect(snapshot.workflowProxyScore).toBeNull();
+      expect(snapshot.writeSessionVerificationRate).toBeNull();
       expect(snapshot.incidentsPer100Turns).toBe(0);
     });
 
@@ -183,8 +183,8 @@ describe("comparative-slices", () => {
 
       const snapshot = buildScoreSnapshot(metrics);
 
-      expect(snapshot.verificationProxyScore).toBe(0);
-      expect(snapshot.writeSessionVerificationRate).toBe(0);
+      expect(snapshot.verificationProxyScore).toBeNull();
+      expect(snapshot.writeSessionVerificationRate).toBeNull();
     });
 
     it("calculates discipline score from compliance rules", () => {
@@ -472,6 +472,33 @@ describe("comparative-slices", () => {
       expect(corpusSlice).toBeDefined();
     });
 
+    it("marks empty selected corpus proxies as unavailable", () => {
+      const metrics = createMockMetricsRecord({
+        sessions: [],
+        sessionCount: 0,
+        turnCount: 0,
+        incidentCount: 0,
+        complianceSummary: [
+          {
+            rule: "scope_confirmed_before_major_write",
+            passCount: 0,
+            failCount: 0,
+            notApplicableCount: 0,
+            unknownCount: 0,
+          },
+        ],
+      });
+
+      const slices = buildComparativeSlices(metrics, new Map());
+      const selected = slices[0];
+
+      expect(selected?.key).toBe("selected_corpus");
+      expect(selected?.verificationProxyScore).toBeNull();
+      expect(selected?.flowProxyScore).toBeNull();
+      expect(selected?.workflowProxyScore).toBeNull();
+      expect(selected?.writeSessionVerificationRate).toBeNull();
+    });
+
     it("preserves metrics invariants across all slices", () => {
       const sessions = Array.from({ length: 200 }, (_, i) =>
         createMockSessionMetrics({
@@ -509,17 +536,21 @@ describe("comparative-slices", () => {
         expect(slice.sessionCount).toBeGreaterThanOrEqual(0);
         expect(slice.turnCount).toBeGreaterThanOrEqual(0);
         expect(slice.incidentCount).toBeGreaterThanOrEqual(0);
-        // Scores should be within 0-100 range (NaN will fail these)
-        expect(slice.verificationProxyScore).toBeGreaterThanOrEqual(0);
-        expect(slice.verificationProxyScore).toBeLessThanOrEqual(100);
-        // Check flowProxyScore is valid before range checks
-        if (!Number.isNaN(slice.flowProxyScore)) {
+        if (slice.verificationProxyScore !== null) {
+          expect(slice.verificationProxyScore).toBeGreaterThanOrEqual(0);
+          expect(slice.verificationProxyScore).toBeLessThanOrEqual(100);
+        }
+        if (slice.flowProxyScore !== null) {
           expect(slice.flowProxyScore).toBeGreaterThanOrEqual(0);
           expect(slice.flowProxyScore).toBeLessThanOrEqual(100);
         }
-        expect(slice.workflowProxyScore).toBeGreaterThanOrEqual(0);
-        expect(slice.workflowProxyScore).toBeLessThanOrEqual(100);
-        expect(slice.writeSessionVerificationRate).toBeGreaterThanOrEqual(0);
+        if (slice.workflowProxyScore !== null) {
+          expect(slice.workflowProxyScore).toBeGreaterThanOrEqual(0);
+          expect(slice.workflowProxyScore).toBeLessThanOrEqual(100);
+        }
+        if (slice.writeSessionVerificationRate !== null) {
+          expect(slice.writeSessionVerificationRate).toBeGreaterThanOrEqual(0);
+        }
         expect(slice.incidentsPer100Turns).toBeGreaterThanOrEqual(0);
       }
     });

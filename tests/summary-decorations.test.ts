@@ -137,6 +137,24 @@ describe("summary-decorations", () => {
       }
     });
 
+    it("renders unavailable score cards neutrally with explanatory copy", () => {
+      const metrics = createMockMetricsRecord({
+        sessions: [],
+        sessionCount: 0,
+        turnCount: 0,
+        complianceSummary: [],
+      });
+
+      const decorations = buildSummaryDecorations(metrics, []);
+      const flowCard = decorations.scoreCards.find(
+        (card) => card.title === "Flow Proxy Score",
+      );
+
+      expect(flowCard?.score).toBeNull();
+      expect(flowCard?.tone).toBe("neutral");
+      expect(flowCard?.detail).toContain("not scoreable");
+    });
+
     it("sets neutral tone for scores 70-89", () => {
       // Need multiple sessions to get a partial verification rate
       // 8 verified out of 10 with writes = 80%

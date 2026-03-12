@@ -7,49 +7,20 @@
 import type { SummaryArtifact } from "../schema.js";
 import { escapeHtml } from "./templates.js";
 
-function hasApplicableDiscipline(summary: SummaryArtifact): boolean {
-  return summary.compliance.some(
-    (rule) =>
-      rule.rule !== "no_unverified_ending" &&
-      rule.passCount + rule.failCount > 0,
-  );
-}
-
 function formatComparativeSliceValue(
-  summary: SummaryArtifact,
   slice: SummaryArtifact["comparativeSlices"][number],
   field:
+    | "flowProxyScore"
     | "verificationProxyScore"
     | "workflowProxyScore"
     | "writeSessionVerificationRate",
 ): string {
-  if (slice.key !== "selected_corpus") {
-    return field === "writeSessionVerificationRate"
-      ? `${slice[field]}%`
-      : `${slice[field]}`;
-  }
-
-  if (
-    field === "writeSessionVerificationRate" &&
-    summary.delivery.sessionsWithWrites === 0
-  ) {
+  const value = slice[field];
+  if (value === null) {
     return "N/A";
   }
 
-  if (
-    field === "verificationProxyScore" &&
-    summary.delivery.sessionsWithWrites === 0
-  ) {
-    return "N/A";
-  }
-
-  if (field === "workflowProxyScore" && !hasApplicableDiscipline(summary)) {
-    return "N/A";
-  }
-
-  return field === "writeSessionVerificationRate"
-    ? `${slice[field]}%`
-    : `${slice[field]}`;
+  return field === "writeSessionVerificationRate" ? `${value}%` : `${value}`;
 }
 
 /**
@@ -79,7 +50,7 @@ export function renderComparativeSliceTable(summary: SummaryArtifact): string {
     "<tbody>",
     ...summary.comparativeSlices.map(
       (slice) =>
-        `<tr><td data-label="Slice">${escapeHtml(slice.label)}</td><td data-label="Sessions">${slice.sessionCount}</td><td data-label="Verification Proxy">${escapeHtml(formatComparativeSliceValue(summary, slice, "verificationProxyScore"))}</td><td data-label="Flow Proxy">${slice.flowProxyScore}</td><td data-label="Workflow Proxy">${escapeHtml(formatComparativeSliceValue(summary, slice, "workflowProxyScore"))}</td><td data-label="Write-Session Verification">${escapeHtml(formatComparativeSliceValue(summary, slice, "writeSessionVerificationRate"))}</td><td data-label="Incidents / 100 Turns">${slice.incidentsPer100Turns}</td></tr>`,
+        `<tr><td data-label="Slice">${escapeHtml(slice.label)}</td><td data-label="Sessions">${slice.sessionCount}</td><td data-label="Verification Proxy">${escapeHtml(formatComparativeSliceValue(slice, "verificationProxyScore"))}</td><td data-label="Flow Proxy">${escapeHtml(formatComparativeSliceValue(slice, "flowProxyScore"))}</td><td data-label="Workflow Proxy">${escapeHtml(formatComparativeSliceValue(slice, "workflowProxyScore"))}</td><td data-label="Write-Session Verification">${escapeHtml(formatComparativeSliceValue(slice, "writeSessionVerificationRate"))}</td><td data-label="Incidents / 100 Turns">${slice.incidentsPer100Turns}</td></tr>`,
     ),
     "</tbody>",
     "</table>",
