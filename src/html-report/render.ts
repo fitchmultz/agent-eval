@@ -91,6 +91,7 @@ export function renderHtmlReport(
     '<meta name="viewport" content="width=device-width, initial-scale=1" />',
     `<title>${escapeHtml(title)}</title>`,
     '<link rel="icon" href="./favicon.svg" type="image/svg+xml" />',
+    '<link rel="icon" href="./favicon.ico" sizes="any" type="image/x-icon" />',
     `<style>${styles}</style>`,
     "</head>",
     "<body>",

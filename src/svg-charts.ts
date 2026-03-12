@@ -34,7 +34,7 @@ function createEmptyChart(title: string, message: string): string {
   const width = CHARTS.WIDTH;
   const height = 140;
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" class="report-chart" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet" role="img" aria-label="${escapeHtml(title)}">`,
     `<rect width="${width}" height="${height}" fill="#FFFDF8" />`,
     `<text x="12" y="30" font-size="22" font-weight="700" fill="#10263B">${escapeHtml(title)}</text>`,
     `<text x="12" y="82" font-size="15" fill="#5B6F82">${escapeHtml(message)}</text>`,
@@ -82,7 +82,7 @@ export function renderBarChart(
     .join("");
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" class="report-chart" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet" role="img" aria-label="${escapeHtml(title)}">`,
     `<rect width="${width}" height="${height}" fill="#FFFDF8" />`,
     `<text x="12" y="30" font-size="22" font-weight="700" fill="#10263B">${escapeHtml(title)}</text>`,
     `<line x1="${leftPadding}" y1="44" x2="${leftPadding}" y2="${height - 12}" stroke="#D8E0E8" stroke-width="1" />`,

@@ -167,6 +167,7 @@ function createEvaluationArtifacts(
     report: "# Test Report\n",
     presentation: {
       reportHtml: "<html><body>report</body></html>",
+      faviconIco: new Uint8Array([0, 1, 2, 3]),
       faviconSvg: "<svg>favicon</svg>",
       labelChartSvg: "<svg>labels</svg>",
       complianceChartSvg: "<svg>compliance</svg>",
@@ -234,6 +235,7 @@ describe("artifact-writer", () => {
     expect(readFileSync(join(tempDir, "report.html"), "utf-8")).toContain(
       "<html>",
     );
+    expect(existsSync(join(tempDir, "favicon.ico"))).toBe(true);
     expect(readFileSync(join(tempDir, "favicon.svg"), "utf-8")).toContain(
       "<svg>",
     );

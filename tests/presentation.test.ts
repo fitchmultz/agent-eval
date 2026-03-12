@@ -261,11 +261,14 @@ describe("presentation", () => {
     expect(summary.topIncidents[0]?.turnSpan).toBe(2);
     expect(presentation.reportHtml).toContain("Transcript Analytics Report");
     expect(presentation.reportHtml).toContain("<svg");
+    expect(presentation.reportHtml).toContain("./favicon.ico");
     expect(presentation.reportHtml).toContain("Sessions To Review First");
     expect(presentation.reportHtml).toContain("Heuristic Scorecards");
     expect(presentation.reportHtml).toContain("Recent Momentum");
     expect(presentation.reportHtml).toContain("Comparative Slices");
     expect(presentation.reportHtml).not.toContain("Victory Lap Sessions");
+    expect(presentation.faviconIco).toBeInstanceOf(Uint8Array);
+    expect(presentation.faviconIco.byteLength).toBeGreaterThan(0);
     expect(presentation.labelChartSvg).toContain("<svg");
     expect(presentation.complianceChartSvg).toContain("Compliance Pass Counts");
     expect(presentation.severityChartSvg).toContain("Incident Severity");

@@ -221,6 +221,7 @@ describe("evaluator", () => {
     mockBuildSummaryArtifact.mockReturnValue(createSummary());
     mockBuildPresentationArtifacts.mockReturnValue({
       reportHtml: "<html></html>",
+      faviconIco: new Uint8Array([0, 1, 2, 3]),
       labelChartSvg: "<svg>labels</svg>",
       complianceChartSvg: "<svg>compliance</svg>",
       severityChartSvg: "<svg>severity</svg>",

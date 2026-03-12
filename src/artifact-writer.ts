@@ -8,7 +8,11 @@
 
 import { join } from "node:path";
 
-import { writeJsonLinesFile, writeTextFile } from "./filesystem.js";
+import {
+  writeBinaryFile,
+  writeJsonLinesFile,
+  writeTextFile,
+} from "./filesystem.js";
 import type { PresentationArtifacts } from "./presentation.js";
 import type {
   IncidentRecord,
@@ -88,6 +92,10 @@ export async function writeArtifacts(
   await writeTextFile(
     join(outputDir, "report.html"),
     result.presentation.reportHtml,
+  );
+  await writeBinaryFile(
+    join(outputDir, "favicon.ico"),
+    result.presentation.faviconIco,
   );
   await writeTextFile(
     join(outputDir, "favicon.svg"),

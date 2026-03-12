@@ -62,7 +62,7 @@ export function renderComplianceTable(summary: SummaryArtifact): string {
     "<tbody>",
     ...summary.compliance.map(
       (rule) =>
-        `<tr><td>${escapeHtml(rule.rule)}</td><td>${rule.passCount}</td><td>${rule.failCount}</td><td>${rule.notApplicableCount}</td><td>${rule.unknownCount}</td></tr>`,
+        `<tr><td data-label="Rule">${escapeHtml(rule.rule)}</td><td data-label="Pass">${rule.passCount}</td><td data-label="Fail">${rule.failCount}</td><td data-label="N/A">${rule.notApplicableCount}</td><td data-label="Unknown">${rule.unknownCount}</td></tr>`,
     ),
     "</tbody>",
     "</table>",
@@ -79,7 +79,7 @@ export function renderComparativeSliceTable(summary: SummaryArtifact): string {
     "<tbody>",
     ...summary.comparativeSlices.map(
       (slice) =>
-        `<tr><td>${escapeHtml(slice.label)}</td><td>${slice.sessionCount}</td><td>${escapeHtml(formatComparativeSliceValue(summary, slice, "verificationProxyScore"))}</td><td>${slice.flowProxyScore}</td><td>${escapeHtml(formatComparativeSliceValue(summary, slice, "workflowProxyScore"))}</td><td>${escapeHtml(formatComparativeSliceValue(summary, slice, "writeSessionVerificationRate"))}</td><td>${slice.incidentsPer100Turns}</td></tr>`,
+        `<tr><td data-label="Slice">${escapeHtml(slice.label)}</td><td data-label="Sessions">${slice.sessionCount}</td><td data-label="Verification Proxy">${escapeHtml(formatComparativeSliceValue(summary, slice, "verificationProxyScore"))}</td><td data-label="Flow Proxy">${slice.flowProxyScore}</td><td data-label="Workflow Proxy">${escapeHtml(formatComparativeSliceValue(summary, slice, "workflowProxyScore"))}</td><td data-label="Write-Session Verification">${escapeHtml(formatComparativeSliceValue(summary, slice, "writeSessionVerificationRate"))}</td><td data-label="Incidents / 100 Turns">${slice.incidentsPer100Turns}</td></tr>`,
     ),
     "</tbody>",
     "</table>",

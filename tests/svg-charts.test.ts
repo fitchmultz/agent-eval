@@ -78,6 +78,7 @@ describe("renderBarChart", () => {
     expect(svg).toContain("<svg");
     expect(svg).toContain("</svg>");
     expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
+    expect(svg).toContain('class="report-chart"');
     expect(svg).toContain("Test Chart");
   });
 
@@ -131,6 +132,7 @@ describe("renderBarChart", () => {
 
     expect(svg).toContain('aria-label="Accessible Chart"');
     expect(svg).toContain('role="img"');
+    expect(svg).toContain('preserveAspectRatio="xMinYMin meet"');
   });
 });
 

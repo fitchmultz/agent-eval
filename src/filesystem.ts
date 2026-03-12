@@ -237,3 +237,20 @@ export async function writeTextFile(
   await ensureParentDirectory(path);
   await writeFile(path, content, "utf8");
 }
+
+/**
+ * Writes binary content to a file.
+ *
+ * The parent directory is created if it doesn't exist.
+ *
+ * @param path - The file path to write to
+ * @param content - The binary content to write
+ * @returns Promise that resolves when the file is written
+ */
+export async function writeBinaryFile(
+  path: string,
+  content: Uint8Array,
+): Promise<void> {
+  await ensureParentDirectory(path);
+  await writeFile(path, content);
+}
