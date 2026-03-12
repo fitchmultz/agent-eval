@@ -66,7 +66,13 @@ function formatScoreCardDisplay(
  */
 export function renderSummaryCards(summary: SummaryArtifact): string {
   const sections = buildSummarySections(summary);
-  const cards = [
+  const cards: Array<{
+    label: string;
+    value: string;
+    valueKind?: "default" | "session-id";
+    detail: string;
+    tone: "neutral" | "good" | "warn" | "danger";
+  }> = [
     {
       label: "Sessions",
       value: `${summary.sessions}`,
@@ -82,6 +88,7 @@ export function renderSummaryCards(summary: SummaryArtifact): string {
     ...sections.headlineInsights.map((card) => ({
       label: card.title,
       value: card.value,
+      valueKind: card.valueKind ?? "default",
       detail: card.detail,
       tone: card.tone,
     })),
@@ -94,6 +101,8 @@ export function renderSummaryCards(summary: SummaryArtifact): string {
         card.value,
         card.detail,
         card.tone ?? "neutral",
+        card.valueKind === "session-id" ? "session-metric-card" : "",
+        card.valueKind ?? "default",
       ),
     )
     .join("");
@@ -115,6 +124,7 @@ export function renderHighlightCards(summary: SummaryArtifact): string {
         card.detail,
         card.tone,
         "brag-card",
+        "default",
       ),
     )
     .join("");
@@ -160,6 +170,7 @@ export function renderMomentumCards(summary: SummaryArtifact): string {
         card.detail,
         card.tone,
         "score-card",
+        "default",
       ),
     )
     .join("");

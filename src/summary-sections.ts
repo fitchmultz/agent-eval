@@ -18,6 +18,8 @@ export interface SummarySectionCard {
   title: string;
   /** Primary value displayed prominently */
   value: string;
+  /** Presentation mode for the primary value */
+  valueKind?: "default" | "session-id";
   /** Detailed explanation or context */
   detail: string;
   /** Visual tone for styling (affects color/border) */
@@ -92,6 +94,7 @@ function buildHeadlineInsights(
     {
       title: "Highest Friction Session",
       value: highestFriction ? highestFriction.sessionId : "none",
+      valueKind: highestFriction ? "session-id" : "default",
       detail: highestFriction
         ? `${highestFriction.frictionScore} friction points, profile ${highestFriction.archetypeLabel}.`
         : "No sessions were available.",

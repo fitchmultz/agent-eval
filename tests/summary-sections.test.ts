@@ -549,6 +549,7 @@ describe("summary-sections", () => {
 
       expect(frictionCard).toBeDefined();
       expect(frictionCard?.value).toBe("high-friction-session");
+      expect(frictionCard?.valueKind).toBe("session-id");
       expect(frictionCard?.detail).toContain("15 friction points");
       expect(frictionCard?.detail).toContain(
         "High-Friction Ended-Verified Delivery",
@@ -622,6 +623,7 @@ describe("summary-sections", () => {
       );
 
       expect(frictionCard?.value).toBe("none");
+      expect(frictionCard?.valueKind).toBe("default");
       expect(frictionCard?.detail).toBe("No sessions were available.");
       expect(frictionCard?.tone).toBe("neutral");
     });

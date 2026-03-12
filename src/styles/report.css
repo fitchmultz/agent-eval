@@ -64,6 +64,28 @@ section { margin-top: 32px; }
   margin-top: 14px;
   overflow-wrap: anywhere;
 }
+.session-metric-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.metric-value-session {
+  margin-top: 12px;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+.metric-session-id {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(16,38,59,0.04);
+  color: var(--ink);
+  font-family: "SFMono-Regular", "SF Mono", "Menlo", monospace;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
 .metric-detail { color: var(--muted); margin-top: 8px; }
 .panel { padding: 18px; overflow: hidden; }
 .panel > * { min-width: 0; }
@@ -72,6 +94,25 @@ section { margin-top: 32px; }
   width: 100%;
   max-width: 100%;
   height: auto;
+}
+.chart-panel {
+  min-height: 204px;
+}
+.chart-empty-state {
+  display: flex;
+  min-height: 168px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+.chart-empty-state h3 {
+  font-size: 1.35rem;
+}
+.chart-panel-empty {
+  overflow: clip;
+}
+.chart-panel-empty .empty-state {
+  max-width: 36ch;
 }
 .empty-hero {
   background:
@@ -147,6 +188,12 @@ code {
     gap: 14px;
   }
   .panel { padding: 16px; }
+  .chart-panel {
+    min-height: 0;
+  }
+  .chart-empty-state {
+    min-height: 148px;
+  }
   .compliance-table,
   .compliance-table thead,
   .compliance-table tbody,

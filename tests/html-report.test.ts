@@ -274,6 +274,60 @@ describe("renderHtmlReport", () => {
     expect(html).toContain("empty-hero");
   });
 
+  it("renders highest friction session ids with an intentional session-id treatment", () => {
+    const html = renderHtmlReport(
+      {
+        ...baseSummary,
+        topSessions: [
+          {
+            sessionId: "019cc8a6-a906-7d52-894a-b07132712517",
+            archetype: "unverified_delivery",
+            archetypeLabel: "Unverified Ending Delivery",
+            frictionScore: 22,
+            complianceScore: 80,
+            incidentCount: 4,
+            labeledTurnCount: 8,
+            writeCount: 2,
+            verificationPassedCount: 0,
+            endedVerified: false,
+            dominantLabels: ["regression_report"],
+            note: "Needs follow-up",
+          },
+        ],
+      },
+      baseMetrics,
+      baseCharts,
+    );
+
+    expect(html).toContain("Highest Friction Session");
+    expect(html).toContain("session-metric-card");
+    expect(html).toContain("metric-value-session");
+    expect(html).toContain("metric-session-id");
+    expect(html).toContain("019cc8a6-a906-7d52-894a-b07132712517");
+  });
+
+  it("renders intentional empty chart panels when summary charts have no data", () => {
+    const html = renderHtmlReport(
+      {
+        ...baseSummary,
+        labels: [],
+        severities: [],
+        compliance: [],
+      },
+      baseMetrics,
+      baseCharts,
+    );
+
+    expect(html).toContain("chart-panel-empty");
+    expect(html).toContain("chart-empty-state");
+    expect(html).toContain("No incidents were recorded in this slice.");
+    expect(html).toContain(
+      "No passing compliance checks were recorded in this slice.",
+    );
+    expect(html).not.toContain('<svg data-chart="severity"></svg>');
+    expect(html).not.toContain('<svg data-chart="compliance"></svg>');
+  });
+
   it("includes all major sections", () => {
     const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 

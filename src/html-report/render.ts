@@ -63,6 +63,27 @@ function renderNoDataPanel(summary: SummaryArtifact): string {
   </div></section>`;
 }
 
+function renderChartPanel(
+  title: string,
+  content: string,
+  emptyMessage?: string,
+  extraClass = "",
+): string {
+  const classes = ["panel", "chart-panel", extraClass];
+
+  if (emptyMessage) {
+    classes.push("chart-panel-empty");
+    return `<div class="${classes.filter(Boolean).join(" ")}">
+      <div class="chart-empty-state">
+        <h3>${escapeHtml(title)}</h3>
+        <p class="empty-state">${escapeHtml(emptyMessage)}</p>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="${classes.filter(Boolean).join(" ")}">${content}</div>`;
+}
+
 /**
  * Generates a complete HTML report from summary artifacts.
  */
@@ -131,9 +152,28 @@ export function renderHtmlReport(
     </div></section>`,
     `<section><h2>Comparative Slices</h2><div class="panel">${renderComparativeSliceTable(summary)}</div></section>`,
     `<section><h2>Charts</h2><div class="charts-grid">
-      <div class="panel wide">${charts.labelChartSvg}</div>
-      <div class="panel">${charts.severityChartSvg}</div>
-      <div class="panel">${charts.complianceChartSvg}</div>
+      ${renderChartPanel(
+        "Label Counts",
+        charts.labelChartSvg,
+        summary.labels.length === 0
+          ? "No labels were detected in this slice."
+          : undefined,
+        "wide",
+      )}
+      ${renderChartPanel(
+        "Incident Severity",
+        charts.severityChartSvg,
+        summary.severities.some((entry) => entry.count > 0)
+          ? undefined
+          : "No incidents were recorded in this slice.",
+      )}
+      ${renderChartPanel(
+        "Compliance Pass Counts",
+        charts.complianceChartSvg,
+        summary.compliance.some((entry) => entry.passCount > 0)
+          ? undefined
+          : "No passing compliance checks were recorded in this slice.",
+      )}
     </div></section>`,
     `<section><h2>Sessions To Review First</h2><div class="sessions-grid">${renderSessionCards(summary)}</div></section>`,
     ...(skin === "showcase"

@@ -32,11 +32,17 @@ export function createMetricCard(
   detail: string,
   tone: string,
   extraClass = "",
+  valueKind: "default" | "session-id" = "default",
 ): string {
+  const valueMarkup =
+    valueKind === "session-id"
+      ? `<div class="metric-value metric-value-session"><span class="metric-session-id">${escapeHtml(value)}</span></div>`
+      : `<div class="metric-value">${escapeHtml(value)}</div>`;
+
   return `
     <article class="metric-card tone-${escapeHtml(tone)} ${extraClass}">
       <div class="metric-label">${escapeHtml(label)}</div>
-      <div class="metric-value">${escapeHtml(value)}</div>
+      ${valueMarkup}
       <div class="metric-detail">${escapeHtml(detail)}</div>
     </article>`;
 }
