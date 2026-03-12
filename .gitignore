@@ -9,3 +9,4 @@ dist/
 .agent-evalrc
 .agent-evalrc.json
 agent-eval.config.json
+.playwright-cli/
