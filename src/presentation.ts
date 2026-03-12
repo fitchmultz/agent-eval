@@ -6,6 +6,7 @@
  * Invariants/Assumptions: Presentation is derived entirely from canonical metrics and summary data; it does not recompute evaluator logic.
  */
 
+import { renderFaviconSvg } from "./html-report/favicon.js";
 import { renderHtmlReport } from "./html-report/index.js";
 import type { MetricsRecord, SummaryArtifact } from "./schema.js";
 import {
@@ -20,6 +21,8 @@ import {
 export interface PresentationArtifacts {
   /** Polished HTML report with charts and styled cards */
   reportHtml: string;
+  /** Static favicon asset for the report bundle */
+  faviconSvg: string;
   /** SVG bar chart of label counts */
   labelChartSvg: string;
   /** SVG bar chart of compliance pass counts */
@@ -38,6 +41,7 @@ export function buildPresentationArtifacts(
   const labelChartSvg = renderLabelChart(summary);
   const complianceChartSvg = renderComplianceChart(summary);
   const severityChartSvg = renderSeverityChart(summary);
+  const faviconSvg = renderFaviconSvg();
 
   return {
     reportHtml: renderHtmlReport(summary, metrics, {
@@ -45,6 +49,7 @@ export function buildPresentationArtifacts(
       complianceChartSvg,
       severityChartSvg,
     }),
+    faviconSvg,
     labelChartSvg,
     complianceChartSvg,
     severityChartSvg,

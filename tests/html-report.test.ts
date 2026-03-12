@@ -271,6 +271,14 @@ describe("renderHtmlReport", () => {
     expect(html).toContain("Incident evidence is redacted");
   });
 
+  it("includes a favicon link for static report bundles", () => {
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
+
+    expect(html).toContain(
+      '<link rel="icon" href="./favicon.svg" type="image/svg+xml" />',
+    );
+  });
+
   it("renders badges when present", () => {
     const summaryWithBadges: SummaryArtifact = {
       ...baseSummary,

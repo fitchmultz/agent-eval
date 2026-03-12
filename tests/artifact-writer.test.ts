@@ -167,6 +167,7 @@ function createEvaluationArtifacts(
     report: "# Test Report\n",
     presentation: {
       reportHtml: "<html><body>report</body></html>",
+      faviconSvg: "<svg>favicon</svg>",
       labelChartSvg: "<svg>labels</svg>",
       complianceChartSvg: "<svg>compliance</svg>",
       severityChartSvg: "<svg>severity</svg>",
@@ -232,6 +233,9 @@ describe("artifact-writer", () => {
     );
     expect(readFileSync(join(tempDir, "report.html"), "utf-8")).toContain(
       "<html>",
+    );
+    expect(readFileSync(join(tempDir, "favicon.svg"), "utf-8")).toContain(
+      "<svg>",
     );
     expect(readFileSync(join(tempDir, "label-counts.svg"), "utf-8")).toContain(
       "<svg>",

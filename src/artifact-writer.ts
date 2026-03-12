@@ -90,6 +90,10 @@ export async function writeArtifacts(
     result.presentation.reportHtml,
   );
   await writeTextFile(
+    join(outputDir, "favicon.svg"),
+    result.presentation.faviconSvg,
+  );
+  await writeTextFile(
     join(outputDir, "label-counts.svg"),
     result.presentation.labelChartSvg,
   );
