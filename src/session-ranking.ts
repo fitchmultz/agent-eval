@@ -18,6 +18,24 @@ import {
 import { createEmptySessionLabelMap } from "./summary/index.js";
 import type { SessionInsightRow } from "./summary/types.js";
 
+function dedupeSessionInsights(
+  sessions: readonly SessionInsightRow[],
+): SessionInsightRow[] {
+  const uniqueSessions: SessionInsightRow[] = [];
+  const seenSessionIds = new Set<string>();
+
+  for (const session of sessions) {
+    if (seenSessionIds.has(session.sessionId)) {
+      continue;
+    }
+
+    seenSessionIds.add(session.sessionId);
+    uniqueSessions.push(session);
+  }
+
+  return uniqueSessions;
+}
+
 /**
  * Builds a ranked list of session insights sorted by friction (highest first).
  * @param metrics - Metrics record containing session data
@@ -28,7 +46,7 @@ export function buildTopSessions(
   metrics: MetricsRecord,
   sessionLabelCounts: Map<string, Record<LabelName, number>>,
 ): SessionInsightRow[] {
-  return metrics.sessions
+  const rankedSessions = metrics.sessions
     .map((session) => {
       const labelCounts =
         sessionLabelCounts.get(session.sessionId) ??
@@ -65,6 +83,8 @@ export function buildTopSessions(
         right.incidentCount - left.incidentCount ||
         left.sessionId.localeCompare(right.sessionId),
     );
+
+  return dedupeSessionInsights(rankedSessions);
 }
 
 /**
@@ -75,7 +95,7 @@ export function buildTopSessions(
 export function buildEndedVerifiedDeliverySpotlights(
   topSessions: readonly SessionInsightRow[],
 ): SessionInsightRow[] {
-  return topSessions
+  const rankedSpotlights = topSessions
     .filter((session) => session.archetype === "verified_delivery")
     .sort(
       (left, right) =>
@@ -84,6 +104,10 @@ export function buildEndedVerifiedDeliverySpotlights(
         left.incidentCount - right.incidentCount ||
         left.frictionScore - right.frictionScore ||
         left.sessionId.localeCompare(right.sessionId),
-    )
-    .slice(0, getConfig().previews.maxVictoryLaps);
+    );
+
+  return dedupeSessionInsights(rankedSpotlights).slice(
+    0,
+    getConfig().previews.maxVictoryLaps,
+  );
 }

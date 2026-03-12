@@ -199,4 +199,101 @@ describe("buildSummaryArtifact", () => {
     expect(topIncidents[0]?.incidentId).toBe("incident-b");
     expect(topIncidents[0]?.turnSpan).toBe(5);
   });
+
+  it("emits unique top sessions and unique ended-verified spotlights for duplicate session IDs", () => {
+    const sessions: MetricsRecord["sessions"] = [
+      {
+        sessionId: "repeat-session",
+        provider: "codex",
+        turnCount: 10,
+        labeledTurnCount: 4,
+        incidentCount: 4,
+        parseWarningCount: 0,
+        writeCount: 2,
+        verificationCount: 1,
+        verificationPassedCount: 1,
+        verificationFailedCount: 0,
+        postWriteVerificationAttempted: true,
+        postWriteVerificationPassed: true,
+        endedVerified: true,
+        complianceScore: 60,
+        complianceRules: createPassingRules(),
+      },
+      {
+        sessionId: "repeat-session",
+        provider: "codex",
+        turnCount: 8,
+        labeledTurnCount: 1,
+        incidentCount: 1,
+        parseWarningCount: 0,
+        writeCount: 2,
+        verificationCount: 1,
+        verificationPassedCount: 1,
+        verificationFailedCount: 0,
+        postWriteVerificationAttempted: true,
+        postWriteVerificationPassed: true,
+        endedVerified: true,
+        complianceScore: 95,
+        complianceRules: createPassingRules(),
+      },
+      {
+        sessionId: "unique-session",
+        provider: "codex",
+        turnCount: 6,
+        labeledTurnCount: 0,
+        incidentCount: 0,
+        parseWarningCount: 0,
+        writeCount: 1,
+        verificationCount: 1,
+        verificationPassedCount: 1,
+        verificationFailedCount: 0,
+        postWriteVerificationAttempted: true,
+        postWriteVerificationPassed: true,
+        endedVerified: true,
+        complianceScore: 100,
+        complianceRules: createPassingRules(),
+      },
+    ];
+
+    const metrics: MetricsRecord = {
+      engineVersion: "0.1.0",
+      schemaVersion: "1",
+      generatedAt: "2026-03-06T19:00:00.000Z",
+      sessionCount: sessions.length,
+      turnCount: 24,
+      incidentCount: 5,
+      parseWarningCount: 0,
+      labelCounts: {
+        interrupt: 4,
+      },
+      complianceSummary: [],
+      sessions,
+      inventory: [],
+    };
+
+    const summary = buildSummaryArtifact(metrics, {
+      sessionLabelCounts: new Map([
+        [
+          "repeat-session",
+          {
+            ...createEmptySessionLabelMap(),
+            interrupt: 5,
+          },
+        ],
+        ["unique-session", createEmptySessionLabelMap()],
+      ]),
+      topIncidents: [] as SummaryArtifact["topIncidents"],
+      severityCounts: createEmptySeverityCounts(),
+      writeTurnCount: 5,
+    });
+
+    expect(summary.topSessions.map((session) => session.sessionId)).toEqual([
+      "repeat-session",
+      "unique-session",
+    ]);
+    expect(
+      new Set(summary.endedVerifiedDeliverySpotlights.map((s) => s.sessionId))
+        .size,
+    ).toBe(summary.endedVerifiedDeliverySpotlights.length);
+  });
 });

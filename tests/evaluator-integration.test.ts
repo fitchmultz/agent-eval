@@ -5,7 +5,7 @@
  * Usage: Executed by Vitest via `pnpm test`.
  * Invariants/Assumptions: Fixtures stay synthetic and local-only while covering the real supported transcript shapes.
  */
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -15,6 +15,7 @@ import { evaluateArtifacts, parseArtifacts } from "../src/evaluator.js";
 import {
   createClaudeHome,
   createCodexHome,
+  createCodexSessionContent,
 } from "./support/transcript-fixtures.js";
 
 const testDirBase = join(tmpdir(), "agent-eval-evaluator-integration");
@@ -68,6 +69,40 @@ describe("evaluateArtifacts integration", () => {
     expect(result.presentation.reportHtml).toContain(
       "Transcript Analytics Report",
     );
+  });
+
+  it("keeps ranked summary sessions unique when multiple transcript files share a session ID", async () => {
+    const homeDir = join(testDirBase, "codex-duplicate-session-id");
+    const sessionsDir = join(homeDir, "sessions", "2026", "03");
+    await mkdir(sessionsDir, { recursive: true });
+    await writeFile(
+      join(sessionsDir, "duplicate-a.jsonl"),
+      createCodexSessionContent("shared-session"),
+      "utf8",
+    );
+    await writeFile(
+      join(sessionsDir, "duplicate-b.jsonl"),
+      createCodexSessionContent("shared-session"),
+      "utf8",
+    );
+
+    const result = await evaluateArtifacts({
+      source: "codex",
+      home: homeDir,
+      outputMode: "summary",
+    });
+
+    expect(result.metrics.sessions).toHaveLength(2);
+    expect(
+      result.summary.topSessions.map((session) => session.sessionId),
+    ).toEqual(["shared-session"]);
+    expect(
+      new Set(
+        result.summary.endedVerifiedDeliverySpotlights.map(
+          (session) => session.sessionId,
+        ),
+      ).size,
+    ).toBe(result.summary.endedVerifiedDeliverySpotlights.length);
   });
 
   it("parses a real transcript home without emitting evaluation artifacts", async () => {

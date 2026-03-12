@@ -219,6 +219,19 @@ function mergeLabelCounts(
   return merged;
 }
 
+function mergeSessionLabelCounts(
+  target: Record<LabelName, number>,
+  source: Record<LabelName, number>,
+): Record<LabelName, number> {
+  const merged = { ...target };
+
+  for (const label of Object.keys(source) as LabelName[]) {
+    merged[label] = (merged[label] ?? 0) + (source[label] ?? 0);
+  }
+
+  return merged;
+}
+
 function buildSummaryInputsFromSessions(
   projections: readonly SessionSummaryProjection[],
 ): SummaryInputs {
@@ -228,9 +241,17 @@ function buildSummaryInputsFromSessions(
   let writeTurnCount = 0;
 
   for (const projection of projections) {
+    const existingSessionLabelCounts = sessionLabelCounts.get(
+      projection.metrics.sessionId,
+    );
     sessionLabelCounts.set(
       projection.metrics.sessionId,
-      projection.sessionLabelCounts,
+      existingSessionLabelCounts
+        ? mergeSessionLabelCounts(
+            existingSessionLabelCounts,
+            projection.sessionLabelCounts,
+          )
+        : projection.sessionLabelCounts,
     );
     writeTurnCount += projection.writeTurnCount;
 

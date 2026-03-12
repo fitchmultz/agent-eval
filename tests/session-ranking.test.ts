@@ -231,6 +231,46 @@ describe("buildTopSessions", () => {
     expect(result[0]?.sessionId).toBe("session-a");
     expect(result[1]?.sessionId).toBe("session-b");
   });
+
+  it("deduplicates repeated session IDs after ranking", () => {
+    const sessions = [
+      createSession("repeat-session", {
+        complianceScore: 40,
+        incidentCount: 4,
+      }),
+      createSession("repeat-session", {
+        complianceScore: 60,
+        incidentCount: 2,
+      }),
+      createSession("unique-session", {
+        complianceScore: 70,
+        incidentCount: 1,
+      }),
+    ];
+    const metrics: MetricsRecord = {
+      engineVersion: "0.1.0",
+      schemaVersion: "1",
+      generatedAt: "2026-03-06T00:00:00.000Z",
+      sessionCount: sessions.length,
+      turnCount: 30,
+      incidentCount: 7,
+      parseWarningCount: 0,
+      labelCounts: {},
+      complianceSummary: [],
+      sessions,
+      inventory: [],
+    };
+    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
+    sessionLabelCounts.set("repeat-session", createEmptySessionLabelMap());
+    sessionLabelCounts.set("unique-session", createEmptySessionLabelMap());
+
+    const result = buildTopSessions(metrics, sessionLabelCounts);
+
+    expect(result.map((session) => session.sessionId)).toEqual([
+      "repeat-session",
+      "unique-session",
+    ]);
+  });
 });
 
 describe("buildEndedVerifiedDeliverySpotlights", () => {
@@ -362,5 +402,60 @@ describe("buildEndedVerifiedDeliverySpotlights", () => {
 
     const result = buildEndedVerifiedDeliverySpotlights(topSessions);
     expect(result).toHaveLength(6);
+  });
+
+  it("deduplicates repeated verified delivery session IDs", () => {
+    const topSessions = [
+      {
+        sessionId: "repeat-session",
+        archetype: "verified_delivery" as const,
+        archetypeLabel: "Ended-Verified Delivery",
+        frictionScore: 2,
+        complianceScore: 100,
+        incidentCount: 0,
+        labeledTurnCount: 2,
+        writeCount: 5,
+        verificationPassedCount: 3,
+        endedVerified: true,
+        dominantLabels: [],
+        note: "better entry",
+      },
+      {
+        sessionId: "repeat-session",
+        archetype: "verified_delivery" as const,
+        archetypeLabel: "Ended-Verified Delivery",
+        frictionScore: 4,
+        complianceScore: 95,
+        incidentCount: 1,
+        labeledTurnCount: 2,
+        writeCount: 5,
+        verificationPassedCount: 2,
+        endedVerified: true,
+        dominantLabels: [],
+        note: "duplicate entry",
+      },
+      {
+        sessionId: "unique-session",
+        archetype: "verified_delivery" as const,
+        archetypeLabel: "Ended-Verified Delivery",
+        frictionScore: 3,
+        complianceScore: 90,
+        incidentCount: 0,
+        labeledTurnCount: 2,
+        writeCount: 5,
+        verificationPassedCount: 2,
+        endedVerified: true,
+        dominantLabels: [],
+        note: "unique entry",
+      },
+    ];
+
+    const result = buildEndedVerifiedDeliverySpotlights(topSessions);
+
+    expect(result.map((session) => session.sessionId)).toEqual([
+      "repeat-session",
+      "unique-session",
+    ]);
+    expect(result[0]?.note).toBe("better entry");
   });
 });
