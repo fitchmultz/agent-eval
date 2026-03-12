@@ -6,7 +6,6 @@
  * Invariants/Assumptions: Codex transcript parsing remains Zod-validated; Claude Code uses a source-specific adapter.
  */
 
-import { basename } from "node:path";
 import { normalizeError, TranscriptParseError } from "../errors.js";
 import { detectSourceProviderFromPath } from "../sources.js";
 import {
@@ -18,23 +17,17 @@ import { parseClaudeTranscriptFile } from "./claude-parser.js";
 import { createSourceRef, routeEvent } from "./event-router.js";
 import { createTranscriptLineReader, getReaderStream } from "./file-reader.js";
 import { validateEventRecord } from "./schema.js";
-import { buildParsedSession, createTurn } from "./session-builder.js";
+import {
+  buildParsedSession,
+  createTurn,
+  inferSessionIdFromFilename,
+} from "./session-builder.js";
 import type {
   JsonlEventRecord,
   ParsedSession,
   ParseOptions,
   ParserContext,
 } from "./types.js";
-
-/**
- * Infers session ID from the filename.
- * Extracts the last 5 hyphen-separated parts from the filename.
- */
-function inferSessionIdFromFilename(path: string): string {
-  const filename = basename(path, ".jsonl");
-  const parts = filename.split("-");
-  return parts.slice(-5).join("-");
-}
 
 /**
  * Creates a new parser context for the given file path.

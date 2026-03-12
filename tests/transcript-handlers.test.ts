@@ -65,6 +65,16 @@ describe("hasTurnContent", () => {
   });
 });
 
+describe("createParserContext", () => {
+  it("derives the fallback session id from the filename", () => {
+    const context = createParserContext(
+      "/tmp/prefix-alpha-beta-gamma-delta-epsilon.jsonl",
+    );
+
+    expect(context.sessionId).toBe("alpha-beta-gamma-delta-epsilon");
+  });
+});
+
 describe("handleSessionMetaEvent", () => {
   it("updates sessionId from payload", () => {
     const context = createTestContext();
