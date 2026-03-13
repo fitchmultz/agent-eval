@@ -19,6 +19,16 @@ import type {
 } from "./schema.js";
 import { buildSummarySections } from "./summary-sections.js";
 
+function inventoryStatusLabel(
+  record: MetricsRecord["inventory"][number],
+): string {
+  if (record.required && record.kind === "session_jsonl" && !record.discovered) {
+    return "missing canonical input";
+  }
+
+  return record.discovered ? "present" : "missing";
+}
+
 function renderNoDataLines(summary: SummaryArtifact): string[] {
   if (summary.sessions > 0) {
     return [];
@@ -135,7 +145,7 @@ function renderInventoryLines(metrics: MetricsRecord): string[] {
     .filter((record) => record.discovered || record.required)
     .map(
       (record) =>
-        `- ${record.provider} ${record.required ? "required" : "optional"} ${record.kind}: ${record.discovered ? "present" : "missing"} at \`${record.path}\``,
+        `- ${record.provider} ${record.required ? "required" : "optional"} ${record.kind}: ${inventoryStatusLabel(record)} at \`${record.path}\``,
     );
 }
 

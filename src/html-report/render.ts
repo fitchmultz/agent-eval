@@ -59,7 +59,7 @@ function renderNoDataPanel(summary: SummaryArtifact): string {
   return `<section><div class="panel empty-hero">
     <h2>No Data Yet</h2>
     <p>The selected source home has the expected transcript layout, but no session JSONL files were discovered yet.</p>
-    <p>This is a valid first-run or freshly bootstrapped state, so the report renders a deterministic empty corpus instead of treating it as a runtime failure.</p>
+    <p>This is a valid first-run or freshly bootstrapped state, so the report renders a deterministic empty corpus instead of treating it as a runtime failure. The transcript home is reachable, but required transcript input stays missing until canonical session JSONL files appear.</p>
   </div></section>`;
 }
 
@@ -103,46 +103,27 @@ export function renderHtmlReport(
       : "Transcript Analytics Report";
   const scoreHeading =
     skin === "showcase" ? "Shareable Scoreboard" : "Heuristic Scorecards";
-
-  return [
-    "<!doctype html>",
-    '<html lang="en">',
-    "<head>",
-    '<meta charset="utf-8" />',
-    '<meta name="viewport" content="width=device-width, initial-scale=1" />',
-    `<title>${escapeHtml(title)}</title>`,
-    '<link rel="icon" href="./favicon.svg" type="image/svg+xml" />',
-    '<link rel="icon" href="./favicon.ico" sizes="any" type="image/x-icon" />',
-    `<style>${styles}</style>`,
-    "</head>",
-    "<body>",
-    "<main>",
-    "<header>",
-    `<h1>${escapeHtml(title)}</h1>`,
-    `<p class="lede">${escapeHtml(
-      skin === "showcase"
-        ? "A deterministic, transcript-first summary of developer-agent sessions for sharing and review."
-        : "A deterministic, transcript-first analytics summary for developer-agent session artifacts. These outputs emphasize operator burden, verification habits, and transcript-visible workflow signals rather than correctness claims.",
-    )}</p>`,
-    `<div class="meta-row">
-      <span class="pill">engine ${escapeHtml(summary.engineVersion)}</span>
-      <span class="pill">schema ${escapeHtml(summary.schemaVersion)}</span>
-      <span class="pill">sources ${escapeHtml(providers.join(", "))}</span>
-      <span class="pill">${escapeHtml(summary.generatedAt)}</span>
-      <span class="pill">parse warnings ${metrics.parseWarningCount}</span>
-    </div>`,
-    "</header>",
-    renderNoDataPanel(summary),
-    `<section><div class="metric-grid">${renderSummaryCards(summary)}</div></section>`,
-    `<section><h2>${escapeHtml(scoreHeading)}</h2><div class="metric-grid">${renderScoreCards(summary)}</div></section>`,
-    `<section><h2>Recent Momentum</h2><div class="metric-grid">${renderMomentumCards(summary)}</div></section>`,
-    ...(skin === "showcase"
-      ? [
-          `<section><h2>Showcase Highlights</h2><div class="metric-grid">${renderHighlightCards(summary)}</div></section>`,
-          `<section><h2>Recognitions</h2><div class="badge-row">${renderRecognitions(summary)}</div></section>`,
-        ]
-      : []),
-    `<section><h2>Operational Rates</h2><div class="rates-grid">
+  const isEmptyCorpus = summary.sessions === 0;
+  const bodyClassName = isEmptyCorpus ? ' class="empty-report"' : "";
+  const contentSections = isEmptyCorpus
+    ? [
+        renderNoDataPanel(summary),
+        `<section><div class="metric-grid">${renderSummaryCards(summary)}</div></section>`,
+        `<section><h2>Inventory</h2><ul class="inventory-list">${renderInventoryList(metrics)}</ul></section>`,
+        `<section><h2>Methodology And Limitations</h2><div class="panel">${renderMethodologyList(metrics)}</div></section>`,
+      ]
+    : [
+        renderNoDataPanel(summary),
+        `<section><div class="metric-grid">${renderSummaryCards(summary)}</div></section>`,
+        `<section><h2>${escapeHtml(scoreHeading)}</h2><div class="metric-grid">${renderScoreCards(summary)}</div></section>`,
+        `<section><h2>Recent Momentum</h2><div class="metric-grid">${renderMomentumCards(summary)}</div></section>`,
+        ...(skin === "showcase"
+          ? [
+              `<section><h2>Showcase Highlights</h2><div class="metric-grid">${renderHighlightCards(summary)}</div></section>`,
+              `<section><h2>Recognitions</h2><div class="badge-row">${renderRecognitions(summary)}</div></section>`,
+            ]
+          : []),
+        `<section><h2>Operational Rates</h2><div class="rates-grid">
       <div class="rate-item"><strong>Incidents / 100 turns</strong><div class="rate-value">${summary.rates.incidentsPer100Turns}</div></div>
       <div class="rate-item"><strong>Writes / 100 turns</strong><div class="rate-value">${summary.rates.writesPer100Turns}</div></div>
       <div class="rate-item"><strong>Verification requests / 100 turns</strong><div class="rate-value">${summary.rates.verificationRequestsPer100Turns}</div></div>
@@ -150,8 +131,8 @@ export function renderHtmlReport(
       <div class="rate-item"><strong>Reinjections / 100 turns</strong><div class="rate-value">${summary.rates.reinjectionsPer100Turns}</div></div>
       <div class="rate-item"><strong>Praise / 100 turns</strong><div class="rate-value">${summary.rates.praisePer100Turns}</div></div>
     </div></section>`,
-    `<section><h2>Comparative Slices</h2><div class="panel">${renderComparativeSliceTable(summary)}</div></section>`,
-    `<section><h2>Charts</h2><div class="charts-grid">
+        `<section><h2>Comparative Slices</h2><div class="panel">${renderComparativeSliceTable(summary)}</div></section>`,
+        `<section><h2>Charts</h2><div class="charts-grid">
       ${renderChartPanel(
         "Label Counts",
         charts.labelChartSvg,
@@ -175,17 +156,48 @@ export function renderHtmlReport(
           : "No passing compliance checks were recorded in this slice.",
       )}
     </div></section>`,
-    `<section><h2>Sessions To Review First</h2><div class="sessions-grid">${renderSessionCards(summary)}</div></section>`,
-    ...(skin === "showcase"
-      ? [
-          `<section><h2>Ended-Verified Delivery Spotlights</h2><div class="sessions-grid">${renderEndedVerifiedDeliverySpotlightCards(summary)}</div></section>`,
-        ]
-      : []),
-    `<section><h2>Top Incidents</h2><div class="incident-grid">${renderIncidentCards(summary)}</div></section>`,
-    `<section><h2>Deterministic Opportunities</h2><ul class="opportunity-list">${renderOpportunityList(summary)}</ul></section>`,
-    `<section><h2>Compliance Breakdown</h2><div class="panel">${renderComplianceTable(summary)}</div></section>`,
-    `<section><h2>Methodology And Limitations</h2><div class="panel">${renderMethodologyList(metrics)}</div></section>`,
-    `<section><h2>Inventory</h2><ul class="inventory-list">${renderInventoryList(metrics)}</ul></section>`,
+        `<section><h2>Sessions To Review First</h2><div class="sessions-grid">${renderSessionCards(summary)}</div></section>`,
+        ...(skin === "showcase"
+          ? [
+              `<section><h2>Ended-Verified Delivery Spotlights</h2><div class="sessions-grid">${renderEndedVerifiedDeliverySpotlightCards(summary)}</div></section>`,
+            ]
+          : []),
+        `<section><h2>Top Incidents</h2><div class="incident-grid">${renderIncidentCards(summary)}</div></section>`,
+        `<section><h2>Deterministic Opportunities</h2><ul class="opportunity-list">${renderOpportunityList(summary)}</ul></section>`,
+        `<section><h2>Compliance Breakdown</h2><div class="panel">${renderComplianceTable(summary)}</div></section>`,
+        `<section><h2>Methodology And Limitations</h2><div class="panel">${renderMethodologyList(metrics)}</div></section>`,
+        `<section><h2>Inventory</h2><ul class="inventory-list">${renderInventoryList(metrics)}</ul></section>`,
+      ];
+
+  return [
+    "<!doctype html>",
+    '<html lang="en">',
+    "<head>",
+    '<meta charset="utf-8" />',
+    '<meta name="viewport" content="width=device-width, initial-scale=1" />',
+    `<title>${escapeHtml(title)}</title>`,
+    '<link rel="icon" href="./favicon.svg" type="image/svg+xml" />',
+    '<link rel="icon" href="./favicon.ico" sizes="any" type="image/x-icon" />',
+    `<style>${styles}</style>`,
+    "</head>",
+    `<body${bodyClassName}>`,
+    "<main>",
+    "<header>",
+    `<h1>${escapeHtml(title)}</h1>`,
+    `<p class="lede">${escapeHtml(
+      skin === "showcase"
+        ? "A deterministic, transcript-first summary of developer-agent sessions for sharing and review."
+        : "A deterministic, transcript-first analytics summary for developer-agent session artifacts. These outputs emphasize operator burden, verification habits, and transcript-visible workflow signals rather than correctness claims.",
+    )}</p>`,
+    `<div class="meta-row">
+      <span class="pill">engine ${escapeHtml(summary.engineVersion)}</span>
+      <span class="pill">schema ${escapeHtml(summary.schemaVersion)}</span>
+      <span class="pill">sources ${escapeHtml(providers.join(", "))}</span>
+      <span class="pill">${escapeHtml(summary.generatedAt)}</span>
+      <span class="pill">parse warnings ${metrics.parseWarningCount}</span>
+    </div>`,
+    "</header>",
+    ...contentSections,
     `<p class="footer-note">${escapeHtml(
       "Incident evidence is redacted and truncated for compact reporting. Preview sanitization reduces common sensitive data exposure but is not a guarantee of full anonymization.",
     )}</p>`,

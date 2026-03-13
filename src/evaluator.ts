@@ -326,19 +326,22 @@ async function discoverSessionInputs(
   const sessionInventory = discovered.inventory.find(
     (item) => item.kind === "session_jsonl",
   );
-  if (!sessionInventory?.discovered) {
+  const sessionInventoryPath =
+    sessionInventory?.path ??
+    (options.source === "claude"
+      ? `${options.home}/projects`
+      : `${options.home}/sessions`);
+
+  if (!discovered.sessionDirectoryExists) {
     throw new MissingTranscriptInputError(
-      sessionInventory?.path ??
-        (options.source === "claude"
-          ? `${options.home}/projects`
-          : `${options.home}/sessions`),
+      sessionInventoryPath,
       "missing-directory",
     );
   }
 
   return {
     inventory: discovered.inventory,
-    sessionInventoryPath: sessionInventory.path,
+    sessionInventoryPath,
     sessionFiles: discovered.sessionFiles,
   };
 }

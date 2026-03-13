@@ -13,6 +13,16 @@ import {
   escapeHtml,
 } from "./templates.js";
 
+function inventoryStatusLabel(
+  record: MetricsRecord["inventory"][number],
+): string {
+  if (record.required && record.kind === "session_jsonl" && !record.discovered) {
+    return "missing canonical input";
+  }
+
+  return record.discovered ? "present" : "missing";
+}
+
 function formatScoreCardDisplay(card: SummaryArtifact["scoreCards"][number]): {
   score: number | string;
   detail: string;
@@ -280,7 +290,7 @@ export function renderInventoryList(metrics: MetricsRecord): string {
         <span class="pill">${escapeHtml(record.provider)}</span>
         <span class="pill ${record.required ? "required" : "optional"}">${record.required ? "required" : "optional"}</span>
         <strong>${escapeHtml(record.kind)}</strong>
-        <span>${record.discovered ? "present" : "missing"}</span>
+        <span>${escapeHtml(inventoryStatusLabel(record))}</span>
         <code>${escapeHtml(record.path)}</code>
       </li>`,
     )

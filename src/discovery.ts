@@ -24,6 +24,8 @@ export interface DiscoveredArtifacts {
   provider: SourceProvider;
   /** Path to the source home directory that was scanned */
   homePath: string;
+  /** Whether the canonical transcript directory exists, even if it is still empty */
+  sessionDirectoryExists: boolean;
   /** Inventory records for all expected and discovered artifact types */
   inventory: InventoryRecord[];
   /** Full paths to all discovered session JSONL files */
@@ -151,6 +153,7 @@ async function doDiscoverArtifacts(
         })
       ).filter((path) => path.endsWith(".jsonl"))
     : [];
+  const discoveredCanonicalSessionInput = sessionFiles.length > 0;
 
   // Check for abort before building inventory
   throwIfAborted(options?.signal);
@@ -160,7 +163,7 @@ async function doDiscoverArtifacts(
       provider,
       "session_jsonl",
       sessionsPath,
-      sessionsPathExists,
+      discoveredCanonicalSessionInput,
       true,
     ),
     ...(provider === "codex"
@@ -219,6 +222,7 @@ async function doDiscoverArtifacts(
   return {
     provider,
     homePath,
+    sessionDirectoryExists: sessionsPathExists,
     inventory,
     sessionFiles,
   };

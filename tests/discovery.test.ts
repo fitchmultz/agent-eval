@@ -82,6 +82,33 @@ describe("discoverArtifacts", () => {
     }
   });
 
+  it("treats an empty Codex sessions directory as missing canonical transcript input", async () => {
+    const testDir = join(testDirBase, "codex-empty-sessions-dir");
+    await mkdir(join(testDir, "sessions"), { recursive: true });
+    await mkdir(join(testDir, "shell_snapshots"), { recursive: true });
+
+    const result = await discoverArtifacts(testDir, { provider: "codex" });
+
+    expect(result.sessionFiles).toEqual([]);
+    expect(
+      result.inventory.find((record) => record.kind === "session_jsonl"),
+    ).toMatchObject({
+      provider: "codex",
+      discovered: false,
+      required: true,
+      optional: false,
+      path: join(testDir, "sessions"),
+    });
+    expect(
+      result.inventory.find((record) => record.kind === "shell_snapshot"),
+    ).toMatchObject({
+      provider: "codex",
+      discovered: true,
+      optional: true,
+      path: join(testDir, "shell_snapshots"),
+    });
+  });
+
   it("discovers Claude Code project transcripts and optional stores", async () => {
     const testDir = join(testDirBase, "claude-home");
     const projectsDir = join(testDir, "projects", "-Users-test-project");
@@ -134,5 +161,32 @@ describe("discoverArtifacts", () => {
       expect(record.provider).toBe("claude");
       expect(record.discovered).toBe(false);
     }
+  });
+
+  it("treats an empty Claude projects directory as missing canonical transcript input", async () => {
+    const testDir = join(testDirBase, "claude-empty-projects-dir");
+    await mkdir(join(testDir, "projects"), { recursive: true });
+    await mkdir(join(testDir, "shell-snapshots"), { recursive: true });
+
+    const result = await discoverArtifacts(testDir, { provider: "claude" });
+
+    expect(result.sessionFiles).toEqual([]);
+    expect(
+      result.inventory.find((record) => record.kind === "session_jsonl"),
+    ).toMatchObject({
+      provider: "claude",
+      discovered: false,
+      required: true,
+      optional: false,
+      path: join(testDir, "projects"),
+    });
+    expect(
+      result.inventory.find((record) => record.kind === "shell_snapshot"),
+    ).toMatchObject({
+      provider: "claude",
+      discovered: true,
+      optional: true,
+      path: join(testDir, "shell-snapshots"),
+    });
   });
 });

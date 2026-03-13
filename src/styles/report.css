@@ -120,6 +120,16 @@ section { margin-top: 32px; }
     var(--panel);
   border: 1px solid rgba(15,118,110,0.18);
 }
+.empty-report section {
+  margin-top: 24px;
+}
+.empty-report .empty-hero {
+  padding: 24px;
+}
+.empty-report .inventory-list,
+.empty-report .opportunity-list {
+  gap: 10px;
+}
 .empty-hero p {
   margin: 10px 0 0;
   color: var(--muted);

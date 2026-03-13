@@ -135,6 +135,15 @@ describe("evaluateArtifacts integration", () => {
     expect(result.report).toContain("## No Data Yet");
     expect(result.report).toContain("Sources: `codex`");
     expect(result.presentation.reportHtml).toContain("No Data Yet");
+    expect(
+      result.metrics.inventory.find((record) => record.kind === "session_jsonl")
+        ?.discovered,
+    ).toBe(false);
+    expect(result.presentation.reportHtml).toContain("missing canonical input");
+    expect(result.presentation.reportHtml).not.toContain(
+      "Sessions To Review First",
+    );
+    expect(result.presentation.reportHtml).not.toContain("Top Incidents");
   });
 
   it("evaluates a valid empty Codex home into a deterministic no-data summary bundle", async () => {

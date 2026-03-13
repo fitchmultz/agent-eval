@@ -262,6 +262,24 @@ describe("renderHtmlReport", () => {
         turnCount: 0,
         incidentCount: 0,
         sessions: [],
+        inventory: [
+          {
+            provider: "codex",
+            kind: "session_jsonl",
+            path: "~/.codex/sessions",
+            discovered: false,
+            required: true,
+            optional: false,
+          },
+          {
+            provider: "codex",
+            kind: "shell_snapshot",
+            path: "~/.codex/shell_snapshots",
+            discovered: true,
+            required: false,
+            optional: true,
+          },
+        ],
       },
       baseCharts,
     );
@@ -272,6 +290,50 @@ describe("renderHtmlReport", () => {
     );
     expect(html).toContain("deterministic empty corpus");
     expect(html).toContain("empty-hero");
+    expect(html).toContain("missing canonical input");
+    expect(html).toContain("shell_snapshot");
+    expect(html).toContain("<body class=\"empty-report\">");
+  });
+
+  it("collapses zero-value sections out of the empty HTML report", () => {
+    const html = renderHtmlReport(
+      {
+        ...baseSummary,
+        sessions: 0,
+        turns: 0,
+        incidents: 0,
+      },
+      {
+        ...baseMetrics,
+        sessionCount: 0,
+        turnCount: 0,
+        incidentCount: 0,
+        sessions: [],
+        inventory: [
+          {
+            provider: "codex",
+            kind: "session_jsonl",
+            path: "~/.codex/sessions",
+            discovered: false,
+            required: true,
+            optional: false,
+          },
+        ],
+      },
+      baseCharts,
+    );
+
+    expect(html).toContain("Inventory");
+    expect(html).toContain("Methodology And Limitations");
+    expect(html).not.toContain("Heuristic Scorecards");
+    expect(html).not.toContain("Recent Momentum");
+    expect(html).not.toContain("Operational Rates");
+    expect(html).not.toContain("Comparative Slices");
+    expect(html).not.toContain("Charts");
+    expect(html).not.toContain("Sessions To Review First");
+    expect(html).not.toContain("Top Incidents");
+    expect(html).not.toContain("Deterministic Opportunities");
+    expect(html).not.toContain("Compliance Breakdown");
   });
 
   it("renders highest friction session ids with an intentional session-id treatment", () => {
