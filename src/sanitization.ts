@@ -78,18 +78,41 @@ const lowSignalPatterns = [
   /\bExit codes:\b/i,
   /\bAgent Rules For Drift Control\b/i,
   /\bCurrent date is\b.*\bAlways verify information is up-to-date\b/i,
+  /^-?\s*Missing\/blocked:/i,
+  /^-?\s*Safety and fallback:/i,
+  /^If you want, I will do exactly one of these next\b/i,
+  /^If you want, I can now do the same\b/i,
+  /^[-•]\s*[a-z0-9._-]+:\s+.+\bUse when\b/i,
+  /^(?:[-•]\s*)?[a-z0-9]+(?:-[a-z0-9]+){1,}:\s+[A-Z]/i,
+  /^(?:[-•]\s*)?[a-z0-9._-]+:\s+(?:Helps|Guides|Use when|Integration-research workflow)\b/i,
+  /^(?:[-•]\s*)?[a-z0-9._-]+:\s+[A-Z][^.]{0,220}\.\s+(?:Use|Invoke|Guides|Helps|Trigger|Update documentation|Verify work)\b/i,
+  /\bcreate-subagent:\s+Create custom subagents\b/i,
+  /\b(?:Repo Execution Trust|Trust Boundary)\b/i,
+  /\btrust file shape\b/i,
+  /\ballow_project_commands\b/i,
+  /\brepo-local executable settings\b/i,
+  /\bmissing trust file means\b/i,
+  /\bFocus on\b.+\bReport:\s*1\)/i,
+  /^(?:Audit|Inspect|Post-remediation audit of)\b.+\bFocus\b/i,
 ];
 
 const unsafePreviewPatterns = [
   /(?:^|\s)~?\/?\.ssh\//i,
+  /(?:^|\s)~\/\.ssh(?:\s|$|[.)!,:;])/i,
   /\bssh[- ]?key(?:s)?\b/i,
   /\b(?:private|public)\s+key\b/i,
+  /\bprivate keys\b/i,
   /\b(?:authorized_keys|known_hosts)\b/i,
   /\bno such identity\b/i,
   /\bpermission denied\s*\(?(?:publickey|keyboard-interactive)\)?/i,
   /\b(?:id_(?:ed25519|rsa|ecdsa)|ed25519|rsa)\b/i,
   /\b(passphrase|password|api[_ -]?key|access[_ -]?token|secret)\b/i,
   /\[redacted-(?:ssh|identity|token|secret|email|path|ip|sensitive|unsafe|abusive)[^\]]*\]/i,
+  /\brestore\s+~\/\.ssh\b/i,
+  /\brestore\b.+\b(?:ssh|key state|key material|encrypted artifacts)\b/i,
+  /\bplaintext private keys?\b/i,
+  /\bdecryptable\b.+\bprivate keys?\b/i,
+  /\brestor(?:e|ing)\b.+\bprivate keys?\b/i,
 ];
 
 const profanityPatterns = [
@@ -222,6 +245,9 @@ function redactSshAndIdentityDetails(text: string): string {
       /\b(?:ssh[- ]?key(?:s)?|private key|public key)\b/gi,
       "[redacted-ssh-key-reference]",
     )
+    .replace(/(?:^|\s)~\/\.ssh(?=$|[\s"',`.)!;:])/gi, (match) =>
+      match.replace(/~\/\.ssh/i, "[redacted-ssh-path]"),
+    )
     .replace(/(?:^|\s)~?\/?\.ssh\/[^\s"'`)]*/gi, (match) =>
       match.replace(/~?\/?\.ssh\/[^\s"'`)]*/i, "[redacted-ssh-path]"),
     );
@@ -278,6 +304,14 @@ function previewSignalScore(preview: string): number {
   }
 
   if (
+    /\b(catastrophic|policy drift|actual issue|problem signal|correct access rights|why does it seem like things are broken|cleanup this mess)\b/i.test(
+      preview,
+    )
+  ) {
+    score += 6;
+  }
+
+  if (
     /\b(please|still|stuck|broken|broke|fail|failing|failure|regression|verify|verification|wrong|issue|problem|feedback|complaint|blocked|need|want|bug|bugs|cleanup|trust|risk|risks|leak|leaks|drift|severity|finding|findings)\b/i.test(
       preview,
     )
@@ -327,6 +361,22 @@ function previewSignalScore(preview: string): number {
     )
   ) {
     score -= 6;
+  }
+
+  if (
+    /\b(?:Audit|Inspect|Post-remediation audit|Look through the codebase|Focus only on|Focus on|Report:\s*1\)|Identify architectural debt)\b/i.test(
+      preview,
+    )
+  ) {
+    score -= 6;
+  }
+
+  if (
+    /\b(?:Repo Execution Trust|Trust Boundary|trust file shape|allow_project_commands|repo-local executable settings|create-subagent:\s+Create custom subagents)\b/i.test(
+      preview,
+    )
+  ) {
+    score -= 10;
   }
 
   if (isUnsafePreview(preview)) {

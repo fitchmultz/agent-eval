@@ -373,4 +373,41 @@ describe("chooseIncidentEvidencePreview", () => {
       "Please implement the Swift-side change, add regression coverage if the slice already has tests, and report any follow-up risks.",
     );
   });
+
+  it("avoids ssh recovery phrasing when a nearby operator complaint is available", () => {
+    const incident = createIncidentRecord({
+      turnIds: ["turn-12", "turn-13"],
+      turnIndices: [12, 13],
+      evidencePreviews: [
+        "Checking the actual key state now. If the encrypted artifacts are usable, I'll restore ~/.ssh immediately.",
+      ],
+    });
+    const turns = [
+      createRawTurn({
+        turnId: "turn-11",
+        turnIndex: 11,
+        userMessagePreviews: [
+          "Please make sure you have the correct access rights and the repository exists.",
+        ],
+      }),
+      createRawTurn({
+        turnId: "turn-12",
+        turnIndex: 12,
+        userMessagePreviews: [
+          "Checking the actual key state now. If the encrypted artifacts are usable, I'll restore ~/.ssh immediately.",
+        ],
+      }),
+      createRawTurn({
+        turnId: "turn-13",
+        turnIndex: 13,
+        userMessagePreviews: [
+          "This is catastrophic level of nonsense.",
+        ],
+      }),
+    ];
+
+    expect(chooseIncidentEvidencePreview(incident, turns)).toBe(
+      "Please make sure you have the correct access rights and the repository exists.",
+    );
+  });
 });

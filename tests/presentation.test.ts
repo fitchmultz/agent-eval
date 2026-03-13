@@ -295,4 +295,37 @@ describe("presentation", () => {
     expect(canonicalMarkdown).not.toContain("## Victory Lap Sessions");
     expect(canonicalMarkdown).toContain("Ended-Verified Delivery");
   });
+
+  it("omits top-incident cards whose best preview remains low-signal or unsafe", () => {
+    const summary = buildSummaryArtifact(
+      metrics,
+      buildSummaryInputsFromArtifacts(
+        [
+          {
+            ...rawTurns[0]!,
+            sessionId: "session-low-signal",
+            turnId: "turn-low-signal",
+            turnIndex: 10,
+            userMessagePreviews: [
+              "- Missing/blocked: If a named skill isn't in the list or the path can't be read, say so briefly and continue with the best fallback.",
+            ],
+          },
+        ],
+        [
+          {
+            ...incidents[0]!,
+            sessionId: "session-low-signal",
+            incidentId: "incident-low-signal",
+            turnIds: ["turn-low-signal"],
+            turnIndices: [10],
+            evidencePreviews: [
+              "Checking the actual key state now. If the encrypted artifacts are usable, I'll restore ~/.ssh immediately.",
+            ],
+          },
+        ],
+      ),
+    );
+
+    expect(summary.topIncidents).toEqual([]);
+  });
 });

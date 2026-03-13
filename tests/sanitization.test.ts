@@ -105,6 +105,41 @@ describe("createMessagePreviews", () => {
     ]);
   });
 
+  it("demotes skill catalogs and trust docs below concrete user problem statements", () => {
+    const previews = createMessagePreviews(
+      [
+        "- create-subagent: Create custom subagents for specialized AI tasks. Use when you want to create a new type of subagent, set up task-specific agents, configure code reviewers, debuggers, or domain-specific assistants.",
+        '### Repo Execution Trust - Repo-local executable settings are gated by local `.ralph/trust.jsonc`. - Trust file shape: `{\"allow_project_commands\": true}`.',
+        "- Policy drift: the repo has a safer argv-first subprocess abstraction, but shell-string execution still leaks.",
+      ],
+      {
+        maxItems: 1,
+        maxLength: 160,
+      },
+    );
+
+    expect(previews).toEqual([
+      "- Policy drift: the repo has a safer argv-first subprocess abstraction, but shell-string execution still leaks.",
+    ]);
+  });
+
+  it("avoids bare ssh recovery phrasing when safer same-turn evidence exists", () => {
+    const previews = createMessagePreviews(
+      [
+        "• Checking the actual key state now. If the encrypted artifacts are usable, I’ll restore ~/.ssh immediately; if not, I’ll verify exactly where the key material still exists so we can recover it without guessing.",
+        "Please make sure you have the correct access rights and the repository exists.",
+      ],
+      {
+        maxItems: 1,
+        maxLength: 160,
+      },
+    );
+
+    expect(previews).toEqual([
+      "Please make sure you have the correct access rights and the repository exists.",
+    ]);
+  });
+
   it("extracts higher-signal sections from structured batch briefings", () => {
     const previews = createMessagePreviews(
       [
@@ -247,6 +282,46 @@ describe("isLowSignalPreview", () => {
       ),
     ).toBe(true);
     expect(
+      isLowSignalPreview(
+        "- create-subagent: Create custom subagents for specialized AI tasks. Use when you want to create a new type of subagent.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        'find-skills: Helps users discover and install agent skills when they ask questions like "how do I do X".',
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "verification-before-completion: Verify work passes all gates before claiming completion. Use before committing, creating PRs, or declaring tasks done.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "repoprompt-tool-guidance-refresh: Update documentation in `$THIS_SKILL_FOLDER/rp-prompts-wip/` based on empirical verification of the latest RepoPrompt MCP server and CLI.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "- Missing/blocked: If a named skill isn't in the list or the path can't be read, say so briefly and continue with the best fallback.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "- Safety and fallback: If a skill can't be applied cleanly, state the issue, pick the next-best approach, and continue.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "If you want, I will do exactly one of these next, and nothing else:",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        '### Repo Execution Trust - Repo-local executable settings are gated by local `.ralph/trust.jsonc`. - Trust file shape: `{\"allow_project_commands\": true}`.',
+      ),
+    ).toBe(true);
+    expect(
       isLowSignalPreview("Please verify after the patch and rerun the tests."),
     ).toBe(false);
   });
@@ -262,6 +337,16 @@ describe("isUnsafePreview", () => {
     expect(
       isUnsafePreview(
         "Git pull failed because the SSH key setup was missing after the migration.",
+      ),
+    ).toBe(true);
+    expect(
+      isUnsafePreview(
+        "Checking the actual key state now. If the encrypted artifacts are usable, I'll restore ~/.ssh immediately.",
+      ),
+    ).toBe(true);
+    expect(
+      isUnsafePreview(
+        "The pre-cutover commit still contains the plaintext private keys and I'm restoring those back into place.",
       ),
     ).toBe(true);
     expect(

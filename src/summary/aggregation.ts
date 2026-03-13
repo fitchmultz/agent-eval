@@ -9,6 +9,7 @@ import {
   chooseIncidentEvidencePreview,
   insertTopIncident,
 } from "../incident-selection.js";
+import { isLowSignalPreview, isUnsafePreview } from "../sanitization.js";
 import type {
   IncidentRecord,
   LabelName,
@@ -76,6 +77,14 @@ export function buildSummaryInputsFromArtifacts(
 
   for (const incident of incidents) {
     severityCounts[incident.severity] += 1;
+    const evidencePreview = chooseIncidentEvidencePreview(incident, rawTurns);
+    if (
+      !evidencePreview ||
+      isLowSignalPreview(evidencePreview) ||
+      isUnsafePreview(evidencePreview)
+    ) {
+      continue;
+    }
     topIncidents = insertTopIncident(
       topIncidents,
       {
@@ -85,7 +94,7 @@ export function buildSummaryInputsFromArtifacts(
         severity: incident.severity,
         confidence: incident.confidence,
         turnSpan: incident.turnIndices.length,
-        evidencePreview: chooseIncidentEvidencePreview(incident, rawTurns),
+        evidencePreview,
       },
       getConfig().previews.maxTopIncidents,
     );

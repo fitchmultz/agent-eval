@@ -450,6 +450,49 @@ describe("renderReport", () => {
     expect(report).not.toContain("mitchfultz_id_ed25519");
   });
 
+  it("renders nearby operator signal instead of ssh recovery phrasing", () => {
+    const metrics = createTestMetrics();
+    const incident = createTestIncidents()[0];
+    if (!incident) {
+      throw new Error("Expected a synthetic incident fixture.");
+    }
+    const incidents: IncidentRecord[] = [
+      {
+        ...incident,
+        turnIds: ["turn-2", "turn-3"],
+        turnIndices: [2, 3],
+        evidencePreviews: [
+          "Checking the actual key state now. If the encrypted artifacts are usable, I'll restore ~/.ssh immediately.",
+        ],
+        severity: "high",
+      },
+    ];
+    const rawTurns: RawTurnRecord[] = [
+      ...createTestRawTurns(),
+      {
+        ...createTestRawTurns()[0]!,
+        turnId: "turn-2",
+        turnIndex: 2,
+        userMessagePreviews: [
+          "Please make sure you have the correct access rights and the repository exists.",
+        ],
+      },
+      {
+        ...createTestRawTurns()[0]!,
+        turnId: "turn-3",
+        turnIndex: 3,
+        userMessagePreviews: ["This is catastrophic level of nonsense."],
+      },
+    ];
+
+    const report = renderReport(metrics, incidents, rawTurns);
+
+    expect(report).toContain(
+      "Please make sure you have the correct access rights and the repository exists.",
+    );
+    expect(report).not.toContain("restore ~/.ssh immediately");
+  });
+
   it("ends with redaction notice", () => {
     const metrics = createTestMetrics();
     const incidents = createTestIncidents();

@@ -18,6 +18,7 @@ import { buildSummaryArtifact, type SummaryInputs } from "./insights.js";
 import { aggregateMetrics, buildMetricsRecord } from "./metrics-aggregation.js";
 import { buildPresentationArtifacts } from "./presentation.js";
 import { renderSummaryReport } from "./report.js";
+import { isLowSignalPreview, isUnsafePreview } from "./sanitization.js";
 import type {
   IncidentRecord,
   InventoryRecord,
@@ -181,6 +182,14 @@ function summarizeProcessedSession(
 
   for (const incident of session.incidents) {
     severityCounts[incident.severity] += 1;
+    const evidencePreview = chooseIncidentEvidencePreview(incident, session.turns);
+    if (
+      !evidencePreview ||
+      isLowSignalPreview(evidencePreview) ||
+      isUnsafePreview(evidencePreview)
+    ) {
+      continue;
+    }
     topIncidents = insertTopIncident(
       topIncidents,
       {
@@ -190,7 +199,7 @@ function summarizeProcessedSession(
         severity: incident.severity,
         confidence: incident.confidence,
         turnSpan: incident.turnIndices.length,
-        evidencePreview: chooseIncidentEvidencePreview(incident, session.turns),
+        evidencePreview,
       },
       getConfig().previews.maxTopIncidents,
     );
