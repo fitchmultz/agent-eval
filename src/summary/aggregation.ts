@@ -5,7 +5,10 @@
  */
 
 import { getConfig } from "../config/index.js";
-import { insertTopIncident } from "../incident-selection.js";
+import {
+  chooseIncidentEvidencePreview,
+  insertTopIncident,
+} from "../incident-selection.js";
 import type {
   IncidentRecord,
   LabelName,
@@ -82,7 +85,7 @@ export function buildSummaryInputsFromArtifacts(
         severity: incident.severity,
         confidence: incident.confidence,
         turnSpan: incident.turnIndices.length,
-        evidencePreview: incident.evidencePreviews[0],
+        evidencePreview: chooseIncidentEvidencePreview(incident, rawTurns),
       },
       getConfig().previews.maxTopIncidents,
     );

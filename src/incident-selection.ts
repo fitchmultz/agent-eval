@@ -5,8 +5,16 @@
  */
 
 import { severityRank } from "./ranking.js";
-import { isLowSignalPreview, isUnsafePreview } from "./sanitization.js";
-import type { SummaryArtifact } from "./schema.js";
+import {
+  isLowSignalPreview,
+  isUnsafePreview,
+  selectBestPreviews,
+} from "./sanitization.js";
+import type {
+  IncidentRecord,
+  RawTurnRecord,
+  SummaryArtifact,
+} from "./schema.js";
 
 /**
  * Compares two top incidents for ranking purposes.
@@ -55,6 +63,83 @@ function topIncidentDedupKey(
     "",
   );
   return `${incident.sessionId}::${normalizedSummary}`;
+}
+
+function orderTurnsByIncidentRelevance(
+  turns: readonly RawTurnRecord[],
+  incidentTurnIndices: readonly number[],
+): RawTurnRecord[] {
+  const incidentTurnSet = new Set(incidentTurnIndices);
+
+  return [...turns].sort((left, right) => {
+    const leftInIncident = incidentTurnSet.has(left.turnIndex);
+    const rightInIncident = incidentTurnSet.has(right.turnIndex);
+    if (leftInIncident !== rightInIncident) {
+      return Number(rightInIncident) - Number(leftInIncident);
+    }
+
+    const leftDistance = Math.min(
+      ...incidentTurnIndices.map((turnIndex) =>
+        Math.abs(left.turnIndex - turnIndex),
+      ),
+    );
+    const rightDistance = Math.min(
+      ...incidentTurnIndices.map((turnIndex) =>
+        Math.abs(right.turnIndex - turnIndex),
+      ),
+    );
+
+    return leftDistance - rightDistance || left.turnIndex - right.turnIndex;
+  });
+}
+
+function pickBestPreview(previews: readonly string[]): string | undefined {
+  return selectBestPreviews(previews, 1)[0];
+}
+
+export function chooseIncidentEvidencePreview(
+  incident: IncidentRecord,
+  sessionTurns: readonly RawTurnRecord[],
+): string | undefined {
+  const orderedTurns = orderTurnsByIncidentRelevance(
+    sessionTurns.filter((turn) => turn.sessionId === incident.sessionId),
+    incident.turnIndices,
+  );
+  const orderedSessionPreviews = orderedTurns.flatMap(
+    (turn) => turn.userMessagePreviews,
+  );
+  const incidentHighSignal = incident.evidencePreviews.filter(
+    (preview) => !isLowSignalPreview(preview) && !isUnsafePreview(preview),
+  );
+  if (incidentHighSignal.length > 0) {
+    return pickBestPreview(incidentHighSignal);
+  }
+
+  const sessionHighSignal = orderedSessionPreviews.filter(
+    (preview) => !isLowSignalPreview(preview) && !isUnsafePreview(preview),
+  );
+  if (sessionHighSignal.length > 0) {
+    return pickBestPreview(sessionHighSignal);
+  }
+
+  const incidentSafe = incident.evidencePreviews.filter(
+    (preview) => !isUnsafePreview(preview),
+  );
+  if (incidentSafe.length > 0) {
+    return pickBestPreview(incidentSafe);
+  }
+
+  const sessionSafe = orderedSessionPreviews.filter(
+    (preview) => !isUnsafePreview(preview),
+  );
+  if (sessionSafe.length > 0) {
+    return pickBestPreview(sessionSafe);
+  }
+
+  return (
+    pickBestPreview(incident.evidencePreviews) ??
+    pickBestPreview(orderedSessionPreviews)
+  );
 }
 
 /**

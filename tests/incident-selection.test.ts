@@ -5,8 +5,15 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { insertTopIncident } from "../src/incident-selection.js";
-import type { SummaryArtifact } from "../src/schema.js";
+import {
+  chooseIncidentEvidencePreview,
+  insertTopIncident,
+} from "../src/incident-selection.js";
+import type {
+  IncidentRecord,
+  RawTurnRecord,
+  SummaryArtifact,
+} from "../src/schema.js";
 
 type TopIncident = SummaryArtifact["topIncidents"][number];
 
@@ -18,6 +25,46 @@ function createIncident(overrides: Partial<TopIncident> = {}): TopIncident {
     severity: "medium",
     confidence: "high",
     turnSpan: 3,
+    ...overrides,
+  };
+}
+
+function createRawTurn(overrides: Partial<RawTurnRecord> = {}): RawTurnRecord {
+  return {
+    engineVersion: "0.1.0",
+    schemaVersion: "1",
+    sessionId: "session-1",
+    turnId: "turn-1",
+    turnIndex: 0,
+    userMessageCount: 1,
+    assistantMessageCount: 0,
+    userMessagePreviews: ["Test message"],
+    assistantMessagePreviews: [],
+    toolCalls: [],
+    labels: [],
+    sourceRefs: [],
+    ...overrides,
+  };
+}
+
+function createIncidentRecord(
+  overrides: Partial<IncidentRecord> = {},
+): IncidentRecord {
+  return {
+    engineVersion: "0.1.0",
+    schemaVersion: "1",
+    incidentId: "incident-1",
+    sessionId: "session-1",
+    turnIds: ["turn-1"],
+    turnIndices: [0],
+    labels: [],
+    summary: "test incident",
+    evidencePreviews: ["Test message"],
+    severity: "medium",
+    confidence: "high",
+    firstSeenAt: "2026-03-12T00:00:00.000Z",
+    lastSeenAt: "2026-03-12T00:00:00.000Z",
+    sourceRefs: [],
     ...overrides,
   };
 }
@@ -111,6 +158,32 @@ describe("insertTopIncident", () => {
     const result = insertTopIncident([lowSignal], highSignal, 8);
     expect(result).toHaveLength(1);
     expect(result[0]?.incidentId).toBe("high-signal");
+  });
+
+  it("treats orchestration batch briefings as lower-signal evidence", () => {
+    const batchBriefing: TopIncident = createIncident({
+      incidentId: "batch-briefing",
+      sessionId: "session-1",
+      summary: "test incident",
+      severity: "high",
+      evidencePreview:
+        "# Cloop Batch 1: Loop Surface State + Next View UX ## Mission / Scope Fully remediate loop-surface defects in the Inbox and Next views.",
+      turnSpan: 3,
+    });
+
+    const userSignal: TopIncident = createIncident({
+      incidentId: "user-signal",
+      sessionId: "session-1",
+      summary: "test incident",
+      severity: "high",
+      evidencePreview:
+        "Top Incidents still shows orchestration wrappers instead of the actual user problem signal.",
+      turnSpan: 2,
+    });
+
+    const result = insertTopIncident([batchBriefing], userSignal, 8);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.incidentId).toBe("user-signal");
   });
 
   it("prefers safer evidence when severities are equal", () => {
@@ -259,5 +332,45 @@ describe("insertTopIncident", () => {
     const result = insertTopIncident([], withoutPreview, 8);
     expect(result).toHaveLength(1);
     expect(result[0]?.incidentId).toBe("no-preview");
+  });
+});
+
+describe("chooseIncidentEvidencePreview", () => {
+  it("falls back to stronger same-session user signal when incident evidence is low-signal", () => {
+    const incident = createIncidentRecord({
+      turnIds: ["turn-1", "turn-2"],
+      turnIndices: [0, 1],
+      evidencePreviews: [
+        "The human user will interrupt if they need your attention, otherwise remain focused on the task.",
+        '**Ask the chat when stuck:** ```json {"tool":"chat_send","args":{"chat_id":"<same chat_id>"}} ```',
+      ],
+    });
+    const turns = [
+      createRawTurn({
+        turnId: "turn-1",
+        turnIndex: 0,
+        userMessagePreviews: [
+          "The human user will interrupt if they need your attention, otherwise remain focused on the task.",
+        ],
+      }),
+      createRawTurn({
+        turnId: "turn-2",
+        turnIndex: 1,
+        userMessagePreviews: [
+          '**Ask the chat when stuck:** ```json {"tool":"chat_send","args":{"chat_id":"<same chat_id>"}} ```',
+        ],
+      }),
+      createRawTurn({
+        turnId: "turn-3",
+        turnIndex: 2,
+        userMessagePreviews: [
+          "Please implement the Swift-side change, add regression coverage if the slice already has tests, and report any follow-up risks.",
+        ],
+      }),
+    ];
+
+    expect(chooseIncidentEvidencePreview(incident, turns)).toBe(
+      "Please implement the Swift-side change, add regression coverage if the slice already has tests, and report any follow-up risks.",
+    );
   });
 });

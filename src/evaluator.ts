@@ -10,7 +10,10 @@ import type { EvaluationArtifacts } from "./artifact-writer.js";
 import { getConfig } from "./config/index.js";
 import { discoverArtifacts } from "./discovery.js";
 import { MissingTranscriptInputError } from "./errors.js";
-import { insertTopIncident } from "./incident-selection.js";
+import {
+  chooseIncidentEvidencePreview,
+  insertTopIncident,
+} from "./incident-selection.js";
 import { buildSummaryArtifact, type SummaryInputs } from "./insights.js";
 import { aggregateMetrics, buildMetricsRecord } from "./metrics-aggregation.js";
 import { buildPresentationArtifacts } from "./presentation.js";
@@ -187,7 +190,7 @@ function summarizeProcessedSession(
         severity: incident.severity,
         confidence: incident.confidence,
         turnSpan: incident.turnIndices.length,
-        evidencePreview: incident.evidencePreviews[0],
+        evidencePreview: chooseIncidentEvidencePreview(incident, session.turns),
       },
       getConfig().previews.maxTopIncidents,
     );

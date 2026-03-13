@@ -104,6 +104,64 @@ describe("createMessagePreviews", () => {
       "Git pull failed after the deploy cutover and the repo now needs the SSH auth fix restored.",
     ]);
   });
+
+  it("extracts higher-signal sections from structured batch briefings", () => {
+    const previews = createMessagePreviews(
+      [
+        `# Cloop Batch 1: Loop Surface State + Next View UX
+
+## Mission / Scope
+Fully remediate loop-surface defects in the Inbox, Next, and adjacent loop-management views for Cloop's web UI.
+
+## Defects To Eliminate
+Top Incidents still shows orchestration wrappers instead of the actual user problem signal.
+
+## Acceptance Criteria
+Reports should show meaningful human evidence instead of batch boilerplate.`,
+      ],
+      {
+        maxItems: 1,
+        maxLength: 140,
+      },
+    );
+
+    expect(previews).toEqual([
+      "Top Incidents still shows orchestration wrappers instead of the actual user problem signal.",
+    ]);
+  });
+
+  it("extracts the human question from JSON tool examples", () => {
+    const previews = createMessagePreviews(
+      [
+        '**Ask the chat when stuck:** ```json {"tool":"chat_send","args":{"chat_id":"<same chat_id>","message":"How does X connect to Y in these files? Any edge cases I should watch for?","mode":"chat","new_chat":false}} ```',
+      ],
+      {
+        maxItems: 1,
+        maxLength: 140,
+      },
+    );
+
+    expect(previews).toEqual([
+      "How does X connect to Y in these files? Any edge cases I should watch for?",
+    ]);
+  });
+
+  it("prefers concrete problem statements over completion-format instructions", () => {
+    const previews = createMessagePreviews(
+      [
+        '- End your turn with a short "what changed / how to verify / what\'s next" summary.',
+        "- Policy drift: the repo has a safer argv-first subprocess abstraction, but shell-string execution still leaks.",
+      ],
+      {
+        maxItems: 1,
+        maxLength: 140,
+      },
+    );
+
+    expect(previews).toEqual([
+      "- Policy drift: the repo has a safer argv-first subprocess abstraction, but shell-string execution still leaks.",
+    ]);
+  });
 });
 
 describe("isLowSignalPreview", () => {
@@ -156,6 +214,36 @@ describe("isLowSignalPreview", () => {
     expect(
       isLowSignalPreview(
         "# MISSION You are Task Builder for this repository. ## AGENT SWARM INSTRUCTION",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "# Cloop Batch 1: Loop Surface State + Next View UX ## Mission / Scope Fully remediate loop-surface defects in the Inbox and Next views.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "## Project Intent - Rust workspace with shared client logic and two frontends.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "- [ ] Any generated artifacts should either be cleaned up or placed in a project-appropriate artifact location.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "**Shell/Bash:** - unquoted variables - missing `set -euo pipefail` - backticks vs `$()` - eval usage - parsing ls output",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "- Always use `tmux` when you need persistent or interactive command execution.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "> ⚠️ **CRITICAL**: Current date is **March 2026**. Always verify information is up-to-date; never assume 2024 references are current.",
       ),
     ).toBe(true);
     expect(

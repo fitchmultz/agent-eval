@@ -445,7 +445,8 @@ describe("renderReport", () => {
 
     const report = renderReport(metrics, incidents, rawTurns);
 
-    expect(report).toContain("[redacted-sensitive-content]");
+    expect(report).toContain("Please fix the bug");
+    expect(report).not.toContain("[redacted-sensitive-content]");
     expect(report).not.toContain("mitchfultz_id_ed25519");
   });
 

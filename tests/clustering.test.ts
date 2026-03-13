@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { clusterIncidents } from "../src/clustering.js";
+import { createMessagePreviews } from "../src/sanitization.js";
 import type { RawTurnRecord } from "../src/schema.js";
 
 function createLabel(
@@ -159,6 +160,45 @@ describe("clusterIncidents", () => {
 
     expect(incidents[0]?.evidencePreviews[0]).toBe(
       "Git pull broke after the migration and the auth setup needs to be restored.",
+    );
+  });
+
+  it("prefers human-signal sections over batch briefing wrappers", () => {
+    const incidents = clusterIncidents(
+      [
+        createMockTurn({
+          turnId: "turn-1",
+          turnIndex: 0,
+          userMessagePreviews: createMessagePreviews(
+            [
+              `# Cloop Batch 1: Loop Surface State + Next View UX
+
+## Mission / Scope
+Fully remediate loop-surface defects in the Inbox, Next, and adjacent loop-management views for Cloop's web UI.
+
+## Defects To Eliminate
+Top Incidents still shows orchestration wrappers instead of the actual user problem signal.`,
+            ],
+            {
+              maxItems: 3,
+              maxLength: 140,
+            },
+          ),
+          labels: [
+            createLabel("regression_report", {
+              severity: "high",
+              rationale: "regression",
+            }),
+          ],
+        }),
+      ],
+      { maxTurnGap: 2 },
+      "0.1.0",
+      "1",
+    );
+
+    expect(incidents[0]?.evidencePreviews[0]).toBe(
+      "Top Incidents still shows orchestration wrappers instead of the actual user problem signal.",
     );
   });
 

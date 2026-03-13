@@ -22,6 +22,7 @@ export interface PreviewOptions {
 const lowSignalPatterns = [
   /AGENTS\.md instructions/i,
   /^# AGENTS/i,
+  /^#\s*[^\n#]{0,120}\bBatch\s+\d+\b/i,
   /^# Parallel Integration/i,
   /^# Deep Investigation Mode/i,
   /<INSTRUCTIONS>/i,
@@ -49,6 +50,34 @@ const lowSignalPatterns = [
   /\breview criteria:\b/i,
   /\byour job is to:\b/i,
   /\brepoprompt_(?:managed|skill_path|skills_version):/i,
+  /\bThis batch owns\b/i,
+  /\bNo minimal slices\b/i,
+  /\b(?:Mission\s*\/\s*Scope|Defects To Eliminate|Priority\s*\/\s*Rationale|Acceptance Criteria|Required Verification|Runtime Notes|Safety Precautions|Working Directives|Visual Validation Reminder|Completion Rule)\b/i,
+  /\bThe human user will interrupt if they need your attention\b/i,
+  /\bDo not use automatically, only when invoked explicitly\b/i,
+  /\*\*Ask the chat when stuck:/i,
+  /\bSKILL\.md\b/i,
+  /\bchat_send\b.*\bnew_chat\b/i,
+  /^\s*##\s*Project Intent\b/i,
+  /\*\*Skill\*\*/i,
+  /\b(?:ask-clarifying-questions|root-cause-triage)\b/i,
+  /\bThe user interrupted the previous turn on purpose\b/i,
+  /\bIf any tools\/commands were aborted\b/i,
+  /^\s*-\s*\[[ x]\]/i,
+  /\bGroup\s+\d+\s+last\b/i,
+  /\bIf you want, I can now do the same grouping\b/i,
+  /\bEnd your turn with a short\b/i,
+  /\bwhat changed\s*\/\s*how to verify\s*\/\s*what'?s next\b/i,
+  /\bcreate-rule:\b/i,
+  /\bCursor rules\b/i,
+  /\bfile-specific patterns\b/i,
+  /"message"\s*:/i,
+  /\bAlways use `?tmux`?\b/i,
+  /\b`?tracked-paths\.tsv`?\s+is authoritative\b/i,
+  /\bThe current source checkout may live at\b/i,
+  /\bExit codes:\b/i,
+  /\bAgent Rules For Drift Control\b/i,
+  /\bCurrent date is\b.*\bAlways verify information is up-to-date\b/i,
 ];
 
 const unsafePreviewPatterns = [
@@ -77,6 +106,73 @@ const profanityPatterns = [
 
 function normalizeWhitespace(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function splitIntoSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9#<])/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 0);
+}
+
+function extractStructuredPreviewCandidates(message: string): string[] {
+  const normalized = message.replace(/\r\n?/g, "\n").trim();
+  if (normalized.length === 0) {
+    return [];
+  }
+
+  const blocks = normalized
+    .split(/\n\s*\n+/)
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0);
+
+  const candidates: string[] = [];
+
+  for (const block of blocks) {
+    const inlineBlock = normalizeWhitespace(block);
+    if (inlineBlock.length === 0) {
+      continue;
+    }
+
+    candidates.push(inlineBlock);
+
+    const blockLines = block
+      .split("\n")
+      .map((line) => normalizeWhitespace(line))
+      .filter((line) => line.length > 0);
+    for (const line of blockLines) {
+      candidates.push(line);
+    }
+
+    for (const match of block.matchAll(
+      /"message"\s*:\s*"((?:[^"\\]|\\.)+)"/g,
+    )) {
+      const [, rawMessage] = match;
+      if (!rawMessage) {
+        continue;
+      }
+      candidates.push(
+        rawMessage.replace(/\\"/g, '"').replace(/\\n/g, " ").trim(),
+      );
+    }
+
+    const sentences = splitIntoSentences(inlineBlock);
+    for (const sentence of sentences) {
+      candidates.push(sentence);
+    }
+
+    for (let index = 0; index < sentences.length - 1; index += 1) {
+      const first = sentences[index];
+      const second = sentences[index + 1];
+      if (!first || !second) {
+        continue;
+      }
+      candidates.push(`${first} ${second}`);
+    }
+  }
+
+  candidates.push(normalizeWhitespace(normalized));
+  return [...new Set(candidates)];
 }
 
 function redactEmailAddresses(text: string): string {
@@ -182,7 +278,7 @@ function previewSignalScore(preview: string): number {
   }
 
   if (
-    /\b(please|still|stuck|broken|broke|fail|failing|failure|regression|verify|verification|wrong|issue|problem|feedback|complaint|blocked|need|want)\b/i.test(
+    /\b(please|still|stuck|broken|broke|fail|failing|failure|regression|verify|verification|wrong|issue|problem|feedback|complaint|blocked|need|want|bug|bugs|cleanup|trust|risk|risks|leak|leaks|drift|severity|finding|findings)\b/i.test(
       preview,
     )
   ) {
@@ -205,6 +301,10 @@ function previewSignalScore(preview: string): number {
     score -= 4;
   }
 
+  if (/```|`{2,}|\{".+?:.+?"\}/.test(preview)) {
+    score -= 4;
+  }
+
   if (/^[#<>{}[\]A-Z0-9_/:. -]+$/i.test(preview)) {
     score -= 2;
   }
@@ -213,6 +313,20 @@ function previewSignalScore(preview: string): number {
     preview.match(/(?:^|\s)(?:##+|group\s+\d+:|\$[a-z0-9._-]+)/gi)?.length ?? 0;
   if (instructionMarkupCount >= 2) {
     score -= 4;
+  }
+
+  if (
+    /\bSKILL\.md\b|~\/\.agents\/skills\/|~\/\.codex\/skills\//i.test(preview)
+  ) {
+    score -= 6;
+  }
+
+  if (
+    /\b(what changed|how to verify|what'?s next|Cursor rules|file-specific patterns|coding standards|summary)\b/i.test(
+      preview,
+    )
+  ) {
+    score -= 6;
   }
 
   if (isUnsafePreview(preview)) {
@@ -247,7 +361,17 @@ function previewSignalScore(preview: string): number {
  */
 export function isLowSignalPreview(preview: string): boolean {
   const normalized = normalizeWhitespace(preview);
-  return lowSignalPatterns.some((pattern) => pattern.test(normalized));
+  const bulletItemCount = normalized.match(/(?:^|\s)[-•]\s+/g)?.length ?? 0;
+  const codeSpanCount = normalized.match(/`[^`]+`/g)?.length ?? 0;
+  const emphasizedHeadingCount =
+    normalized.match(/\*\*[A-Z][^*]{1,80}:\*\*/g)?.length ?? 0;
+
+  return (
+    lowSignalPatterns.some((pattern) => pattern.test(normalized)) ||
+    bulletItemCount >= 3 ||
+    codeSpanCount >= 4 ||
+    (emphasizedHeadingCount >= 1 && bulletItemCount >= 2)
+  );
 }
 
 export function isUnsafePreview(preview: string): boolean {
@@ -338,7 +462,11 @@ export function createMessagePreviews(
   options: PreviewOptions,
 ): string[] {
   return selectBestPreviews(
-    messages.map((message) => sanitizeMessageText(message, options)),
+    messages.flatMap((message) =>
+      extractStructuredPreviewCandidates(message).map((candidate) =>
+        sanitizeMessageText(candidate, options),
+      ),
+    ),
     options.maxItems,
   );
 }
