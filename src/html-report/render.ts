@@ -7,6 +7,7 @@
  */
 
 import { getConfig } from "../config/index.js";
+import { describeCorpusScope } from "../report-scope.js";
 import type { MetricsRecord, SummaryArtifact } from "../schema.js";
 import {
   renderEndedVerifiedDeliverySpotlightCards,
@@ -93,6 +94,7 @@ export function renderHtmlReport(
   charts: HtmlReportCharts,
 ): string {
   const styles = renderStyles();
+  const scope = describeCorpusScope(metrics);
   const providers = [
     ...new Set(metrics.inventory.map((record) => record.provider)),
   ];
@@ -193,8 +195,14 @@ export function renderHtmlReport(
       <span class="pill">engine ${escapeHtml(summary.engineVersion)}</span>
       <span class="pill">schema ${escapeHtml(summary.schemaVersion)}</span>
       <span class="pill">sources ${escapeHtml(providers.join(", "))}</span>
+      <span class="pill">${escapeHtml(scope.pill)}</span>
       <span class="pill">${escapeHtml(summary.generatedAt)}</span>
       <span class="pill">parse warnings ${metrics.parseWarningCount}</span>
+    </div>`,
+    `<div class="scope-banner${scope.isWindowed ? " scope-banner-windowed" : ""}">
+      <p class="scope-banner-title">${escapeHtml(scope.headline)}</p>
+      <p>${escapeHtml(scope.detail)}</p>
+      <p>${escapeHtml(scope.comparability)}</p>
     </div>`,
     "</header>",
     ...contentSections,

@@ -81,12 +81,18 @@ export interface MetricsRecordParts {
 export function buildMetricsRecord(
   parts: MetricsRecordParts,
   inventory: InventoryRecord[],
+  corpusScope: MetricsRecord["corpusScope"] = {
+    selection: "all_discovered",
+    discoveredSessionCount: parts.sessionMetrics.length,
+    appliedSessionLimit: null,
+  },
 ): MetricsRecord {
   return {
     engineVersion: ENGINE_VERSION,
     schemaVersion: SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     sessionCount: parts.sessionMetrics.length,
+    corpusScope,
     turnCount: parts.turnCount,
     incidentCount: parts.incidentCount,
     parseWarningCount: parts.parseWarningCount,
@@ -106,6 +112,7 @@ export function buildMetricsRecord(
 export function aggregateMetrics(
   sessions: readonly ProcessedSession[],
   inventory: InventoryRecord[],
+  corpusScope?: MetricsRecord["corpusScope"],
 ): MetricsRecord {
   const labelCounts = aggregateLabelCounts(sessions);
   const sessionMetrics = sessions.map((s) => s.metrics);
@@ -122,6 +129,7 @@ export function aggregateMetrics(
       ),
     },
     inventory,
+    corpusScope,
   );
 }
 

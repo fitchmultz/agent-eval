@@ -90,6 +90,11 @@ describe("buildSummaryArtifact", () => {
       schemaVersion: "1",
       generatedAt: "2026-03-06T19:00:00.000Z",
       sessionCount: sessions.length,
+      corpusScope: {
+        selection: "all_discovered",
+        discoveredSessionCount: sessions.length,
+        appliedSessionLimit: null,
+      },
       turnCount: 1010,
       incidentCount: 1,
       parseWarningCount: 0,
@@ -260,6 +265,11 @@ describe("buildSummaryArtifact", () => {
       schemaVersion: "1",
       generatedAt: "2026-03-06T19:00:00.000Z",
       sessionCount: sessions.length,
+      corpusScope: {
+        selection: "all_discovered",
+        discoveredSessionCount: sessions.length,
+        appliedSessionLimit: null,
+      },
       turnCount: 24,
       incidentCount: 5,
       parseWarningCount: 0,

@@ -24,6 +24,7 @@ import type {
   InventoryRecord,
   LabelCountRecord,
   LabelName,
+  MetricsRecord,
   RawTurnRecord,
   Severity,
 } from "./schema.js";
@@ -291,6 +292,7 @@ function buildSummaryInputsFromSessions(
 function buildSummaryModeMetrics(
   projections: readonly SessionSummaryProjection[],
   inventory: InventoryRecord[],
+  corpusScope: MetricsRecord["corpusScope"],
 ) {
   return buildMetricsRecord(
     {
@@ -314,6 +316,7 @@ function buildSummaryModeMetrics(
       ),
     },
     inventory,
+    corpusScope,
   );
 }
 
@@ -321,6 +324,28 @@ interface DiscoveredSessionInputs {
   inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
   sessionInventoryPath: string;
   sessionFiles: readonly string[];
+}
+
+function buildCorpusScope(
+  discoveredSessionCount: number,
+  sessionLimit: number | undefined,
+): MetricsRecord["corpusScope"] {
+  if (typeof sessionLimit !== "number") {
+    return {
+      selection: "all_discovered",
+      discoveredSessionCount,
+      appliedSessionLimit: null,
+    };
+  }
+
+  return {
+    selection:
+      discoveredSessionCount > sessionLimit
+        ? "most_recent_window"
+        : "all_discovered",
+    discoveredSessionCount,
+    appliedSessionLimit: sessionLimit,
+  };
 }
 
 async function discoverSessionInputs(
@@ -365,15 +390,21 @@ async function processDiscoveredSessions(
   signal?: AbortSignal,
 ): Promise<{
   inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
+  corpusScope: MetricsRecord["corpusScope"];
   processed: Awaited<ReturnType<typeof processSession>>[];
 }> {
   const { inventory, sessionInventoryPath, sessionFiles } =
     await discoverSessionInputs(options, signal);
+  const corpusScope = buildCorpusScope(
+    sessionFiles.length,
+    options.sessionLimit,
+  );
 
   if (sessionFiles.length === 0) {
     if (allowEmptyCorpus) {
       return {
         inventory,
+        corpusScope,
         processed: [],
       };
     }
@@ -394,6 +425,7 @@ async function processDiscoveredSessions(
     if (allowEmptyCorpus) {
       return {
         inventory,
+        corpusScope,
         processed: [],
       };
     }
@@ -421,6 +453,7 @@ async function processDiscoveredSessions(
 
   return {
     inventory,
+    corpusScope,
     processed,
   };
 }
@@ -432,15 +465,21 @@ async function processSummarySessions(
   signal?: AbortSignal,
 ): Promise<{
   inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
+  corpusScope: MetricsRecord["corpusScope"];
   projections: SessionSummaryProjection[];
 }> {
   const { inventory, sessionInventoryPath, sessionFiles } =
     await discoverSessionInputs(options, signal);
+  const corpusScope = buildCorpusScope(
+    sessionFiles.length,
+    options.sessionLimit,
+  );
 
   if (sessionFiles.length === 0) {
     if (allowEmptyCorpus) {
       return {
         inventory,
+        corpusScope,
         projections: [],
       };
     }
@@ -461,6 +500,7 @@ async function processSummarySessions(
     if (allowEmptyCorpus) {
       return {
         inventory,
+        corpusScope,
         projections: [],
       };
     }
@@ -489,6 +529,7 @@ async function processSummarySessions(
 
   return {
     inventory,
+    corpusScope,
     projections,
   };
 }
@@ -500,10 +541,11 @@ async function collectParsedArtifacts(
   signal?: AbortSignal,
 ): Promise<{
   inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
+  corpusScope: MetricsRecord["corpusScope"];
   processed: Awaited<ReturnType<typeof processSession>>[];
   rawTurns: RawTurnRecord[];
 }> {
-  const { inventory, processed } = await processDiscoveredSessions(
+  const { inventory, corpusScope, processed } = await processDiscoveredSessions(
     options,
     concurrency,
     allowEmptyCorpus,
@@ -513,6 +555,7 @@ async function collectParsedArtifacts(
 
   return {
     inventory,
+    corpusScope,
     processed,
     rawTurns: extractTurns(processed),
   };
@@ -557,13 +600,13 @@ export async function evaluateArtifacts(
       : getConfig().concurrency.full;
 
   if (outputMode === "summary") {
-    const { inventory, projections } = await processSummarySessions(
+    const { inventory, corpusScope, projections } = await processSummarySessions(
       { ...options, outputMode },
       concurrency,
       true,
       signal,
     );
-    const metrics = buildSummaryModeMetrics(projections, inventory);
+    const metrics = buildSummaryModeMetrics(projections, inventory, corpusScope);
     const summary = buildSummaryArtifact(
       metrics,
       buildSummaryInputsFromSessions(projections),
@@ -590,7 +633,11 @@ export async function evaluateArtifacts(
   const rawTurns = parsed.rawTurns;
   const incidents = extractIncidents(parsed.processed);
   const projections = parsed.processed.map(summarizeProcessedSession);
-  const metrics = aggregateMetrics(parsed.processed, parsed.inventory);
+  const metrics = aggregateMetrics(
+    parsed.processed,
+    parsed.inventory,
+    parsed.corpusScope,
+  );
   const summary = buildSummaryArtifact(
     metrics,
     buildSummaryInputsFromSessions(projections),

@@ -142,6 +142,11 @@ function createMetrics(sessionIds: string[]): MetricsRecord {
     schemaVersion: "1.0.0",
     generatedAt: "2026-03-10T00:00:00.000Z",
     sessionCount: sessionIds.length,
+    corpusScope: {
+      selection: "all_discovered",
+      discoveredSessionCount: sessionIds.length,
+      appliedSessionLimit: null,
+    },
     turnCount: sessionIds.length,
     incidentCount: 0,
     parseWarningCount: 0,
@@ -233,11 +238,17 @@ describe("evaluator", () => {
       earliestTimestamp: undefined,
       mtimeMs: Number(path.match(/(\d+)/)?.[1] ?? 0),
     }));
-    mockBuildMetricsRecord.mockImplementation((parts, inventory) => ({
+    mockBuildMetricsRecord.mockImplementation((parts, inventory, corpusScope) => ({
       engineVersion: "1.0.0",
       schemaVersion: "1.0.0",
       generatedAt: "2026-03-10T00:00:00.000Z",
       sessionCount: parts.sessionMetrics.length,
+      corpusScope:
+        corpusScope ?? {
+          selection: "all_discovered",
+          discoveredSessionCount: parts.sessionMetrics.length,
+          appliedSessionLimit: null,
+        },
       turnCount: parts.turnCount,
       incidentCount: parts.incidentCount,
       parseWarningCount: parts.parseWarningCount,
@@ -264,6 +275,7 @@ describe("evaluator", () => {
     mockDiscoverArtifacts.mockResolvedValue({
       provider: "codex",
       homePath: "/home/user/.codex",
+      sessionDirectoryExists: true,
       sessionFiles,
       inventory: createInventory(),
     });
@@ -299,6 +311,7 @@ describe("evaluator", () => {
     mockDiscoverArtifacts.mockResolvedValue({
       provider: "codex",
       homePath: "/home/user/.codex",
+      sessionDirectoryExists: true,
       sessionFiles,
       inventory: createInventory(),
     });
@@ -331,12 +344,22 @@ describe("evaluator", () => {
       ["/path/3.jsonl", expect.objectContaining({ sourceProvider: "codex" })],
       ["/path/4.jsonl", expect.objectContaining({ sourceProvider: "codex" })],
     ]);
+    expect(mockAggregateMetrics).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Array),
+      {
+        selection: "most_recent_window",
+        discoveredSessionCount: 4,
+        appliedSessionLimit: 2,
+      },
+    );
   });
 
   it("uses per-session incidents without reclustering the flattened corpus", async () => {
     mockDiscoverArtifacts.mockResolvedValue({
       provider: "codex",
       homePath: "/home/user/.codex",
+      sessionDirectoryExists: true,
       sessionFiles: ["/path/1.jsonl"],
       inventory: createInventory(),
     });
@@ -366,6 +389,7 @@ describe("evaluator", () => {
     mockDiscoverArtifacts.mockResolvedValue({
       provider: "codex",
       homePath: "/home/user/.codex",
+      sessionDirectoryExists: true,
       sessionFiles: ["/path/1.jsonl"],
       inventory: createInventory(),
     });
@@ -394,6 +418,7 @@ describe("evaluator", () => {
     mockDiscoverArtifacts.mockResolvedValue({
       provider: "codex",
       homePath: "/home/user/.codex",
+      sessionDirectoryExists: true,
       sessionFiles: ["/path/1.jsonl", "/path/2.jsonl", "/path/3.jsonl"],
       inventory: createInventory(),
     });
@@ -431,6 +456,7 @@ describe("evaluator", () => {
     mockDiscoverArtifacts.mockResolvedValue({
       provider: "codex",
       homePath: "/home/user/.codex",
+      sessionDirectoryExists: true,
       sessionFiles: ["/path/1.jsonl"],
       inventory: createInventory(),
     });
@@ -454,6 +480,15 @@ describe("evaluator", () => {
     expect(result.report).toBe("# Report");
     expect(mockAggregateMetrics).not.toHaveBeenCalled();
     expect(mockBuildMetricsRecord).toHaveBeenCalled();
+    expect(mockBuildMetricsRecord).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.any(Array),
+      {
+        selection: "all_discovered",
+        discoveredSessionCount: 1,
+        appliedSessionLimit: null,
+      },
+    );
     expect(mockBuildPresentationArtifacts).toHaveBeenCalledWith(
       result.metrics,
       result.summary,

@@ -180,6 +180,11 @@ export const metricsSchema = z.object({
   schemaVersion: z.string().min(1),
   generatedAt: z.string().min(1),
   sessionCount: z.int().nonnegative(),
+  corpusScope: z.object({
+    selection: z.enum(["all_discovered", "most_recent_window"]),
+    discoveredSessionCount: z.int().nonnegative(),
+    appliedSessionLimit: z.int().positive().nullable(),
+  }),
   turnCount: z.int().nonnegative(),
   incidentCount: z.int().nonnegative(),
   parseWarningCount: z.int().nonnegative(),

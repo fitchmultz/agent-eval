@@ -24,6 +24,11 @@ const metrics: MetricsRecord = {
   schemaVersion: "1",
   generatedAt: "2026-03-06T19:00:00.000Z",
   sessionCount: 2,
+  corpusScope: {
+    selection: "all_discovered",
+    discoveredSessionCount: 2,
+    appliedSessionLimit: null,
+  },
   turnCount: 8,
   incidentCount: 2,
   parseWarningCount: 0,

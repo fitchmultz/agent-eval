@@ -19,6 +19,11 @@ const baseMetrics: MetricsRecord = {
   schemaVersion: "1",
   generatedAt: "2026-03-06T19:00:00.000Z",
   sessionCount: 2,
+  corpusScope: {
+    selection: "all_discovered",
+    discoveredSessionCount: 2,
+    appliedSessionLimit: null,
+  },
   turnCount: 8,
   incidentCount: 2,
   parseWarningCount: 0,
@@ -160,6 +165,45 @@ describe("renderHtmlReport", () => {
     expect(html).toContain("Interruptions / 100 turns");
     expect(html).toContain("Reinjections / 100 turns");
     expect(html).toContain("Praise / 100 turns");
+  });
+
+  it("discloses corpus scope and comparability in the header", () => {
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
+
+    expect(html).toContain("scope all 2 sessions");
+    expect(html).toContain("Corpus scope: all 2 sessions");
+    expect(html).toContain(
+      "This report includes every discovered session in the selected source home for this run.",
+    );
+    expect(html).toContain(
+      "Metrics are directly comparable only to reports built from the same source home and discovery moment.",
+    );
+  });
+
+  it("warns when the report is built from a capped recent-session window", () => {
+    const html = renderHtmlReport(
+      baseSummary,
+      {
+        ...baseMetrics,
+        sessionCount: 50,
+        corpusScope: {
+          selection: "most_recent_window",
+          discoveredSessionCount: 200,
+          appliedSessionLimit: 50,
+        },
+      },
+      baseCharts,
+    );
+
+    expect(html).toContain("scope recent 50/200");
+    expect(html).toContain(
+      "Corpus scope: most recent 50 sessions of 200 sessions",
+    );
+    expect(html).toContain("session limit 50");
+    expect(html).toContain(
+      "Metrics are not directly comparable to reports built with a different session limit or corpus window.",
+    );
+    expect(html).toContain("scope-banner-windowed");
   });
 
   it("inlines chart SVG markup", () => {

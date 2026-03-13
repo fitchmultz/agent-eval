@@ -11,6 +11,7 @@ import {
   buildSummaryArtifact,
   buildSummaryInputsFromArtifacts,
 } from "./insights.js";
+import { describeCorpusScope } from "./report-scope.js";
 import type {
   IncidentRecord,
   MetricsRecord,
@@ -190,6 +191,7 @@ export function renderSummaryReport(
   summary: SummaryArtifact,
 ): string {
   const sections = buildSummarySections(summary);
+  const scope = describeCorpusScope(metrics);
   const providers = [
     ...new Set(metrics.inventory.map((record) => record.provider)),
   ];
@@ -207,6 +209,9 @@ export function renderSummaryReport(
     `- Generated at: \`${metrics.generatedAt}\``,
     `- Sources: \`${providers.join(", ")}\``,
     `- Sessions: \`${metrics.sessionCount}\``,
+    `- ${scope.headline}`,
+    `- ${scope.detail}`,
+    `- ${scope.comparability}`,
     `- Turns: \`${metrics.turnCount}\``,
     `- Incidents: \`${metrics.incidentCount}\``,
     `- Parse warnings: \`${metrics.parseWarningCount}\``,

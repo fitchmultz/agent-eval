@@ -85,6 +85,11 @@ function createMetrics(): MetricsRecord {
     schemaVersion: "1.0.0",
     generatedAt: "2026-03-10T00:00:00.000Z",
     sessionCount: 1,
+    corpusScope: {
+      selection: "all_discovered",
+      discoveredSessionCount: 1,
+      appliedSessionLimit: null,
+    },
     turnCount: 1,
     incidentCount: 1,
     parseWarningCount: 0,

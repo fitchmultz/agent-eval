@@ -39,6 +39,11 @@ function createMockMetricsRecord(
     schemaVersion: "1",
     generatedAt: new Date().toISOString(),
     sessionCount: 1,
+    corpusScope: {
+      selection: "all_discovered",
+      discoveredSessionCount: 1,
+      appliedSessionLimit: null,
+    },
     turnCount: 10,
     incidentCount: 0,
     parseWarningCount: 0,

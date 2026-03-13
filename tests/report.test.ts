@@ -21,6 +21,11 @@ function createTestMetrics(overrides?: Partial<MetricsRecord>): MetricsRecord {
     schemaVersion: "1",
     generatedAt: "2026-03-06T19:00:00.000Z",
     sessionCount: 2,
+    corpusScope: {
+      selection: "all_discovered",
+      discoveredSessionCount: 2,
+      appliedSessionLimit: null,
+    },
     turnCount: 10,
     incidentCount: 1,
     parseWarningCount: 0,
@@ -252,6 +257,11 @@ function createEmptyMetrics(): MetricsRecord {
     schemaVersion: "1",
     generatedAt: "2026-03-06T19:00:00.000Z",
     sessionCount: 0,
+    corpusScope: {
+      selection: "all_discovered",
+      discoveredSessionCount: 0,
+      appliedSessionLimit: null,
+    },
     turnCount: 0,
     incidentCount: 0,
     parseWarningCount: 0,
@@ -331,8 +341,32 @@ describe("renderReport", () => {
     expect(report).toContain("Analytics engine version: `0.1.0`");
     expect(report).toContain("Schema version: `1`");
     expect(report).toContain("Sessions: `2`");
+    expect(report).toContain("Corpus scope: all 2 sessions");
     expect(report).toContain("Turns: `10`");
     expect(report).toContain("Incidents: `1`");
+  });
+
+  it("explains when a report uses a capped recent-session window", () => {
+    const metrics = createTestMetrics({
+      sessionCount: 50,
+      corpusScope: {
+        selection: "most_recent_window",
+        discoveredSessionCount: 200,
+        appliedSessionLimit: 50,
+      },
+    });
+    const incidents = createTestIncidents();
+    const rawTurns = createTestRawTurns();
+
+    const report = renderReport(metrics, incidents, rawTurns);
+
+    expect(report).toContain(
+      "Corpus scope: most recent 50 sessions of 200 sessions",
+    );
+    expect(report).toContain("session limit 50");
+    expect(report).toContain(
+      "Metrics are not directly comparable to reports built with a different session limit or corpus window.",
+    );
   });
 
   it("handles empty data gracefully", () => {

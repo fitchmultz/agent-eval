@@ -130,6 +130,11 @@ function createSubsetMetrics(
     schemaVersion: metrics.schemaVersion,
     generatedAt: metrics.generatedAt,
     sessionCount: sessions.length,
+    corpusScope: {
+      selection: "all_discovered",
+      discoveredSessionCount: sessions.length,
+      appliedSessionLimit: null,
+    },
     turnCount,
     incidentCount,
     parseWarningCount: sessions.reduce(
