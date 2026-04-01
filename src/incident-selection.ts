@@ -1,7 +1,7 @@
 /**
- * Purpose: Selects and ranks top incidents for summary display.
- * Entrypoint: `insertTopIncident()` for maintaining bounded incident list.
- * Notes: Deduplicates incidents and prioritizes by severity and signal quality.
+ * Purpose: Selects, humanizes, and ranks top incidents for operator-facing summary display.
+ * Entrypoint: `insertTopIncident()` and `buildTopIncidentSummary()` for maintaining bounded incident lists.
+ * Notes: Deduplicates incidents and prioritizes severity, signal quality, and breadth while keeping titles consequence-oriented.
  */
 
 import { severityRank } from "./ranking.js";
@@ -15,14 +15,24 @@ import type {
   RawTurnRecord,
   SummaryArtifact,
 } from "./schema.js";
+import {
+  deriveSessionDisplayLabel,
+  deriveSessionShortId,
+} from "./summary/session-display.js";
+import type { SessionContext } from "./summary/types.js";
 
-/**
- * Compares two top incidents for ranking purposes.
- * Higher severity, non-low-signal, and wider turn span are preferred.
- * @param left - First incident to compare
- * @param right - Second incident to compare
- * @returns Negative if left should rank higher, positive if right should rank higher
- */
+const LABEL_SUMMARIES: Record<string, string> = {
+  context_drift: "Scope or context drift was reported",
+  test_build_lint_failure_complaint:
+    "Build, test, or lint failure pressure surfaced",
+  interrupt: "The session showed interruption or churn pressure",
+  regression_report: "A possible regression was reported",
+  praise: "Positive user feedback appeared alongside the session",
+  context_reinjection: "The user had to restate context or goals",
+  verification_request: "The user had to ask for verification explicitly",
+  stalled_or_guessing: "The session appeared stalled or speculative",
+};
+
 function compareTopIncidents(
   left: SummaryArtifact["topIncidents"][number],
   right: SummaryArtifact["topIncidents"][number],
@@ -46,15 +56,12 @@ function compareTopIncidents(
     Number(leftUnsafe) - Number(rightUnsafe) ||
     Number(leftLowSignal) - Number(rightLowSignal) ||
     right.turnSpan - left.turnSpan ||
-    left.summary.localeCompare(right.summary)
+    (left.humanSummary ?? left.summary).localeCompare(
+      right.humanSummary ?? right.summary,
+    )
   );
 }
 
-/**
- * Creates a deduplication key for an incident based on session and normalized summary.
- * @param incident - The incident to create a key for
- * @returns String key for deduplication
- */
 function topIncidentDedupKey(
   incident: SummaryArtifact["topIncidents"][number],
 ): string {
@@ -95,6 +102,62 @@ function orderTurnsByIncidentRelevance(
 
 function pickBestPreview(previews: readonly string[]): string | undefined {
   return selectBestPreviews(previews, 1)[0];
+}
+
+function humanizeIncidentSummary(incident: IncidentRecord): string {
+  const leadLabel = incident.labels[0]?.label;
+  const leadSummary = leadLabel ? LABEL_SUMMARIES[leadLabel] : undefined;
+  const turnSpan = incident.turnIndices.length;
+  return leadSummary
+    ? `${leadSummary} across ${turnSpan} turn${turnSpan === 1 ? "" : "s"}.`
+    : incident.summary;
+}
+
+function buildIncidentWhySelected(
+  incident: IncidentRecord,
+  evidencePreview?: string,
+): string[] {
+  const reasons: string[] = [];
+
+  if (incident.severity === "high") {
+    reasons.push("High-severity incident signal.");
+  } else if (incident.severity === "medium") {
+    reasons.push("Medium-severity incident signal worth review.");
+  }
+
+  if (incident.turnIndices.length >= 3) {
+    reasons.push(
+      `Persisted across ${incident.turnIndices.length} turns instead of a one-off spike.`,
+    );
+  }
+
+  if (incident.confidence === "high") {
+    reasons.push("Classifier confidence is high.");
+  }
+
+  if (evidencePreview) {
+    reasons.push(
+      "A usable evidence preview is available in the summary report.",
+    );
+  }
+
+  return reasons.slice(0, 3);
+}
+
+function buildIncidentTrustFlags(
+  incident: IncidentRecord,
+  evidencePreview?: string,
+): string[] {
+  const flags: string[] = [];
+
+  if (!evidencePreview) {
+    flags.push("No safe evidence preview was available.");
+  }
+  if (incident.sourceRefs.length === 0) {
+    flags.push("No source references were captured for this incident.");
+  }
+
+  return flags;
 }
 
 export function chooseIncidentEvidencePreview(
@@ -142,13 +205,34 @@ export function chooseIncidentEvidencePreview(
   );
 }
 
-/**
- * Inserts an incident into the top incidents list, maintaining size limit and deduplication.
- * @param topIncidents - Current list of top incidents
- * @param incident - New incident to insert
- * @param limit - Maximum number of incidents to keep
- * @returns Updated and sorted list of top incidents
- */
+export function buildTopIncidentSummary(
+  incident: IncidentRecord,
+  sessionTurns: readonly RawTurnRecord[],
+  sessionContext?: SessionContext,
+): SummaryArtifact["topIncidents"][number] {
+  const evidencePreview = chooseIncidentEvidencePreview(incident, sessionTurns);
+  const sessionDisplayLabel = deriveSessionDisplayLabel(
+    incident.sessionId,
+    sessionContext,
+  );
+
+  return {
+    incidentId: incident.incidentId,
+    sessionId: incident.sessionId,
+    sessionDisplayLabel,
+    sessionShortId: deriveSessionShortId(incident.sessionId),
+    summary: incident.summary,
+    humanSummary: humanizeIncidentSummary(incident),
+    severity: incident.severity,
+    confidence: incident.confidence,
+    turnSpan: incident.turnIndices.length,
+    ...(evidencePreview ? { evidencePreview } : {}),
+    whySelected: buildIncidentWhySelected(incident, evidencePreview),
+    sourceRefs: incident.sourceRefs,
+    trustFlags: buildIncidentTrustFlags(incident, evidencePreview),
+  };
+}
+
 export function insertTopIncident(
   topIncidents: SummaryArtifact["topIncidents"],
   incident: SummaryArtifact["topIncidents"][number],

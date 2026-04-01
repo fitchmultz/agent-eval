@@ -22,6 +22,7 @@ export {
   parseEventLine,
   parseTranscriptFile,
 } from "./parser.js";
+export { parsePiTranscriptFile } from "./pi-parser.js";
 // Schema validation
 export {
   jsonlEventRecordSchema,

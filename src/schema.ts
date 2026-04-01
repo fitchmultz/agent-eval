@@ -164,6 +164,12 @@ export const complianceAggregateSchema = z.object({
   unknownCount: z.int().nonnegative(),
 });
 
+export const summaryComplianceAggregateSchema =
+  complianceAggregateSchema.extend({
+    passRate: z.number().nonnegative(),
+    affectedSessionCount: z.int().nonnegative(),
+  });
+
 export const labelCountSchema = z.object({
   context_drift: z.int().nonnegative().optional(),
   test_build_lint_failure_complaint: z.int().nonnegative().optional(),
@@ -205,6 +211,10 @@ const valueCardSchema = z.object({
 
 const sessionHighlightSchema = z.object({
   sessionId: z.string().min(1),
+  sessionShortId: z.string().min(1),
+  sessionDisplayLabel: z.string().min(1),
+  sessionTimestampLabel: z.string().min(1),
+  sessionProjectLabel: z.string().min(1),
   archetype: z.enum(sessionArchetypeValues),
   archetypeLabel: z.string().min(1),
   frictionScore: z.number().nonnegative(),
@@ -215,6 +225,11 @@ const sessionHighlightSchema = z.object({
   endedVerified: z.boolean(),
   verificationPassedCount: z.int().nonnegative(),
   dominantLabels: z.array(z.enum(labelTaxonomy)),
+  whySelected: z.array(z.string().min(1)),
+  failedRules: z.array(z.string().min(1)),
+  evidencePreviews: z.array(z.string().min(1)),
+  sourceRefs: z.array(sourceRefSchema),
+  trustFlags: z.array(z.string().min(1)),
   note: z.string().min(1),
 });
 
@@ -238,7 +253,7 @@ const summaryCoreSchema = z.object({
       count: z.int().nonnegative(),
     }),
   ),
-  compliance: z.array(complianceAggregateSchema),
+  compliance: z.array(summaryComplianceAggregateSchema),
   rates: z.object({
     incidentsPer100Turns: z.number().nonnegative(),
     writesPer100Turns: z.number().nonnegative(),
@@ -271,11 +286,38 @@ const summaryCoreSchema = z.object({
     z.object({
       incidentId: z.string().min(1),
       sessionId: z.string().min(1),
+      sessionDisplayLabel: z.string().min(1),
+      sessionShortId: z.string().min(1),
       summary: z.string().min(1),
+      humanSummary: z.string().min(1),
       severity: z.enum(severityValues),
       confidence: z.enum(confidenceValues),
       turnSpan: z.int().positive(),
       evidencePreview: z.string().min(1).optional(),
+      whySelected: z.array(z.string().min(1)),
+      sourceRefs: z.array(sourceRefSchema),
+      trustFlags: z.array(z.string().min(1)),
+    }),
+  ),
+  executiveSummary: z.object({
+    problem: z.string().min(1),
+    change: z.string().min(1),
+    action: z.string().min(1),
+  }),
+  operatorMetrics: z.array(
+    z.object({
+      label: z.string().min(1),
+      value: z.string().min(1),
+      detail: z.string().min(1),
+      tone: summaryCardToneSchema,
+    }),
+  ),
+  metricGlossary: z.array(
+    z.object({
+      key: z.string().min(1),
+      label: z.string().min(1),
+      plainLanguage: z.string().min(1),
+      caveat: z.string().min(1),
     }),
   ),
 });

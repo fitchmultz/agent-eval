@@ -18,6 +18,8 @@ export const WRITE_TOOL_NAMES = [
   "Edit",
   "MultiEdit",
   "Write",
+  "edit",
+  "write",
 ] as const;
 
 /**

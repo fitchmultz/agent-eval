@@ -83,6 +83,55 @@ describe("buildTopSessions", () => {
     expect(result).toEqual([]);
   });
 
+  it("filters out sessions with no meaningful review signal", () => {
+    const sessions = [
+      createSession("quiet-analysis", {
+        incidentCount: 0,
+        labeledTurnCount: 0,
+        writeCount: 0,
+        verificationCount: 0,
+        verificationPassedCount: 0,
+        verificationFailedCount: 0,
+        postWriteVerificationAttempted: false,
+        postWriteVerificationPassed: false,
+        complianceScore: 100,
+        complianceRules: createPassingRules(),
+      }),
+      createSession("needs-review", {
+        incidentCount: 1,
+        writeCount: 0,
+        complianceScore: 80,
+      }),
+    ];
+    const metrics: MetricsRecord = {
+      engineVersion: "0.1.0",
+      schemaVersion: "1",
+      generatedAt: "2026-03-06T00:00:00.000Z",
+      sessionCount: sessions.length,
+      corpusScope: {
+        selection: "all_discovered",
+        discoveredSessionCount: sessions.length,
+        appliedSessionLimit: null,
+      },
+      turnCount: 20,
+      incidentCount: 1,
+      parseWarningCount: 0,
+      labelCounts: {},
+      complianceSummary: [],
+      sessions,
+      inventory: [],
+    };
+    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
+    for (const session of sessions) {
+      sessionLabelCounts.set(session.sessionId, createEmptySessionLabelMap());
+    }
+
+    const result = buildTopSessions(metrics, sessionLabelCounts);
+    expect(result.map((session) => session.sessionId)).toEqual([
+      "needs-review",
+    ]);
+  });
+
   it("ranks sessions by friction score descending", () => {
     const sessions = [
       createSession("low-friction", { complianceScore: 100, incidentCount: 0 }),
@@ -308,23 +357,49 @@ describe("buildTopSessions", () => {
   });
 });
 
+function createSpotlightSession(
+  sessionId: string,
+  overrides: Partial<ReturnType<typeof buildTopSessions>[number]> = {},
+) {
+  return {
+    sessionId,
+    sessionShortId: sessionId,
+    sessionDisplayLabel: sessionId,
+    sessionTimestampLabel: "2026-03-06 00:00Z",
+    sessionProjectLabel: "agent-eval",
+    archetype: "verified_delivery" as const,
+    archetypeLabel: "Ended-Verified Delivery",
+    frictionScore: 1,
+    complianceScore: 100,
+    incidentCount: 0,
+    labeledTurnCount: 2,
+    writeCount: 5,
+    verificationPassedCount: 3,
+    endedVerified: true,
+    dominantLabels: [],
+    whySelected: ["Test reason."],
+    failedRules: [],
+    evidencePreviews: [],
+    sourceRefs: [],
+    trustFlags: [],
+    note: "test",
+    ...overrides,
+  };
+}
+
 describe("buildEndedVerifiedDeliverySpotlights", () => {
   it("returns empty array when no verified delivery sessions", () => {
     const topSessions = [
-      {
-        sessionId: "unverified",
-        archetype: "unverified_delivery" as const,
+      createSpotlightSession("unverified", {
+        archetype: "unverified_delivery",
         archetypeLabel: "Unverified Delivery",
         frictionScore: 5,
         complianceScore: 60,
         incidentCount: 2,
         labeledTurnCount: 3,
-        writeCount: 5,
         verificationPassedCount: 0,
         endedVerified: false,
-        dominantLabels: [],
-        note: "test",
-      },
+      }),
     ];
 
     const result = buildEndedVerifiedDeliverySpotlights(topSessions);
@@ -333,48 +408,29 @@ describe("buildEndedVerifiedDeliverySpotlights", () => {
 
   it("filters to only verified_delivery archetype", () => {
     const topSessions = [
-      {
-        sessionId: "verified-1",
-        archetype: "verified_delivery" as const,
-        archetypeLabel: "Ended-Verified Delivery",
+      createSpotlightSession("verified-1", {
         frictionScore: 2,
         complianceScore: 100,
         incidentCount: 0,
-        labeledTurnCount: 2,
-        writeCount: 5,
         verificationPassedCount: 3,
-        endedVerified: true,
-        dominantLabels: [],
-        note: "test",
-      },
-      {
-        sessionId: "unverified",
-        archetype: "unverified_delivery" as const,
+      }),
+      createSpotlightSession("unverified", {
+        archetype: "unverified_delivery",
         archetypeLabel: "Unverified Delivery",
         frictionScore: 5,
         complianceScore: 60,
         incidentCount: 2,
         labeledTurnCount: 3,
-        writeCount: 5,
         verificationPassedCount: 0,
         endedVerified: false,
-        dominantLabels: [],
-        note: "test",
-      },
-      {
-        sessionId: "verified-2",
-        archetype: "verified_delivery" as const,
-        archetypeLabel: "Ended-Verified Delivery",
+      }),
+      createSpotlightSession("verified-2", {
         frictionScore: 1,
         complianceScore: 95,
         incidentCount: 1,
-        labeledTurnCount: 2,
         writeCount: 3,
         verificationPassedCount: 2,
-        endedVerified: true,
-        dominantLabels: [],
-        note: "test",
-      },
+      }),
     ];
 
     const result = buildEndedVerifiedDeliverySpotlights(topSessions);
@@ -384,34 +440,8 @@ describe("buildEndedVerifiedDeliverySpotlights", () => {
 
   it("sorts by compliance score descending", () => {
     const topSessions = [
-      {
-        sessionId: "lower-compliance",
-        archetype: "verified_delivery" as const,
-        archetypeLabel: "Ended-Verified Delivery",
-        frictionScore: 1,
-        complianceScore: 90,
-        incidentCount: 0,
-        labeledTurnCount: 2,
-        writeCount: 5,
-        verificationPassedCount: 3,
-        endedVerified: true,
-        dominantLabels: [],
-        note: "test",
-      },
-      {
-        sessionId: "higher-compliance",
-        archetype: "verified_delivery" as const,
-        archetypeLabel: "Ended-Verified Delivery",
-        frictionScore: 1,
-        complianceScore: 100,
-        incidentCount: 0,
-        labeledTurnCount: 2,
-        writeCount: 5,
-        verificationPassedCount: 3,
-        endedVerified: true,
-        dominantLabels: [],
-        note: "test",
-      },
+      createSpotlightSession("lower-compliance", { complianceScore: 90 }),
+      createSpotlightSession("higher-compliance", { complianceScore: 100 }),
     ];
 
     const result = buildEndedVerifiedDeliverySpotlights(topSessions);
@@ -420,20 +450,11 @@ describe("buildEndedVerifiedDeliverySpotlights", () => {
   });
 
   it("limits to maximum 6 sessions", () => {
-    const topSessions = Array.from({ length: 10 }, (_, i) => ({
-      sessionId: `verified-${i}`,
-      archetype: "verified_delivery" as const,
-      archetypeLabel: "Ended-Verified Delivery",
-      frictionScore: 1,
-      complianceScore: 100 - i,
-      incidentCount: 0,
-      labeledTurnCount: 2,
-      writeCount: 5,
-      verificationPassedCount: 3,
-      endedVerified: true,
-      dominantLabels: [],
-      note: "test",
-    }));
+    const topSessions = Array.from({ length: 10 }, (_, i) =>
+      createSpotlightSession(`verified-${i}`, {
+        complianceScore: 100 - i,
+      }),
+    );
 
     const result = buildEndedVerifiedDeliverySpotlights(topSessions);
     expect(result).toHaveLength(6);
@@ -441,48 +462,24 @@ describe("buildEndedVerifiedDeliverySpotlights", () => {
 
   it("deduplicates repeated verified delivery session IDs", () => {
     const topSessions = [
-      {
-        sessionId: "repeat-session",
-        archetype: "verified_delivery" as const,
-        archetypeLabel: "Ended-Verified Delivery",
+      createSpotlightSession("repeat-session", {
         frictionScore: 2,
         complianceScore: 100,
-        incidentCount: 0,
-        labeledTurnCount: 2,
-        writeCount: 5,
-        verificationPassedCount: 3,
-        endedVerified: true,
-        dominantLabels: [],
         note: "better entry",
-      },
-      {
-        sessionId: "repeat-session",
-        archetype: "verified_delivery" as const,
-        archetypeLabel: "Ended-Verified Delivery",
+      }),
+      createSpotlightSession("repeat-session", {
         frictionScore: 4,
         complianceScore: 95,
         incidentCount: 1,
-        labeledTurnCount: 2,
-        writeCount: 5,
         verificationPassedCount: 2,
-        endedVerified: true,
-        dominantLabels: [],
         note: "duplicate entry",
-      },
-      {
-        sessionId: "unique-session",
-        archetype: "verified_delivery" as const,
-        archetypeLabel: "Ended-Verified Delivery",
+      }),
+      createSpotlightSession("unique-session", {
         frictionScore: 3,
         complianceScore: 90,
-        incidentCount: 0,
-        labeledTurnCount: 2,
-        writeCount: 5,
         verificationPassedCount: 2,
-        endedVerified: true,
-        dominantLabels: [],
         note: "unique entry",
-      },
+      }),
     ];
 
     const result = buildEndedVerifiedDeliverySpotlights(topSessions);

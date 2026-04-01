@@ -18,13 +18,20 @@ import type {
 type TopIncident = SummaryArtifact["topIncidents"][number];
 
 function createIncident(overrides: Partial<TopIncident> = {}): TopIncident {
+  const summary = overrides.summary ?? "Test incident summary";
   return {
     incidentId: `incident-${Math.random().toString(36).slice(2)}`,
     sessionId: "session-1",
-    summary: "Test incident summary",
+    sessionDisplayLabel: "Test session",
+    sessionShortId: "session-1",
+    summary,
+    humanSummary: overrides.humanSummary ?? summary,
     severity: "medium",
     confidence: "high",
     turnSpan: 3,
+    whySelected: ["Test ranking reason."],
+    sourceRefs: [],
+    trustFlags: [],
     ...overrides,
   };
 }
@@ -400,9 +407,7 @@ describe("chooseIncidentEvidencePreview", () => {
       createRawTurn({
         turnId: "turn-13",
         turnIndex: 13,
-        userMessagePreviews: [
-          "This is catastrophic level of nonsense.",
-        ],
+        userMessagePreviews: ["This is catastrophic level of nonsense."],
       }),
     ];
 

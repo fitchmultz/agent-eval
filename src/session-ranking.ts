@@ -1,10 +1,11 @@
 /**
- * Purpose: Ranks sessions by friction and selects ended-verified delivery spotlights for review.
+ * Purpose: Ranks sessions into an operator-facing triage queue and selects ended-verified delivery spotlights.
  * Entrypoint: `buildTopSessions()` and `buildEndedVerifiedDeliverySpotlights()` for session prioritization.
- * Notes: Ended-verified delivery spotlights highlight the best terminally verified write sessions.
+ * Notes: Queue rows are deterministic, evidence-linked, and use humane identity instead of raw session ids.
  */
 
 import { getConfig } from "./config/index.js";
+import { SCORING } from "./constants/index.js";
 import {
   calculateFrictionScore,
   dominantLabelsForSession,
@@ -16,7 +17,25 @@ import {
   determineArchetype,
 } from "./session-archetype.js";
 import { createEmptySessionLabelMap } from "./summary/index.js";
-import type { SessionInsightRow } from "./summary/types.js";
+import {
+  deriveSessionDisplayLabel,
+  deriveSessionProjectLabel,
+  deriveSessionShortId,
+  deriveSessionTimestampLabel,
+} from "./summary/session-display.js";
+import type {
+  SessionContext,
+  SessionInsightRow,
+  SessionMetricRecord,
+} from "./summary/types.js";
+
+const RULE_LABELS: Record<string, string> = {
+  scope_confirmed_before_major_write: "Scope confirmed before major write",
+  cwd_or_repo_echoed_before_write: "Repo or cwd confirmed before write",
+  short_plan_before_large_change: "Short plan before large change",
+  verification_after_code_changes: "Verification after code changes",
+  no_unverified_ending: "No unverified ending",
+};
 
 function dedupeSessionInsights(
   sessions: readonly SessionInsightRow[],
@@ -36,51 +55,173 @@ function dedupeSessionInsights(
   return uniqueSessions;
 }
 
+function pluralize(count: number, singular: string, plural?: string): string {
+  return `${count} ${count === 1 ? singular : (plural ?? `${singular}s`)}`;
+}
+
+function buildFailedRules(session: SessionMetricRecord): string[] {
+  return session.complianceRules
+    .filter((rule) => rule.status === "fail")
+    .map((rule) => RULE_LABELS[rule.rule] ?? rule.rule);
+}
+
+function buildWhySelected(
+  session: SessionMetricRecord,
+  frictionScore: number,
+  dominantLabels: readonly LabelName[],
+  failedRules: readonly string[],
+): string[] {
+  const reasons: string[] = [];
+
+  if (session.writeCount > 0 && !session.endedVerified) {
+    reasons.push(
+      "Ended without a passing post-write verification after code changes.",
+    );
+  }
+
+  if (failedRules.includes("Verification after code changes")) {
+    reasons.push("Failed the verification-after-code-changes rule.");
+  }
+
+  if (failedRules.includes("No unverified ending")) {
+    reasons.push("Failed the no-unverified-ending rule.");
+  }
+
+  if (frictionScore >= SCORING.FRICTION_THRESHOLD) {
+    reasons.push(
+      `${frictionScore} friction points from incident pressure and compliance penalties.`,
+    );
+  }
+
+  if (session.incidentCount > 0) {
+    reasons.push(
+      `${pluralize(session.incidentCount, "labeled incident")} in this session.`,
+    );
+  }
+
+  if (dominantLabels.length > 0) {
+    reasons.push(`Dominant signals: ${dominantLabels.join(", ")}.`);
+  }
+
+  if (reasons.length === 0) {
+    reasons.push(
+      "Ranked for operator review based on overall session friction and delivery profile.",
+    );
+  }
+
+  return reasons.slice(0, 4);
+}
+
+function buildTrustFlags(
+  session: SessionMetricRecord,
+  context?: SessionContext,
+): string[] {
+  const flags: string[] = [];
+
+  if (session.parseWarningCount > 0) {
+    flags.push("Parse warnings were present, so this session may be partial.");
+  }
+
+  if (!context || context.evidencePreviews.length === 0) {
+    flags.push(
+      "No strong evidence preview was available in summary-only output.",
+    );
+  }
+
+  if (!context || context.sourceRefs.length === 0) {
+    flags.push("No source references were captured for this session.");
+  }
+
+  return flags;
+}
+
+function buildSessionInsight(
+  session: SessionMetricRecord,
+  sessionLabelCounts: Map<string, Record<LabelName, number>>,
+  sessionContexts?: Map<string, SessionContext>,
+): SessionInsightRow {
+  const labelCounts =
+    sessionLabelCounts.get(session.sessionId) ?? createEmptySessionLabelMap();
+  const context = sessionContexts?.get(session.sessionId);
+  const dominantLabels = dominantLabelsForSession(labelCounts);
+  const frictionScore = calculateFrictionScore(
+    labelCounts,
+    session.complianceScore,
+  );
+  const archetype = determineArchetype(
+    session.writeCount,
+    session.endedVerified,
+    frictionScore,
+  );
+  const failedRules = buildFailedRules(session);
+
+  return {
+    sessionId: session.sessionId,
+    sessionShortId: deriveSessionShortId(session.sessionId),
+    sessionDisplayLabel: deriveSessionDisplayLabel(session.sessionId, context),
+    sessionTimestampLabel: deriveSessionTimestampLabel(context?.startedAt),
+    sessionProjectLabel: deriveSessionProjectLabel(
+      context?.cwd,
+      context?.sourceRefs,
+    ),
+    archetype,
+    archetypeLabel: archetypeLabel(archetype),
+    frictionScore,
+    complianceScore: session.complianceScore,
+    incidentCount: session.incidentCount,
+    labeledTurnCount: session.labeledTurnCount,
+    writeCount: session.writeCount,
+    verificationPassedCount: session.verificationPassedCount,
+    endedVerified: session.endedVerified,
+    dominantLabels,
+    whySelected: buildWhySelected(
+      session,
+      frictionScore,
+      dominantLabels,
+      failedRules,
+    ),
+    failedRules,
+    evidencePreviews: context?.evidencePreviews ?? [],
+    sourceRefs: context?.sourceRefs ?? [],
+    trustFlags: buildTrustFlags(session, context),
+    note: createArchetypeNote(archetype, dominantLabels, session),
+  };
+}
+
+function hasMeaningfulReviewSignal(session: SessionInsightRow): boolean {
+  return (
+    session.writeCount > 0 ||
+    session.incidentCount > 0 ||
+    session.frictionScore > 0 ||
+    session.failedRules.length > 0 ||
+    session.dominantLabels.length > 0
+  );
+}
+
 /**
  * Builds a ranked list of session insights sorted by friction (highest first).
  * @param metrics - Metrics record containing session data
  * @param sessionLabelCounts - Map of session IDs to their label counts
+ * @param sessionContexts - Optional map of session IDs to display/evidence context
  * @returns Array of session insight rows sorted by friction score
  */
 export function buildTopSessions(
   metrics: MetricsRecord,
   sessionLabelCounts: Map<string, Record<LabelName, number>>,
+  sessionContexts?: Map<string, SessionContext>,
 ): SessionInsightRow[] {
   const rankedSessions = metrics.sessions
-    .map((session) => {
-      const labelCounts =
-        sessionLabelCounts.get(session.sessionId) ??
-        createEmptySessionLabelMap();
-      const dominantLabels = dominantLabelsForSession(labelCounts);
-      const frictionScore = calculateFrictionScore(
-        labelCounts,
-        session.complianceScore,
-      );
-      const archetype = determineArchetype(
-        session.writeCount,
-        session.endedVerified,
-        frictionScore,
-      );
-
-      return {
-        sessionId: session.sessionId,
-        archetype,
-        archetypeLabel: archetypeLabel(archetype),
-        frictionScore,
-        complianceScore: session.complianceScore,
-        incidentCount: session.incidentCount,
-        labeledTurnCount: session.labeledTurnCount,
-        writeCount: session.writeCount,
-        verificationPassedCount: session.verificationPassedCount,
-        endedVerified: session.endedVerified,
-        dominantLabels,
-        note: createArchetypeNote(archetype, dominantLabels, session),
-      };
-    })
+    .map((session) =>
+      buildSessionInsight(session, sessionLabelCounts, sessionContexts),
+    )
+    .filter(hasMeaningfulReviewSignal)
     .sort(
       (left, right) =>
         right.frictionScore - left.frictionScore ||
         right.incidentCount - left.incidentCount ||
+        (left.sessionDisplayLabel ?? left.sessionId).localeCompare(
+          right.sessionDisplayLabel ?? right.sessionId,
+        ) ||
         left.sessionId.localeCompare(right.sessionId),
     );
 
@@ -103,6 +244,9 @@ export function buildEndedVerifiedDeliverySpotlights(
         right.verificationPassedCount - left.verificationPassedCount ||
         left.incidentCount - right.incidentCount ||
         left.frictionScore - right.frictionScore ||
+        (left.sessionDisplayLabel ?? left.sessionId).localeCompare(
+          right.sessionDisplayLabel ?? right.sessionId,
+        ) ||
         left.sessionId.localeCompare(right.sessionId),
     );
 

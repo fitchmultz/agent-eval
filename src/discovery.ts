@@ -1,6 +1,6 @@
 /**
  * Purpose: Discovers canonical transcript files and optional local enrichment stores under a supported agent home directory.
- * Responsibilities: Source-aware inventory building for Codex and Claude Code transcript stores.
+ * Responsibilities: Source-aware inventory building for Codex, Claude Code, and pi transcript stores.
  * Scope: Called by CLI commands before parsing or evaluation begins.
  * Usage: `discoverArtifacts(homePath, { provider })` to inventory one source home.
  * Invariants/Assumptions: Transcript JSONL remains the only required canonical input for each provider.
@@ -54,6 +54,28 @@ function buildInventoryRecord(
  */
 const DEFAULT_DISCOVERY_TIMEOUT_MS = 60000;
 
+async function resolveSessionsPath(
+  homePath: string,
+  provider: SourceProvider,
+): Promise<string> {
+  if (provider === "claude") {
+    return join(homePath, "projects");
+  }
+
+  if (provider === "pi") {
+    const primaryPath = join(homePath, "agent", "sessions");
+    const fallbackPath = join(homePath, "sessions");
+    for (const candidate of [primaryPath, fallbackPath]) {
+      if (await pathExists(candidate)) {
+        return candidate;
+      }
+    }
+    return primaryPath;
+  }
+
+  return join(homePath, "sessions");
+}
+
 /**
  * Options for artifact discovery operations.
  */
@@ -76,7 +98,7 @@ export interface DiscoveryOptions extends ListOptions {
  *
  * Supports timeout and cancellation via AbortSignal.
  *
- * @param homePath - Path to the source home directory (typically ~/.codex or ~/.claude)
+ * @param homePath - Path to the source home directory (typically ~/.codex, ~/.claude, or ~/.pi)
  * @param options - Optional configuration for timeout and abort signal
  * @returns Promise resolving to discovered artifacts including session files and inventory
  * @throws {FileNotFoundError} If required paths cannot be accessed
@@ -86,7 +108,7 @@ export interface DiscoveryOptions extends ListOptions {
  *
  * @example
  * ```typescript
- * const discovered = await discoverArtifacts("~/.claude", { provider: "claude" });
+ * const discovered = await discoverArtifacts("~/.pi", { provider: "pi" });
  * console.log(`Found ${discovered.sessionFiles.length} sessions`);
  * for (const item of discovered.inventory) {
  *   console.log(`${item.kind}: ${item.discovered ? "present" : "missing"}`);
@@ -122,10 +144,7 @@ async function doDiscoverArtifacts(
       `Unable to determine transcript source for ${homePath}. Pass an explicit provider.`,
     );
   }
-  const sessionsPath =
-    provider === "claude"
-      ? join(homePath, "projects")
-      : join(homePath, "sessions");
+  const sessionsPath = await resolveSessionsPath(homePath, provider);
   const stateSqlitePath = join(homePath, "state_5.sqlite");
   const historyPath = join(homePath, "history.jsonl");
   const tuiLogPath = join(homePath, "log", "codex-tui.log");
@@ -175,24 +194,20 @@ async function doDiscoverArtifacts(
             await pathExists(stateSqlitePath),
             false,
           ),
-        ]
-      : []),
-    buildInventoryRecord(
-      provider,
-      "history_jsonl",
-      historyPath,
-      await pathExists(historyPath),
-      false,
-    ),
-    buildInventoryRecord(
-      provider,
-      "shell_snapshot",
-      shellSnapshotsPath,
-      await pathExists(shellSnapshotsPath),
-      false,
-    ),
-    ...(provider === "codex"
-      ? [
+          buildInventoryRecord(
+            provider,
+            "history_jsonl",
+            historyPath,
+            await pathExists(historyPath),
+            false,
+          ),
+          buildInventoryRecord(
+            provider,
+            "shell_snapshot",
+            shellSnapshotsPath,
+            await pathExists(shellSnapshotsPath),
+            false,
+          ),
           buildInventoryRecord(
             provider,
             "tui_log",
@@ -208,15 +223,31 @@ async function doDiscoverArtifacts(
             false,
           ),
         ]
-      : [
-          buildInventoryRecord(
-            provider,
-            "session_env",
-            sessionEnvPath,
-            await pathExists(sessionEnvPath),
-            false,
-          ),
-        ]),
+      : provider === "claude"
+        ? [
+            buildInventoryRecord(
+              provider,
+              "history_jsonl",
+              historyPath,
+              await pathExists(historyPath),
+              false,
+            ),
+            buildInventoryRecord(
+              provider,
+              "shell_snapshot",
+              shellSnapshotsPath,
+              await pathExists(shellSnapshotsPath),
+              false,
+            ),
+            buildInventoryRecord(
+              provider,
+              "session_env",
+              sessionEnvPath,
+              await pathExists(sessionEnvPath),
+              false,
+            ),
+          ]
+        : []),
   ];
 
   return {

@@ -1,8 +1,10 @@
 # agent-eval
 
-`agent-eval` is a transcript-first analytics engine for developer AI agents. It discovers local session artifacts, normalizes Codex and Claude Code transcripts into one shared model, applies deterministic labeling and compliance heuristics, and emits machine-readable artifacts plus shareable reports.
+`agent-eval` is a transcript-first analytics engine for developer AI agents. It discovers local session artifacts, normalizes Codex, Claude Code, and pi transcripts into one shared model, applies deterministic labeling and compliance heuristics, and emits machine-readable artifacts plus static reports.
 
-This repo is intentionally built for methodology discipline rather than demo flash. The canonical outputs are JSON and JSONL. The markdown, HTML, and SVG layers are deterministic derivatives that make the results easier to share with engineers, managers, and hiring panels without turning the analytics engine into an opaque black box.
+The project is intentionally built for methodological clarity rather than dashboard theater. JSON and JSONL outputs are canonical. Markdown, HTML, and SVG outputs are deterministic derivatives that make the results easier to review, share, and audit without turning the analytics engine into an opaque black box.
+
+The report surface is operator-first: the top of each report explains the primary delivery risk, recent directional context, and which sessions should be reviewed first. The report remains fully static and exportable, including in `--summary-only` mode.
 
 ## Why this project exists
 
@@ -19,15 +21,16 @@ Teams adopting coding agents need a repeatable way to inspect real usage pattern
 
 - `codex`: canonical transcripts under `~/.codex/sessions/**/*.jsonl`
 - `claude`: canonical transcripts under `~/.claude/projects/**/*.jsonl`
+- `pi`: canonical transcripts under `~/.pi/agent/sessions/**/*.jsonl`
 
 Optional enrichment stores such as history, SQLite, shell snapshots, and session environment files are inventoried when present, but transcript JSONL remains the canonical input.
 
-## Why this is relevant to Applied AI / Solutions Architect work
+## What this repository demonstrates
 
-- It shows analytics design discipline: deterministic metrics, explicit tradeoffs, and reproducible reports.
-- It shows governance judgment: transcript previews are redacted and truncated by default, and generated artifacts stay out of git history.
-- It shows scalable architecture thinking: source-specific discovery and parsing feed a shared normalized analytics pipeline.
-- It shows communication range: the same run produces machine-readable artifacts for engineers and readable reports for broader stakeholders.
+- Deterministic analytics design: explicit tradeoffs, reproducible outputs, and stable summary contracts.
+- Governance judgment: transcript previews are redacted and truncated by default, and local artifacts stay out of git history.
+- Extensible architecture: source-specific discovery and parsing feed a shared normalized analytics pipeline.
+- Communication range: the same run produces machine-readable artifacts for engineers and readable reports for broader stakeholders.
 
 ## Architecture
 
@@ -44,7 +47,7 @@ source home
 Key design choices:
 
 - Transcript-first: canonical analytics starts from session JSONL, not optional side stores.
-- Source-aware adapters: Codex and Claude Code use separate discovery/parsing logic but converge on one normalized session model.
+- Source-aware adapters: Codex, Claude Code, and pi use separate discovery/parsing logic but converge on one normalized session model.
 - Deterministic scoring: labeling, clustering, compliance scoring, summaries, and presentation artifacts are all rule-based.
 - Redacted-preview defaults: reports use redacted, truncated previews rather than full transcript bodies.
 
@@ -61,11 +64,12 @@ Maintainer boundaries:
 ```bash
 pnpm inspect -- --source codex --home ~/.codex
 pnpm inspect -- --source claude --home ~/.claude
+pnpm inspect -- --source pi --home ~/.pi
 pnpm parse -- --source codex --home ~/.codex --output-dir artifacts
 cat artifacts/raw-turns.jsonl
 pnpm eval -- --source claude --home ~/.claude --output-dir artifacts
 pnpm report -- --source codex --home ~/.codex --output-dir artifacts
-pnpm exec tsx src/cli.ts eval --source claude --home ~/.claude --summary-only --session-limit 100
+pnpm exec tsx src/cli.ts eval --source pi --home ~/.pi --summary-only --session-limit 100
 pnpm benchmark
 ```
 
@@ -73,7 +77,7 @@ Built binary:
 
 ```bash
 pnpm build
-node dist/cli.js inspect --source claude --home ~/.claude
+node dist/cli.js inspect --source pi --home ~/.pi
 ```
 
 Example local config:
@@ -85,7 +89,7 @@ cp .agent-evalrc.example .agent-evalrc
 Quick local review loop:
 
 ```bash
-pnpm exec tsx src/cli.ts eval --source claude --home ~/.claude --output-dir artifacts --summary-only
+pnpm exec tsx src/cli.ts eval --source pi --home ~/.pi --output-dir artifacts --summary-only
 open artifacts/report.html
 ```
 
@@ -97,16 +101,31 @@ open artifacts/report.html
 
 Every machine-readable output includes `engineVersion` and `schemaVersion`.
 
+The redesigned operator report and enriched summary artifact are emitted under `schemaVersion: "2"`. That cutover reflects the new triage-first summary contract: required executive summary text, operator metrics, metric glossary entries, humane session identity, deterministic `whySelected` reasons, evidence previews, source references, and trust flags.
+
 Benchmark outputs:
 
 - `artifacts/benchmark/benchmark-results.json`
 - `artifacts/benchmark/benchmark-report.md`
 
+## How to read the operator report
+
+Read the report from top to bottom in this order:
+
+1. **Executive Summary** — quick operator framing: what looks wrong, what changed, and what to do next.
+2. **Sessions To Review First** — the primary triage queue. Each card is a session-first review target with humane identity, deterministic `whySelected` reasons, evidence previews, source references, and trust flags.
+3. **Compliance Breakdown** — rule-level failure concentration across the corpus.
+4. **Metric Glossary** — plain-language explanation for operator-facing proxy metrics.
+5. **Recurring Patterns And Incidents** — cross-session support view, not the primary review object.
+6. **Report Metadata** — source, scope, and comparability details.
+
+`--summary-only` is still the preferred mode for large corpora. It skips heavy raw JSONL artifacts while preserving the operator queue, executive summary, glossary, and static HTML/markdown reports.
+
 ## Suggested workflow
 
 ```bash
-pnpm inspect -- --source claude --home ~/.claude
-pnpm eval -- --source claude --home ~/.claude --output-dir artifacts --summary-only
+pnpm inspect -- --source pi --home ~/.pi
+pnpm eval -- --source pi --home ~/.pi --output-dir artifacts --summary-only
 cat artifacts/report.md
 jq '.comparativeSlices' artifacts/summary.json
 jq '.topSessions' artifacts/summary.json
@@ -118,31 +137,32 @@ Use `inspect` first to inventory what is available locally. Use `parse` when you
 
 Use `benchmark` to run the synthetic calibration corpus. It validates terminal verification, case-scoped label matching, incident matching, parse-warning handling, and sanitization behavior against deterministic expectations.
 
-## Public repo notes
+## Public repo hygiene
 
 - Tests use synthetic fixtures only; no private transcript corpora are committed.
-- `artifacts/` stays untracked so local evaluations do not leak into git history.
+- Local evaluation outputs, local agent homes, and temporary analysis material stay untracked.
 - Report previews are redacted and truncated, but they are not a substitute for full secret scanning.
 - If a presentation artifact ever disagrees with the JSON artifacts, treat the JSON artifacts as canonical.
 
-## Project maturity
+## Scope and limitations
 
-Current strengths:
+In scope today:
 
-- Multi-source discovery and parsing for Codex and Claude Code
-- Deterministic summaries, scorecards, badges, and comparative slices
+- Multi-source discovery and parsing for Codex, Claude Code, and pi
+- Operator-first static triage report with a session-first review queue
+- Deterministic summaries, glossary-backed proxy metrics, and recurring-pattern support views
 - Strong local test coverage with synthetic fixtures only
-- Synthetic benchmark harness covering terminal verification, incidents, parse warnings, and sanitization boundaries
+- Synthetic benchmark coverage for terminal verification, incidents, parse warnings, and sanitization boundaries
 
-Current limitations:
+Not in scope yet:
 
-- Compliance and incident logic is heuristic, not semantic proof of behavior
-- Optional enrichment stores are inventoried more deeply than they are merged
-- Additional agent providers can be added, but each needs its own adapter and fixture coverage
+- Semantic proof that repository state is correct
+- Deep optional-store joins beyond transcript-first enrichment
+- Comparative run-over-run views and public/shareable presentation skins beyond the current operator-first surface
 
 ## Case study
 
-The portfolio-facing writeup lives in `docs/case-study.md` and explains the problem framing, architecture choices, redacted-preview design, and how this transcript analytics engine could support enterprise AI adoption workflows.
+`docs/case-study.md` provides a concise walkthrough of the problem framing, architecture choices, privacy defaults, and report design decisions behind the project.
 
 ## Local verification
 

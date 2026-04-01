@@ -1,6 +1,6 @@
 /**
  * Purpose: Tests source-aware artifact discovery and inventory building.
- * Responsibilities: Verify Codex and Claude Code homes resolve the expected transcript and enrichment stores.
+ * Responsibilities: Verify Codex, Claude Code, and pi homes resolve the expected transcript and enrichment stores.
  * Scope: Uses temporary directories only, with synthetic files and no private local data.
  * Usage: Executed by Vitest via `pnpm test`.
  * Invariants/Assumptions: Discovery requires an explicit provider in tests so temp paths stay unambiguous.
@@ -146,6 +146,50 @@ describe("discoverArtifacts", () => {
       provider: "claude",
       discovered: true,
       path: join(testDir, "shell-snapshots"),
+    });
+  });
+
+  it("discovers pi session transcripts", async () => {
+    const testDir = join(testDirBase, "pi-home");
+    const sessionsDir = join(
+      testDir,
+      "agent",
+      "sessions",
+      "--Users-test-project",
+    );
+    await mkdir(sessionsDir, { recursive: true });
+    await writeFile(join(sessionsDir, "session.jsonl"), "{}\n");
+
+    const result = await discoverArtifacts(testDir, { provider: "pi" });
+
+    expect(result.provider).toBe("pi");
+    expect(result.homePath).toBe(testDir);
+    expect(result.sessionFiles).toHaveLength(1);
+    expect(result.inventory).toHaveLength(1);
+    expect(result.inventory[0]).toMatchObject({
+      provider: "pi",
+      kind: "session_jsonl",
+      discovered: true,
+      required: true,
+      optional: false,
+      path: join(testDir, "agent", "sessions"),
+    });
+  });
+
+  it("marks missing pi stores as undiscovered without failing", async () => {
+    const testDir = join(testDirBase, "pi-empty");
+    await mkdir(testDir, { recursive: true });
+
+    const result = await discoverArtifacts(testDir, { provider: "pi" });
+
+    expect(result.sessionFiles).toHaveLength(0);
+    expect(result.inventory).toHaveLength(1);
+    expect(result.inventory[0]).toMatchObject({
+      provider: "pi",
+      discovered: false,
+      required: true,
+      optional: false,
+      path: join(testDir, "agent", "sessions"),
     });
   });
 

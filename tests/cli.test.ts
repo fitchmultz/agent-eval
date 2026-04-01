@@ -1,6 +1,6 @@
 /**
  * Purpose: Tests the public CLI contract for source-aware transcript evaluation.
- * Responsibilities: Verify command dispatch, argument parsing, report titles, and both Codex and Claude workflows.
+ * Responsibilities: Verify command dispatch, argument parsing, report titles, and Codex, Claude, and pi workflows.
  * Scope: Uses synthetic local transcript fixtures only and writes artifacts into temporary directories.
  * Usage: Executed by Vitest via `pnpm test`.
  * Invariants/Assumptions: The CLI contract is `--source` plus `--home`; no provider-specific home flags remain.
@@ -15,6 +15,7 @@ import { main } from "../src/cli.js";
 import {
   createClaudeHome,
   createCodexHome,
+  createPiHome,
 } from "./support/transcript-fixtures.js";
 
 describe("CLI", () => {
@@ -85,6 +86,28 @@ describe("CLI", () => {
     );
   });
 
+  it("inspects a pi home and reports pi inventory", async () => {
+    const homeDir = await createPiHome(testDirBase, "inspect-pi");
+
+    const exitCode = await main([
+      "node",
+      "cli",
+      "inspect",
+      "--source",
+      "pi",
+      "--home",
+      homeDir,
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"provider": "pi"'),
+    );
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"sessionFileCount": 1'),
+    );
+  });
+
   it("parses a Codex home and writes raw-turn artifacts", async () => {
     const homeDir = await createCodexHome(testDirBase, "parse-codex");
     const outputDir = join(homeDir, "artifacts");
@@ -135,6 +158,33 @@ describe("CLI", () => {
       "eval",
       "--source",
       "claude",
+      "--home",
+      homeDir,
+      "--output-dir",
+      outputDir,
+      "--summary-only",
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"summaryOnly": true'),
+    );
+    expect(await readFile(join(outputDir, "summary.json"), "utf8")).toContain(
+      '"sessions": 1',
+    );
+  });
+
+  it("evaluates a pi home in summary-only mode", async () => {
+    const homeDir = await createPiHome(testDirBase, "eval-pi");
+    const outputDir = join(homeDir, "artifacts");
+    await mkdir(outputDir, { recursive: true });
+
+    const exitCode = await main([
+      "node",
+      "cli",
+      "eval",
+      "--source",
+      "pi",
       "--home",
       homeDir,
       "--output-dir",

@@ -51,6 +51,36 @@ describe("probeSessionOrder", () => {
     expect(probe.earliestTimestamp).toBe("2026-03-10T10:00:01.000Z");
   });
 
+  it("captures pi session header timestamps", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "agent-eval-session-order-"));
+    tempDirs.push(dir);
+    const path = join(dir, "session.jsonl");
+    await writeFile(
+      path,
+      [
+        JSON.stringify({
+          type: "session",
+          version: 3,
+          id: "pi-session-1",
+          timestamp: "2026-03-10T09:00:00.000Z",
+          cwd: "/workspace/demo",
+        }),
+        JSON.stringify({
+          type: "message",
+          id: "user-1",
+          parentId: null,
+          timestamp: "2026-03-10T09:00:01.000Z",
+          message: { role: "user", content: [{ type: "text", text: "Hi" }] },
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+
+    const probe = await probeSessionOrder(path, "pi");
+    expect(probe.startedAt).toBe("2026-03-10T09:00:00.000Z");
+    expect(probe.earliestTimestamp).toBe("2026-03-10T09:00:00.000Z");
+  });
+
   it("retains invalid startedAt while still capturing a valid earliest timestamp", async () => {
     const dir = await mkdtemp(join(tmpdir(), "agent-eval-session-order-"));
     tempDirs.push(dir);

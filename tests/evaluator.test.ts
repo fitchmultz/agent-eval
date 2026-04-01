@@ -201,6 +201,13 @@ function createSummary(): SummaryArtifact {
     comparativeSlices: [],
     topSessions: [],
     topIncidents: [],
+    executiveSummary: {
+      problem: "No write sessions were observed.",
+      change: "No recent change summary is available.",
+      action: "Start with inventory review.",
+    },
+    operatorMetrics: [],
+    metricGlossary: [],
     scoreCards: [],
     highlightCards: [],
     recognitions: [],
@@ -238,25 +245,26 @@ describe("evaluator", () => {
       earliestTimestamp: undefined,
       mtimeMs: Number(path.match(/(\d+)/)?.[1] ?? 0),
     }));
-    mockBuildMetricsRecord.mockImplementation((parts, inventory, corpusScope) => ({
-      engineVersion: "1.0.0",
-      schemaVersion: "1.0.0",
-      generatedAt: "2026-03-10T00:00:00.000Z",
-      sessionCount: parts.sessionMetrics.length,
-      corpusScope:
-        corpusScope ?? {
+    mockBuildMetricsRecord.mockImplementation(
+      (parts, inventory, corpusScope) => ({
+        engineVersion: "1.0.0",
+        schemaVersion: "1.0.0",
+        generatedAt: "2026-03-10T00:00:00.000Z",
+        sessionCount: parts.sessionMetrics.length,
+        corpusScope: corpusScope ?? {
           selection: "all_discovered",
           discoveredSessionCount: parts.sessionMetrics.length,
           appliedSessionLimit: null,
         },
-      turnCount: parts.turnCount,
-      incidentCount: parts.incidentCount,
-      parseWarningCount: parts.parseWarningCount,
-      labelCounts: parts.labelCounts,
-      complianceSummary: [],
-      sessions: parts.sessionMetrics,
-      inventory,
-    }));
+        turnCount: parts.turnCount,
+        incidentCount: parts.incidentCount,
+        parseWarningCount: parts.parseWarningCount,
+        labelCounts: parts.labelCounts,
+        complianceSummary: [],
+        sessions: parts.sessionMetrics,
+        inventory,
+      }),
+    );
   });
 
   afterEach(() => {

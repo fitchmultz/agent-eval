@@ -43,6 +43,8 @@ describe("isWriteToolName", () => {
     expect(isWriteToolName("apply_patch")).toBe(true);
     expect(isWriteToolName("mcp__RepoPrompt__apply_edits")).toBe(true);
     expect(isWriteToolName("mcp__RepoPrompt__file_actions")).toBe(true);
+    expect(isWriteToolName("edit")).toBe(true);
+    expect(isWriteToolName("write")).toBe(true);
   });
 
   it("should return false for non-write tool names", () => {
@@ -159,9 +161,20 @@ describe("extractCommandText", () => {
     expect(extractCommandText(toolCall)).toBe("ls -la");
   });
 
-  it("should extract command array from JSON", () => {
+  it("should extract command string from JSON", () => {
     const toolCall = createParsedToolCall({
       callId: "call-2",
+      toolName: "bash",
+      categoryHint: "command",
+      argumentsText: '{"command": "pnpm test"}',
+      status: "completed",
+    });
+    expect(extractCommandText(toolCall)).toBe("pnpm test");
+  });
+
+  it("should extract command array from JSON", () => {
+    const toolCall = createParsedToolCall({
+      callId: "call-3",
       toolName: "bash",
       categoryHint: "command",
       argumentsText: '{"command": ["npm", "test"]}',
@@ -172,7 +185,7 @@ describe("extractCommandText", () => {
 
   it("should return raw text for invalid JSON", () => {
     const toolCall = createParsedToolCall({
-      callId: "call-3",
+      callId: "call-4",
       toolName: "bash",
       categoryHint: "command",
       argumentsText: "not valid json",
@@ -183,7 +196,7 @@ describe("extractCommandText", () => {
 
   it("should return undefined for empty arguments", () => {
     const toolCall = createParsedToolCall({
-      callId: "call-4",
+      callId: "call-5",
       toolName: "bash",
       categoryHint: "command",
     });
@@ -192,7 +205,7 @@ describe("extractCommandText", () => {
 
   it("should return raw text for non-object JSON", () => {
     const toolCall = createParsedToolCall({
-      callId: "call-5",
+      callId: "call-6",
       toolName: "bash",
       categoryHint: "command",
       argumentsText: "[1, 2, 3]",

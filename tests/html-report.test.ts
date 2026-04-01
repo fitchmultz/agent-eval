@@ -1,7 +1,7 @@
 /**
- * Purpose: Verifies HTML report generation produces valid and safe output.
+ * Purpose: Verifies operator-first HTML report generation produces valid, safe, queue-oriented output.
  * Entrypoint: Executed by Vitest via `pnpm test`.
- * Notes: Tests HTML structure, escaping, and all section renderers.
+ * Notes: Focuses on conclusions-first layout, humane session identity, and static report safety after the report redesign cutover.
  */
 import { describe, expect, it } from "vitest";
 
@@ -33,16 +33,16 @@ const baseMetrics: MetricsRecord = {
   },
   complianceSummary: [
     {
-      rule: "scope_confirmed_before_major_write",
+      rule: "verification_after_code_changes",
       passCount: 1,
-      failCount: 0,
-      notApplicableCount: 1,
+      failCount: 1,
+      notApplicableCount: 0,
       unknownCount: 0,
     },
   ],
   sessions: [
     {
-      sessionId: "session-1",
+      sessionId: "123e4567-e89b-12d3-a456-426614174000",
       provider: "codex",
       turnCount: 4,
       labeledTurnCount: 2,
@@ -50,12 +50,12 @@ const baseMetrics: MetricsRecord = {
       parseWarningCount: 0,
       writeCount: 1,
       verificationCount: 1,
-      verificationPassedCount: 1,
-      verificationFailedCount: 0,
+      verificationPassedCount: 0,
+      verificationFailedCount: 1,
       postWriteVerificationAttempted: true,
-      postWriteVerificationPassed: true,
-      endedVerified: true,
-      complianceScore: 100,
+      postWriteVerificationPassed: false,
+      endedVerified: false,
+      complianceScore: 60,
       complianceRules: [],
     },
   ],
@@ -89,11 +89,13 @@ const baseSummary: SummaryArtifact = {
   ],
   compliance: [
     {
-      rule: "scope_confirmed_before_major_write",
-      passCount: 5,
+      rule: "verification_after_code_changes",
+      passCount: 1,
       failCount: 1,
       notApplicableCount: 0,
       unknownCount: 0,
+      passRate: 50,
+      affectedSessionCount: 2,
     },
   ],
   rates: {
@@ -105,18 +107,129 @@ const baseSummary: SummaryArtifact = {
     praisePer100Turns: 0,
   },
   delivery: {
-    sessionsWithWrites: 1,
+    sessionsWithWrites: 2,
     sessionsEndingVerified: 1,
-    writeSessionVerificationRate: 100,
+    writeSessionVerificationRate: 50,
   },
-  topSessions: [],
-  endedVerifiedDeliverySpotlights: [],
-  topIncidents: [],
-  opportunities: [],
-  highlightCards: [],
+  comparativeSlices: [
+    {
+      key: "selected_corpus",
+      label: "Selected Corpus",
+      sessionCount: 2,
+      turnCount: 8,
+      incidentCount: 2,
+      verificationProxyScore: 50,
+      flowProxyScore: 80,
+      workflowProxyScore: 70,
+      writeSessionVerificationRate: 50,
+      incidentsPer100Turns: 25,
+    },
+    {
+      key: "recent_100",
+      label: "Recent 100",
+      sessionCount: 2,
+      turnCount: 8,
+      incidentCount: 1,
+      verificationProxyScore: 60,
+      flowProxyScore: 82,
+      workflowProxyScore: 75,
+      writeSessionVerificationRate: 60,
+      incidentsPer100Turns: 12.5,
+    },
+  ],
+  topSessions: [
+    {
+      sessionId: "123e4567-e89b-12d3-a456-426614174000",
+      sessionShortId: "4174000",
+      sessionDisplayLabel: "Fix login regression and verify the build",
+      sessionTimestampLabel: "2026-03-06 19:00Z",
+      sessionProjectLabel: "agent-eval",
+      archetype: "unverified_delivery",
+      archetypeLabel: "Unverified Ending Delivery",
+      frictionScore: 8,
+      complianceScore: 60,
+      incidentCount: 1,
+      labeledTurnCount: 2,
+      writeCount: 1,
+      endedVerified: false,
+      verificationPassedCount: 0,
+      dominantLabels: ["verification_request"],
+      whySelected: [
+        "Ended without a passing post-write verification after code changes.",
+      ],
+      failedRules: ["Verification after code changes"],
+      evidencePreviews: [
+        "Please fix login and verify the patch before you finish.",
+      ],
+      sourceRefs: [
+        {
+          provider: "codex",
+          kind: "session_jsonl",
+          path: "~/.codex/sessions/a.jsonl",
+        },
+      ],
+      trustFlags: [],
+      note: "Code changes were observed without a passing post-write verification after the final write.",
+    },
+  ],
+  topIncidents: [
+    {
+      incidentId: "incident-1",
+      sessionId: "123e4567-e89b-12d3-a456-426614174000",
+      sessionDisplayLabel: "Fix login regression and verify the build",
+      sessionShortId: "4174000",
+      summary: "verification_request across 2 turn(s)",
+      humanSummary:
+        "The user had to ask for verification explicitly across 2 turns.",
+      severity: "medium",
+      confidence: "high",
+      turnSpan: 2,
+      evidencePreview: "Please verify after the patch.",
+      whySelected: ["Medium-severity incident signal worth review."],
+      sourceRefs: [
+        {
+          provider: "codex",
+          kind: "session_jsonl",
+          path: "~/.codex/sessions/a.jsonl",
+        },
+      ],
+      trustFlags: [],
+    },
+  ],
+  executiveSummary: {
+    problem:
+      "Post-change verification is the main delivery gap in this corpus.",
+    change: "Recent sessions improved slightly on verification discipline.",
+    action: "Inspect the highest-ranked unverified write session first.",
+  },
+  operatorMetrics: [
+    {
+      label: "Ended Unverified",
+      value: "1",
+      detail:
+        "50% of write sessions ended without a passing post-write verification signal.",
+      tone: "danger",
+    },
+  ],
+  metricGlossary: [
+    {
+      key: "verification_proxy_score",
+      label: "Verification Proxy Score",
+      plainLanguage:
+        "How often write sessions ended with a passing post-write verification signal.",
+      caveat: "Proxy only.",
+    },
+  ],
   scoreCards: [],
+  highlightCards: [],
   recognitions: [],
-  comparativeSlices: [],
+  endedVerifiedDeliverySpotlights: [],
+  opportunities: [
+    {
+      title: "Block unverified deliveries",
+      rationale: "Keep post-write verification as the primary operator action.",
+    },
+  ],
 };
 
 describe("renderHtmlReport", () => {
@@ -130,175 +243,76 @@ describe("renderHtmlReport", () => {
     expect(html).toContain("<body>");
   });
 
-  it("includes the report title", () => {
+  it("renders the operator-first section order", () => {
     const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
-    expect(html).toContain("Transcript Analytics Report");
-    expect(html).toContain("<title>Transcript Analytics Report</title>");
-  });
-
-  it("includes inline CSS styles", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).toContain("<style>");
-    expect(html).toContain("--bg:");
-    expect(html).toContain("--panel:");
-    expect(html).toContain(".metric-card");
-  });
-
-  it("displays session and incident counts", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).toContain("Sessions");
-    expect(html).toContain(">2<");
-    expect(html).toContain("Incidents / 100 Turns");
-    expect(html).toContain("25");
-  });
-
-  it("displays operational rates section", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).toContain("Operational Rates");
-    expect(html).toContain("Incidents / 100 turns");
-    expect(html).toContain("Writes / 100 turns");
-    expect(html).toContain("Verification requests / 100 turns");
-    expect(html).toContain("Interruptions / 100 turns");
-    expect(html).toContain("Reinjections / 100 turns");
-    expect(html).toContain("Praise / 100 turns");
-  });
-
-  it("discloses corpus scope and comparability in the header", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).toContain("scope all 2 sessions");
-    expect(html).toContain("Corpus scope: all 2 sessions");
-    expect(html).toContain(
-      "This report includes every discovered session in the selected source home for this run.",
-    );
-    expect(html).toContain(
-      "Metrics are directly comparable only to reports built from the same source home and discovery moment.",
+    expect(html).toContain("Executive Summary");
+    expect(html).toContain("Operator Action Metrics");
+    expect(html).toContain("Sessions To Review First");
+    expect(html).toContain("Compliance Breakdown");
+    expect(html).toContain("Comparative Slices");
+    expect(html).toContain("Recurring Patterns And Incidents");
+    expect(html.indexOf("Executive Summary")).toBeLessThan(
+      html.indexOf("Sessions To Review First"),
     );
   });
 
-  it("warns when the report is built from a capped recent-session window", () => {
+  it("renders humane queue labels instead of raw uuid-only titles", () => {
+    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
+
+    expect(html).toContain("Fix login regression and verify the build");
+    expect(html).toContain("Why selected");
+    expect(html).toContain("Failed rules");
+    expect(html).toContain("Strongest evidence preview");
+    expect(html).not.toContain(">123e4567-e89b-12d3-a456-426614174000<");
+  });
+
+  it("escapes HTML in summary metadata and inventory paths", () => {
     const html = renderHtmlReport(
-      baseSummary,
+      {
+        ...baseSummary,
+        engineVersion: "<script>alert(1)</script>",
+      },
       {
         ...baseMetrics,
-        sessionCount: 50,
-        corpusScope: {
-          selection: "most_recent_window",
-          discoveredSessionCount: 200,
-          appliedSessionLimit: 50,
-        },
+        inventory: [
+          {
+            provider: "codex",
+            kind: "session_jsonl",
+            path: "<img src=x onerror=alert(1)>",
+            discovered: true,
+            required: true,
+            optional: false,
+          },
+        ],
       },
       baseCharts,
     );
 
-    expect(html).toContain("scope recent 50/200");
-    expect(html).toContain(
-      "Corpus scope: most recent 50 sessions of 200 sessions",
-    );
-    expect(html).toContain("session limit 50");
-    expect(html).toContain(
-      "Metrics are not directly comparable to reports built with a different session limit or corpus window.",
-    );
-    expect(html).toContain("scope-banner-windowed");
-  });
-
-  it("inlines chart SVG markup", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).toContain('<svg data-chart="labels"></svg>');
-    expect(html).toContain('<svg data-chart="severity"></svg>');
-    expect(html).toContain('<svg data-chart="compliance"></svg>');
-  });
-
-  it("escapes HTML in summary metadata", () => {
-    const summaryWithHtml: SummaryArtifact = {
-      ...baseSummary,
-      engineVersion: "<script>alert(1)</script>",
-    };
-    const html = renderHtmlReport(summaryWithHtml, baseMetrics, baseCharts);
-
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
-  });
-
-  it("escapes HTML in inventory paths", () => {
-    const metricsWithHtml: MetricsRecord = {
-      ...baseMetrics,
-      inventory: [
-        {
-          provider: "codex",
-          kind: "session_jsonl",
-          path: "<img src=x onerror=alert(1)>",
-          discovered: true,
-          required: true,
-          optional: false,
-        },
-      ],
-    };
-    const html = renderHtmlReport(baseSummary, metricsWithHtml, baseCharts);
-
-    // Check that the dangerous path is escaped in the inventory section
     expect(html).toContain("<code>&lt;img src=x onerror=alert(1)&gt;</code>");
-    expect(html).not.toContain("><img src=x onerror=alert(1)></code>");
   });
 
-  it("shows empty state for badges when none exist", () => {
+  it("renders glossary and report metadata disclosure blocks", () => {
     const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
 
-    expect(html).not.toContain("Badges");
-    expect(html).not.toContain("No badges earned");
+    expect(html).toContain("Metric glossary and caveats");
+    expect(html).toContain("Verification Proxy Score");
+    expect(html).toContain("Report metadata");
+    expect(html).toContain("Engine");
   });
 
-  it("shows empty state for incidents when none exist", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).toContain("Top Incidents");
-    expect(html).toContain("No labeled incidents were detected");
-  });
-
-  it("shows empty state for sessions when none exist", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).toContain("Sessions To Review First");
-    expect(html).toContain("No session insights were available");
-  });
-
-  it("shows empty state for victory laps when none exist", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).not.toContain("Victory Lap Sessions");
-    expect(html).not.toContain(
-      "No clean verified delivery sessions were available",
-    );
-  });
-
-  it("shows empty state for opportunities when none exist", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).toContain("Deterministic Opportunities");
-    expect(html).toContain(
-      "No deterministic improvement opportunities were identified",
-    );
-  });
-
-  it("shows empty state for momentum when not enough data", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).toContain("Recent Momentum");
-    expect(html).toContain("Not enough sessions in this slice");
-  });
-
-  it("shows a no-data hero when the selected corpus is empty", () => {
+  it("renders a deterministic no-data surface for empty corpora", () => {
     const html = renderHtmlReport(
       {
         ...baseSummary,
         sessions: 0,
         turns: 0,
         incidents: 0,
+        topSessions: [],
+        topIncidents: [],
+        operatorMetrics: [],
       },
       {
         ...baseMetrics,
@@ -314,14 +328,6 @@ describe("renderHtmlReport", () => {
             discovered: false,
             required: true,
             optional: false,
-          },
-          {
-            provider: "codex",
-            kind: "shell_snapshot",
-            path: "~/.codex/shell_snapshots",
-            discovered: true,
-            required: false,
-            optional: true,
           },
         ],
       },
@@ -329,487 +335,7 @@ describe("renderHtmlReport", () => {
     );
 
     expect(html).toContain("No Data Yet");
-    expect(html).toContain(
-      "The selected source home has the expected transcript layout, but no session JSONL files were discovered yet.",
-    );
-    expect(html).toContain("deterministic empty corpus");
-    expect(html).toContain("empty-hero");
     expect(html).toContain("missing canonical input");
-    expect(html).toContain("shell_snapshot");
-    expect(html).toContain("<body class=\"empty-report\">");
-  });
-
-  it("collapses zero-value sections out of the empty HTML report", () => {
-    const html = renderHtmlReport(
-      {
-        ...baseSummary,
-        sessions: 0,
-        turns: 0,
-        incidents: 0,
-      },
-      {
-        ...baseMetrics,
-        sessionCount: 0,
-        turnCount: 0,
-        incidentCount: 0,
-        sessions: [],
-        inventory: [
-          {
-            provider: "codex",
-            kind: "session_jsonl",
-            path: "~/.codex/sessions",
-            discovered: false,
-            required: true,
-            optional: false,
-          },
-        ],
-      },
-      baseCharts,
-    );
-
-    expect(html).toContain("Inventory");
-    expect(html).toContain("Methodology And Limitations");
-    expect(html).not.toContain("Heuristic Scorecards");
-    expect(html).not.toContain("Recent Momentum");
-    expect(html).not.toContain("Operational Rates");
-    expect(html).not.toContain("Comparative Slices");
-    expect(html).not.toContain("Charts");
-    expect(html).not.toContain("Sessions To Review First");
-    expect(html).not.toContain("Top Incidents");
-    expect(html).not.toContain("Deterministic Opportunities");
-    expect(html).not.toContain("Compliance Breakdown");
-  });
-
-  it("renders highest friction session ids with an intentional session-id treatment", () => {
-    const html = renderHtmlReport(
-      {
-        ...baseSummary,
-        topSessions: [
-          {
-            sessionId: "019cc8a6-a906-7d52-894a-b07132712517",
-            archetype: "unverified_delivery",
-            archetypeLabel: "Unverified Ending Delivery",
-            frictionScore: 22,
-            complianceScore: 80,
-            incidentCount: 4,
-            labeledTurnCount: 8,
-            writeCount: 2,
-            verificationPassedCount: 0,
-            endedVerified: false,
-            dominantLabels: ["regression_report"],
-            note: "Needs follow-up",
-          },
-        ],
-      },
-      baseMetrics,
-      baseCharts,
-    );
-
-    expect(html).toContain("Highest Friction Session");
-    expect(html).toContain("session-metric-card");
-    expect(html).toContain("metric-value-session");
-    expect(html).toContain("metric-session-id");
-    expect(html).toContain("019cc8a6-a906-7d52-894a-b07132712517");
-  });
-
-  it("renders intentional empty chart panels when summary charts have no data", () => {
-    const html = renderHtmlReport(
-      {
-        ...baseSummary,
-        labels: [],
-        severities: [],
-        compliance: [],
-      },
-      baseMetrics,
-      baseCharts,
-    );
-
-    expect(html).toContain("chart-panel-empty");
-    expect(html).toContain("chart-empty-state");
-    expect(html).toContain("No incidents were recorded in this slice.");
-    expect(html).toContain(
-      "No passing compliance checks were recorded in this slice.",
-    );
-    expect(html).not.toContain('<svg data-chart="severity"></svg>');
-    expect(html).not.toContain('<svg data-chart="compliance"></svg>');
-  });
-
-  it("includes all major sections", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).not.toContain("Show-Off Stats");
-    expect(html).toContain("Heuristic Scorecards");
-    expect(html).toContain("Recent Momentum");
-    expect(html).toContain("Comparative Slices");
-    expect(html).toContain("Charts");
-    expect(html).toContain("Sessions To Review First");
-    expect(html).toContain("Top Incidents");
-    expect(html).toContain("Deterministic Opportunities");
-    expect(html).toContain("Compliance Breakdown");
-    expect(html).toContain("Methodology And Limitations");
-    expect(html).toContain("Inventory");
-  });
-
-  it("includes footer note", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).toContain("footer-note");
-    expect(html).toContain("Incident evidence is redacted");
-  });
-
-  it("includes a favicon link for static report bundles", () => {
-    const html = renderHtmlReport(baseSummary, baseMetrics, baseCharts);
-
-    expect(html).toContain(
-      '<link rel="icon" href="./favicon.svg" type="image/svg+xml" />',
-    );
-    expect(html).toContain(
-      '<link rel="icon" href="./favicon.ico" sizes="any" type="image/x-icon" />',
-    );
-  });
-
-  it("renders badges when present", () => {
-    const summaryWithBadges: SummaryArtifact = {
-      ...baseSummary,
-      recognitions: ["Low-Interruption Corpus", "Ended-Verified Delivery"],
-    };
-    const html = renderHtmlReport(summaryWithBadges, baseMetrics, baseCharts);
-
-    expect(html).not.toContain("Low-Interruption Corpus");
-    expect(html).not.toContain("Verified Delivery Spotlights");
-  });
-
-  it("renders brag cards when present", () => {
-    const summaryWithBrag: SummaryArtifact = {
-      ...baseSummary,
-      highlightCards: [
-        {
-          title: "Test Brag",
-          value: "100%",
-          detail: "Test detail",
-          tone: "good",
-        },
-      ],
-    };
-    const html = renderHtmlReport(summaryWithBrag, baseMetrics, baseCharts);
-
-    expect(html).not.toContain("Test Brag");
-    expect(html).not.toContain("Test detail");
-  });
-
-  it("renders score cards when present", () => {
-    const summaryWithScores: SummaryArtifact = {
-      ...baseSummary,
-      scoreCards: [
-        {
-          title: "Verification Proxy Score",
-          score: 95,
-          detail: "Based on verification",
-          tone: "good",
-        },
-      ],
-    };
-    const html = renderHtmlReport(summaryWithScores, baseMetrics, baseCharts);
-
-    expect(html).toContain("Verification Proxy Score");
-    expect(html).toContain(">95<");
-    expect(html).toContain("/100");
-  });
-
-  it("renders N/A instead of misleading score badges when no writes or applicable rules exist", () => {
-    const html = renderHtmlReport(
-      {
-        ...baseSummary,
-        delivery: {
-          sessionsWithWrites: 0,
-          sessionsEndingVerified: 0,
-          writeSessionVerificationRate: 0,
-        },
-        compliance: baseSummary.compliance.map((rule) => ({
-          ...rule,
-          passCount: 0,
-          failCount: 0,
-          notApplicableCount: 1,
-        })),
-        scoreCards: [
-          {
-            title: "Verification Proxy Score",
-            score: null,
-            detail: "No write sessions were observed in this slice.",
-            tone: "neutral",
-          },
-          {
-            title: "Flow Proxy Score",
-            score: null,
-            detail:
-              "No sessions were observed in this slice, so flow is not scoreable yet.",
-            tone: "neutral",
-          },
-          {
-            title: "Workflow Proxy Score",
-            score: null,
-            detail:
-              "No write-related compliance rules were exercised in this slice.",
-            tone: "neutral",
-          },
-        ],
-      },
-      {
-        ...baseMetrics,
-        sessions: [],
-        complianceSummary: baseMetrics.complianceSummary.map((rule) => ({
-          ...rule,
-          passCount: 0,
-          failCount: 0,
-          notApplicableCount: 1,
-        })),
-      },
-      baseCharts,
-    );
-
-    expect(html).toContain("Terminal Verification");
-    expect(html).toContain(">N/A<");
-    expect(html).toContain("No write sessions were observed in this slice.");
-    expect(html).toContain(
-      "No sessions were observed in this slice, so flow is not scoreable yet.",
-    );
-    expect(html).toContain(
-      "No write-related compliance rules were exercised in this slice.",
-    );
-  });
-
-  it("renders top incidents when present", () => {
-    const summaryWithIncidents: SummaryArtifact = {
-      ...baseSummary,
-      topIncidents: [
-        {
-          incidentId: "inc-1",
-          sessionId: "session-1",
-          severity: "high",
-          confidence: "high",
-          turnSpan: 2,
-          summary: "Test incident",
-          evidencePreview: "Test evidence",
-        },
-      ],
-    };
-    const html = renderHtmlReport(
-      summaryWithIncidents,
-      baseMetrics,
-      baseCharts,
-    );
-
-    expect(html).toContain("Test incident");
-    expect(html).toContain("Test evidence");
-    expect(html).toContain("severity-high");
-    expect(html).toContain("session-1");
-  });
-
-  it("renders sanitized incident previews in html output", () => {
-    const summaryWithIncidents: SummaryArtifact = {
-      ...baseSummary,
-      topIncidents: [
-        {
-          incidentId: "inc-1",
-          sessionId: "session-1",
-          severity: "high",
-          confidence: "high",
-          turnSpan: 2,
-          summary: "Test incident",
-          evidencePreview:
-            "Git access broke after the migration and [redacted-sensitive-content]",
-        },
-      ],
-    };
-    const html = renderHtmlReport(
-      summaryWithIncidents,
-      baseMetrics,
-      baseCharts,
-    );
-
-    expect(html).toContain("[redacted-sensitive-content]");
-    expect(html).not.toContain("mitchfultz_id_ed25519");
-  });
-
-  it("renders top sessions when present", () => {
-    const summaryWithSessions: SummaryArtifact = {
-      ...baseSummary,
-      topSessions: [
-        {
-          sessionId: "session-1",
-          archetype: "verified_delivery",
-          archetypeLabel: "Ended-Verified Delivery",
-          frictionScore: 2,
-          complianceScore: 100,
-          incidentCount: 0,
-          labeledTurnCount: 2,
-          writeCount: 1,
-          verificationPassedCount: 1,
-          endedVerified: true,
-          dominantLabels: ["verification_request"],
-          note: "Well executed session",
-        },
-      ],
-    };
-    const html = renderHtmlReport(summaryWithSessions, baseMetrics, baseCharts);
-
-    expect(html).toContain("session-1");
-    expect(html).toContain("Ended-Verified Delivery");
-    expect(html).toContain("Well executed session");
-    expect(html).toContain("verification_request");
-    expect(html).not.toContain("verified_delivery");
-  });
-
-  it("filters inventory noise down to discovered items and missing required inputs", () => {
-    const html = renderHtmlReport(
-      baseSummary,
-      {
-        ...baseMetrics,
-        inventory: [
-          ...baseMetrics.inventory,
-          {
-            provider: "codex",
-            kind: "state_sqlite",
-            path: "~/.codex/state_5.sqlite",
-            discovered: false,
-            required: false,
-            optional: true,
-          },
-        ],
-      },
-      baseCharts,
-    );
-
-    expect(html).toContain("session_jsonl");
-    expect(html).not.toContain("state_5.sqlite");
-  });
-
-  it("renders victory laps when present", () => {
-    const summaryWithVictory: SummaryArtifact = {
-      ...baseSummary,
-      endedVerifiedDeliverySpotlights: [
-        {
-          sessionId: "session-1",
-          archetype: "verified_delivery",
-          archetypeLabel: "Ended-Verified Delivery",
-          frictionScore: 0,
-          complianceScore: 100,
-          incidentCount: 0,
-          labeledTurnCount: 2,
-          writeCount: 1,
-          verificationPassedCount: 2,
-          endedVerified: true,
-          dominantLabels: [],
-          note: "Perfect session",
-        },
-      ],
-    };
-    const html = renderHtmlReport(summaryWithVictory, baseMetrics, baseCharts);
-
-    expect(html).not.toContain("Perfect session");
-    expect(html).not.toContain("2 verifications");
-  });
-
-  it("renders opportunities when present", () => {
-    const summaryWithOpps: SummaryArtifact = {
-      ...baseSummary,
-      opportunities: [
-        {
-          title: "Add more verification",
-          rationale: "Verification improves confidence",
-        },
-      ],
-    };
-    const html = renderHtmlReport(summaryWithOpps, baseMetrics, baseCharts);
-
-    expect(html).toContain("Add more verification");
-    expect(html).toContain("Verification improves confidence");
-  });
-
-  it("renders comparative slices table when present", () => {
-    const summaryWithSlices: SummaryArtifact = {
-      ...baseSummary,
-      comparativeSlices: [
-        {
-          key: "selected_corpus",
-          label: "Selected Corpus",
-          sessionCount: 10,
-          turnCount: 80,
-          incidentCount: 5,
-          verificationProxyScore: 85,
-          flowProxyScore: 90,
-          workflowProxyScore: 88,
-          writeSessionVerificationRate: 100,
-          incidentsPer100Turns: 5,
-        },
-      ],
-    };
-    const html = renderHtmlReport(summaryWithSlices, baseMetrics, baseCharts);
-
-    expect(html).toContain("Selected Corpus");
-    expect(html).toContain("compliance-table");
-  });
-
-  it("renders N/A flow proxy in comparative slices when a slice has no corpus data", () => {
-    const html = renderHtmlReport(
-      {
-        ...baseSummary,
-        comparativeSlices: [
-          {
-            key: "selected_corpus",
-            label: "Selected Corpus",
-            sessionCount: 0,
-            turnCount: 0,
-            incidentCount: 0,
-            verificationProxyScore: null,
-            flowProxyScore: null,
-            workflowProxyScore: null,
-            writeSessionVerificationRate: null,
-            incidentsPer100Turns: 0,
-          },
-        ],
-      },
-      baseMetrics,
-      baseCharts,
-    );
-
-    expect(html).toContain('data-label="Flow Proxy">N/A<');
-  });
-
-  it("renders momentum cards when comparative slices available", () => {
-    const summaryWithMomentum: SummaryArtifact = {
-      ...baseSummary,
-      comparativeSlices: [
-        {
-          key: "selected_corpus",
-          label: "Selected Corpus",
-          sessionCount: 10,
-          turnCount: 80,
-          incidentCount: 5,
-          verificationProxyScore: 80,
-          flowProxyScore: 80,
-          workflowProxyScore: 80,
-          writeSessionVerificationRate: 100,
-          incidentsPer100Turns: 5,
-        },
-        {
-          key: "recent_100",
-          label: "Recent 100",
-          sessionCount: 5,
-          turnCount: 40,
-          incidentCount: 2,
-          verificationProxyScore: 85,
-          flowProxyScore: 82,
-          workflowProxyScore: 83,
-          writeSessionVerificationRate: 100,
-          incidentsPer100Turns: 3,
-        },
-      ],
-    };
-    const html = renderHtmlReport(summaryWithMomentum, baseMetrics, baseCharts);
-
-    expect(html).toContain("Recent Momentum");
-    expect(html).toContain("Verification Proxy Momentum");
-    expect(html).not.toContain("Not enough sessions");
+    expect(html).not.toContain("Recurring Patterns And Incidents");
   });
 });

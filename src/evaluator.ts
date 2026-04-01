@@ -11,7 +11,7 @@ import { getConfig } from "./config/index.js";
 import { discoverArtifacts } from "./discovery.js";
 import { MissingTranscriptInputError } from "./errors.js";
 import {
-  chooseIncidentEvidencePreview,
+  buildTopIncidentSummary,
   insertTopIncident,
 } from "./incident-selection.js";
 import { buildSummaryArtifact, type SummaryInputs } from "./insights.js";
@@ -31,6 +31,8 @@ import type {
 import { type ProcessedSession, processSession } from "./session-processor.js";
 import type { SourceProvider } from "./sources.js";
 import { countWriteTurns, createEmptySeverityCounts } from "./summary/index.js";
+import { collectSessionContexts } from "./summary/session-display.js";
+import type { SessionContext } from "./summary/types.js";
 import { parseTranscriptFile } from "./transcript/index.js";
 import {
   probeSessionOrder,
@@ -62,7 +64,7 @@ export interface ParseArtifactsResult {
 export interface EvaluateOptions {
   /** Source provider for the selected home */
   source: SourceProvider;
-  /** Path to the source home directory (typically ~/.codex or ~/.claude) */
+  /** Path to the source home directory (typically ~/.codex, ~/.claude, or ~/.pi) */
   home: string;
   /** Maximum number of most recent sessions to evaluate (undefined for all) */
   sessionLimit?: number;
@@ -78,6 +80,7 @@ interface SessionSummaryProjection {
   incidentCount: number;
   labelCounts: LabelCountRecord;
   sessionLabelCounts: Record<LabelName, number>;
+  sessionContext?: SessionContext;
   severityCounts: Record<Severity, number>;
   topIncidents: SummaryInputs["topIncidents"];
   writeTurnCount: number;
@@ -173,6 +176,9 @@ function summarizeProcessedSession(
   const labelCounts: LabelCountRecord = {};
   const severityCounts = createEmptySeverityCounts();
   let topIncidents: SummaryInputs["topIncidents"] = [];
+  const sessionContext = collectSessionContexts(session.turns).get(
+    session.metrics.sessionId,
+  );
 
   for (const turn of session.turns) {
     for (const label of turn.labels) {
@@ -183,25 +189,21 @@ function summarizeProcessedSession(
 
   for (const incident of session.incidents) {
     severityCounts[incident.severity] += 1;
-    const evidencePreview = chooseIncidentEvidencePreview(incident, session.turns);
+    const topIncident = buildTopIncidentSummary(
+      incident,
+      session.turns,
+      sessionContext,
+    );
     if (
-      !evidencePreview ||
-      isLowSignalPreview(evidencePreview) ||
-      isUnsafePreview(evidencePreview)
+      !topIncident.evidencePreview ||
+      isLowSignalPreview(topIncident.evidencePreview) ||
+      isUnsafePreview(topIncident.evidencePreview)
     ) {
       continue;
     }
     topIncidents = insertTopIncident(
       topIncidents,
-      {
-        incidentId: incident.incidentId,
-        sessionId: incident.sessionId,
-        summary: incident.summary,
-        severity: incident.severity,
-        confidence: incident.confidence,
-        turnSpan: incident.turnIndices.length,
-        evidencePreview,
-      },
+      topIncident,
       getConfig().previews.maxTopIncidents,
     );
   }
@@ -212,6 +214,7 @@ function summarizeProcessedSession(
     incidentCount: session.incidents.length,
     labelCounts,
     sessionLabelCounts,
+    ...(sessionContext ? { sessionContext } : {}),
     severityCounts,
     topIncidents,
     writeTurnCount: countWriteTurns(session.turns),
@@ -249,6 +252,10 @@ function buildSummaryInputsFromSessions(
   projections: readonly SessionSummaryProjection[],
 ): SummaryInputs {
   const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
+  const sessionContexts = new Map<
+    string,
+    NonNullable<SessionSummaryProjection["sessionContext"]>
+  >();
   const severityCounts = createEmptySeverityCounts();
   let topIncidents: SummaryInputs["topIncidents"] = [];
   let writeTurnCount = 0;
@@ -266,6 +273,12 @@ function buildSummaryInputsFromSessions(
           )
         : projection.sessionLabelCounts,
     );
+    if (projection.sessionContext) {
+      sessionContexts.set(
+        projection.metrics.sessionId,
+        projection.sessionContext,
+      );
+    }
     writeTurnCount += projection.writeTurnCount;
 
     for (const severity of ["info", "low", "medium", "high"] as const) {
@@ -283,6 +296,7 @@ function buildSummaryInputsFromSessions(
 
   return {
     sessionLabelCounts,
+    sessionContexts,
     topIncidents,
     severityCounts,
     writeTurnCount,
@@ -367,7 +381,9 @@ async function discoverSessionInputs(
     sessionInventory?.path ??
     (options.source === "claude"
       ? `${options.home}/projects`
-      : `${options.home}/sessions`);
+      : options.source === "pi"
+        ? `${options.home}/agent/sessions`
+        : `${options.home}/sessions`);
 
   if (!discovered.sessionDirectoryExists) {
     throw new MissingTranscriptInputError(
@@ -600,13 +616,18 @@ export async function evaluateArtifacts(
       : getConfig().concurrency.full;
 
   if (outputMode === "summary") {
-    const { inventory, corpusScope, projections } = await processSummarySessions(
-      { ...options, outputMode },
-      concurrency,
-      true,
-      signal,
+    const { inventory, corpusScope, projections } =
+      await processSummarySessions(
+        { ...options, outputMode },
+        concurrency,
+        true,
+        signal,
+      );
+    const metrics = buildSummaryModeMetrics(
+      projections,
+      inventory,
+      corpusScope,
     );
-    const metrics = buildSummaryModeMetrics(projections, inventory, corpusScope);
     const summary = buildSummaryArtifact(
       metrics,
       buildSummaryInputsFromSessions(projections),

@@ -60,6 +60,10 @@ function createMockSessionInsightRow(
 ): SessionInsightRow {
   return {
     sessionId: "session-1",
+    sessionShortId: "session-1",
+    sessionDisplayLabel: "Test session",
+    sessionTimestampLabel: "2026-03-06 19:00Z",
+    sessionProjectLabel: "agent-eval",
     archetype: "verified_delivery",
     archetypeLabel: "Ended-Verified Delivery",
     frictionScore: 2,
@@ -70,6 +74,11 @@ function createMockSessionInsightRow(
     verificationPassedCount: 1,
     endedVerified: true,
     dominantLabels: [],
+    whySelected: ["Clean verified session."],
+    failedRules: [],
+    evidencePreviews: [],
+    sourceRefs: [],
+    trustFlags: [],
     note: "Clean session",
     ...overrides,
   };

@@ -1,9 +1,9 @@
 /**
- * Purpose: Provides shared synthetic Codex and Claude transcript fixtures for integration-style tests.
+ * Purpose: Provides shared synthetic Codex, Claude, and pi transcript fixtures for integration-style tests.
  * Responsibilities: Generate provider-shaped JSONL content and materialize temporary homes for CLI and evaluator tests.
  * Scope: Test-only helper used by cross-provider integration coverage; fixtures remain synthetic and public-facing redaction.
- * Usage: Import `createCodexHome()` or `createClaudeHome()` with a temporary base directory per test suite.
- * Invariants/Assumptions: Codex and Claude fixtures describe equivalent workflows unless a test overrides the default transcript content.
+ * Usage: Import `createCodexHome()`, `createClaudeHome()`, or `createPiHome()` with a temporary base directory per test suite.
+ * Invariants/Assumptions: Provider fixtures describe equivalent workflows unless a test overrides the default transcript content.
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
@@ -189,6 +189,96 @@ export async function createCodexHome(
   return homeDir;
 }
 
+export function createPiSessionContent(sessionId: string): string {
+  return writeJsonl([
+    {
+      type: "session",
+      version: 3,
+      id: sessionId,
+      timestamp: "2026-03-06T19:00:00.000Z",
+      cwd: "/workspace/demo",
+    },
+    {
+      type: "model_change",
+      id: "model-1",
+      parentId: null,
+      timestamp: "2026-03-06T19:00:00.100Z",
+      provider: "anthropic",
+      modelId: "claude-sonnet-4-6",
+    },
+    {
+      type: "message",
+      id: "user-1",
+      parentId: "model-1",
+      timestamp: "2026-03-06T19:00:01.000Z",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Please fix the tests and verify before finishing.",
+          },
+        ],
+      },
+    },
+    {
+      type: "message",
+      id: "assistant-1",
+      parentId: "user-1",
+      timestamp: "2026-03-06T19:00:02.000Z",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "thinking",
+            thinking:
+              "I will run the tests and report back with terminal verification status.",
+          },
+          {
+            type: "toolCall",
+            id: "tool-1",
+            name: "bash",
+            arguments: { command: "pnpm test" },
+          },
+        ],
+      },
+    },
+    {
+      type: "message",
+      id: "tool-result-1",
+      parentId: "assistant-1",
+      timestamp: "2026-03-06T19:00:03.000Z",
+      message: {
+        role: "toolResult",
+        toolCallId: "tool-1",
+        toolName: "bash",
+        content: [
+          {
+            type: "text",
+            text: "Process exited with code 0",
+          },
+        ],
+        isError: false,
+      },
+    },
+    {
+      type: "message",
+      id: "assistant-2",
+      parentId: "tool-result-1",
+      timestamp: "2026-03-06T19:00:04.000Z",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "The tests passed.",
+          },
+        ],
+      },
+    },
+  ]);
+}
+
 export async function createClaudeHome(
   baseDir: string,
   name: string,
@@ -211,6 +301,31 @@ export async function createClaudeHome(
     await writeFile(join(homeDir, "history.jsonl"), "{}\n", "utf8");
     await mkdir(join(homeDir, "shell-snapshots"), { recursive: true });
     await writeFile(join(homeDir, "session-env"), "KEY=value\n", "utf8");
+  }
+
+  return homeDir;
+}
+
+export async function createPiHome(
+  baseDir: string,
+  name: string,
+  sessionCount = 1,
+): Promise<string> {
+  const homeDir = join(baseDir, name);
+  const sessionsDir = join(
+    homeDir,
+    "agent",
+    "sessions",
+    "--Users-test-project--",
+  );
+  await mkdir(sessionsDir, { recursive: true });
+
+  for (let index = 0; index < sessionCount; index += 1) {
+    await writeFile(
+      join(sessionsDir, `session-${index + 1}.jsonl`),
+      createPiSessionContent(`pi-session-${index + 1}`),
+      "utf8",
+    );
   }
 
   return homeDir;

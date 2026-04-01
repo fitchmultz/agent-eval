@@ -82,6 +82,23 @@ function extractCodexStartedAt(
   );
 }
 
+function extractPiStartedAt(
+  record: Record<string, unknown>,
+): string | undefined {
+  // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
+  if (record["type"] !== "session") {
+    return undefined;
+  }
+
+  return (
+    // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
+    typeof record["timestamp"] === "string"
+      ? // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
+        record["timestamp"]
+      : undefined
+  );
+}
+
 function extractRecordTimestamp(
   record: Record<string, unknown>,
   provider: SourceProvider,
@@ -96,6 +113,14 @@ function extractRecordTimestamp(
   if (provider === "claude") {
     return {
       ...(timestamp ? { startedAt: timestamp, timestamp } : {}),
+    };
+  }
+
+  if (provider === "pi") {
+    const startedAt = extractPiStartedAt(record);
+    return {
+      ...(startedAt ? { startedAt } : {}),
+      ...(timestamp ? { timestamp } : {}),
     };
   }
 

@@ -26,10 +26,9 @@ export function describeCorpusScope(
     discoveredSessionCount: metrics.sessionCount,
     appliedSessionLimit: null,
   };
-  const {
-    sessionCount,
-  } = metrics;
-  const { appliedSessionLimit, discoveredSessionCount, selection } = corpusScope;
+  const { sessionCount } = metrics;
+  const { appliedSessionLimit, discoveredSessionCount, selection } =
+    corpusScope;
   const isWindowed =
     selection === "most_recent_window" && discoveredSessionCount > sessionCount;
 

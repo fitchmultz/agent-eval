@@ -109,7 +109,7 @@ describe("createMessagePreviews", () => {
     const previews = createMessagePreviews(
       [
         "- create-subagent: Create custom subagents for specialized AI tasks. Use when you want to create a new type of subagent, set up task-specific agents, configure code reviewers, debuggers, or domain-specific assistants.",
-        '### Repo Execution Trust - Repo-local executable settings are gated by local `.ralph/trust.jsonc`. - Trust file shape: `{\"allow_project_commands\": true}`.',
+        '### Repo Execution Trust - Repo-local executable settings are gated by local `.ralph/trust.jsonc`. - Trust file shape: `{"allow_project_commands": true}`.',
         "- Policy drift: the repo has a safer argv-first subprocess abstraction, but shell-string execution still leaks.",
       ],
       {
@@ -318,7 +318,7 @@ describe("isLowSignalPreview", () => {
     ).toBe(true);
     expect(
       isLowSignalPreview(
-        '### Repo Execution Trust - Repo-local executable settings are gated by local `.ralph/trust.jsonc`. - Trust file shape: `{\"allow_project_commands\": true}`.',
+        '### Repo Execution Trust - Repo-local executable settings are gated by local `.ralph/trust.jsonc`. - Trust file shape: `{"allow_project_commands": true}`.',
       ),
     ).toBe(true);
     expect(

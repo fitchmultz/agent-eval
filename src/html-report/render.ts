@@ -1,25 +1,21 @@
 /**
  * Purpose: Main render orchestrator for source-neutral HTML reports.
- * Responsibilities: Assemble the complete static HTML report document for supported transcript sources.
+ * Responsibilities: Assemble the complete static HTML triage report document for supported transcript sources.
  * Scope: Used by the presentation layer after deterministic metrics and summary generation.
  * Usage: `renderHtmlReport(summary, metrics, charts)`.
  * Invariants/Assumptions: The HTML report remains static, portable, and dependency-free.
  */
 
-import { getConfig } from "../config/index.js";
 import { describeCorpusScope } from "../report-scope.js";
 import type { MetricsRecord, SummaryArtifact } from "../schema.js";
 import {
-  renderEndedVerifiedDeliverySpotlightCards,
-  renderHighlightCards,
+  renderExecutiveSummaryCards,
   renderIncidentCards,
   renderInventoryList,
-  renderMomentumCards,
+  renderMetricGlossary,
+  renderOperatorMetrics,
   renderOpportunityList,
-  renderRecognitions,
-  renderScoreCards,
   renderSessionCards,
-  renderSummaryCards,
 } from "./cards.js";
 import {
   renderComparativeSliceTable,
@@ -38,7 +34,7 @@ function renderMethodologyList(metrics: MetricsRecord): string {
     "This report is a deterministic transcript analytics summary with heuristic policy proxies, not a rigorous correctness evaluator.",
     "Labels represent transcript-visible heuristics and should be read as operator-friction signals, not ground-truth task outcomes.",
     "Compliance scores are event-order proxies based on observed transcript behavior and do not prove repository correctness.",
-    "A synthetic benchmark harness validates key proxy behavior, but benchmark coverage remains limited and should not be treated as comprehensive external validation.",
+    "Static HTML is intentional: this report favors shareable, portable triage output over client-side interaction.",
   ];
 
   if (metrics.parseWarningCount > 0) {
@@ -64,25 +60,31 @@ function renderNoDataPanel(summary: SummaryArtifact): string {
   </div></section>`;
 }
 
-function renderChartPanel(
-  title: string,
-  content: string,
-  emptyMessage?: string,
-  extraClass = "",
+function renderHeaderContext(
+  summary: SummaryArtifact,
+  metrics: MetricsRecord,
 ): string {
-  const classes = ["panel", "chart-panel", extraClass];
+  const providers = [
+    ...new Set(metrics.inventory.map((record) => record.provider)),
+  ];
+  return `${providers.join(", ")} corpus · ${summary.sessions} sessions · ${metrics.corpusScope.selection === "most_recent_window" ? "recent-window" : "full corpus"} · generated ${summary.generatedAt}`;
+}
 
-  if (emptyMessage) {
-    classes.push("chart-panel-empty");
-    return `<div class="${classes.filter(Boolean).join(" ")}">
-      <div class="chart-empty-state">
-        <h3>${escapeHtml(title)}</h3>
-        <p class="empty-state">${escapeHtml(emptyMessage)}</p>
-      </div>
-    </div>`;
-  }
-
-  return `<div class="${classes.filter(Boolean).join(" ")}">${content}</div>`;
+function renderReportMetadata(
+  summary: SummaryArtifact,
+  metrics: MetricsRecord,
+): string {
+  const providers = [
+    ...new Set(metrics.inventory.map((record) => record.provider)),
+  ];
+  return `<details class="panel report-metadata"><summary>Report metadata</summary>
+    <ul class="opportunity-list">
+      <li><strong>Engine</strong><span>${escapeHtml(summary.engineVersion)}</span></li>
+      <li><strong>Schema</strong><span>${escapeHtml(summary.schemaVersion)}</span></li>
+      <li><strong>Providers</strong><span>${escapeHtml(providers.join(", "))}</span></li>
+      <li><strong>Parse warnings</strong><span>${metrics.parseWarningCount}</span></li>
+    </ul>
+  </details>`;
 }
 
 /**
@@ -91,84 +93,31 @@ function renderChartPanel(
 export function renderHtmlReport(
   summary: SummaryArtifact,
   metrics: MetricsRecord,
-  charts: HtmlReportCharts,
+  _charts: HtmlReportCharts,
 ): string {
   const styles = renderStyles();
   const scope = describeCorpusScope(metrics);
-  const providers = [
-    ...new Set(metrics.inventory.map((record) => record.provider)),
-  ];
-  const skin = getConfig().reporting.skin;
-  const title =
-    skin === "showcase"
-      ? "Transcript Analytics Engine Report"
-      : "Transcript Analytics Report";
-  const scoreHeading =
-    skin === "showcase" ? "Shareable Scoreboard" : "Heuristic Scorecards";
+  const title = "Transcript Analytics Report";
   const isEmptyCorpus = summary.sessions === 0;
   const bodyClassName = isEmptyCorpus ? ' class="empty-report"' : "";
   const contentSections = isEmptyCorpus
     ? [
         renderNoDataPanel(summary),
-        `<section><div class="metric-grid">${renderSummaryCards(summary)}</div></section>`,
-        `<section><h2>Inventory</h2><ul class="inventory-list">${renderInventoryList(metrics)}</ul></section>`,
+        `<section><h2>Operator Action Metrics</h2><div class="metric-grid">${renderOperatorMetrics(summary)}</div></section>`,
+        `<section><h2>Inventory</h2>${renderInventoryList(metrics)}</section>`,
         `<section><h2>Methodology And Limitations</h2><div class="panel">${renderMethodologyList(metrics)}</div></section>`,
       ]
     : [
-        renderNoDataPanel(summary),
-        `<section><div class="metric-grid">${renderSummaryCards(summary)}</div></section>`,
-        `<section><h2>${escapeHtml(scoreHeading)}</h2><div class="metric-grid">${renderScoreCards(summary)}</div></section>`,
-        `<section><h2>Recent Momentum</h2><div class="metric-grid">${renderMomentumCards(summary)}</div></section>`,
-        ...(skin === "showcase"
-          ? [
-              `<section><h2>Showcase Highlights</h2><div class="metric-grid">${renderHighlightCards(summary)}</div></section>`,
-              `<section><h2>Recognitions</h2><div class="badge-row">${renderRecognitions(summary)}</div></section>`,
-            ]
-          : []),
-        `<section><h2>Operational Rates</h2><div class="rates-grid">
-      <div class="rate-item"><strong>Incidents / 100 turns</strong><div class="rate-value">${summary.rates.incidentsPer100Turns}</div></div>
-      <div class="rate-item"><strong>Writes / 100 turns</strong><div class="rate-value">${summary.rates.writesPer100Turns}</div></div>
-      <div class="rate-item"><strong>Verification requests / 100 turns</strong><div class="rate-value">${summary.rates.verificationRequestsPer100Turns}</div></div>
-      <div class="rate-item"><strong>Interruptions / 100 turns</strong><div class="rate-value">${summary.rates.interruptionsPer100Turns}</div></div>
-      <div class="rate-item"><strong>Reinjections / 100 turns</strong><div class="rate-value">${summary.rates.reinjectionsPer100Turns}</div></div>
-      <div class="rate-item"><strong>Praise / 100 turns</strong><div class="rate-value">${summary.rates.praisePer100Turns}</div></div>
-    </div></section>`,
-        `<section><h2>Comparative Slices</h2><div class="panel">${renderComparativeSliceTable(summary)}</div></section>`,
-        `<section><h2>Charts</h2><div class="charts-grid">
-      ${renderChartPanel(
-        "Label Counts",
-        charts.labelChartSvg,
-        summary.labels.length === 0
-          ? "No labels were detected in this slice."
-          : undefined,
-        "wide",
-      )}
-      ${renderChartPanel(
-        "Incident Severity",
-        charts.severityChartSvg,
-        summary.severities.some((entry) => entry.count > 0)
-          ? undefined
-          : "No incidents were recorded in this slice.",
-      )}
-      ${renderChartPanel(
-        "Compliance Pass Counts",
-        charts.complianceChartSvg,
-        summary.compliance.some((entry) => entry.passCount > 0)
-          ? undefined
-          : "No passing compliance checks were recorded in this slice.",
-      )}
-    </div></section>`,
+        `<section><h2>Executive Summary</h2><div class="metric-grid executive-grid">${renderExecutiveSummaryCards(summary)}</div></section>`,
+        `<section><h2>Operator Action Metrics</h2><div class="metric-grid">${renderOperatorMetrics(summary)}</div></section>`,
         `<section><h2>Sessions To Review First</h2><div class="sessions-grid">${renderSessionCards(summary)}</div></section>`,
-        ...(skin === "showcase"
-          ? [
-              `<section><h2>Ended-Verified Delivery Spotlights</h2><div class="sessions-grid">${renderEndedVerifiedDeliverySpotlightCards(summary)}</div></section>`,
-            ]
-          : []),
-        `<section><h2>Top Incidents</h2><div class="incident-grid">${renderIncidentCards(summary)}</div></section>`,
-        `<section><h2>Deterministic Opportunities</h2><ul class="opportunity-list">${renderOpportunityList(summary)}</ul></section>`,
         `<section><h2>Compliance Breakdown</h2><div class="panel">${renderComplianceTable(summary)}</div></section>`,
+        `<section><h2>Comparative Slices</h2><div class="panel">${renderComparativeSliceTable(summary)}</div>${renderMetricGlossary(summary)}</section>`,
+        `<section><h2>Recurring Patterns And Incidents</h2><div class="incident-grid">${renderIncidentCards(summary)}</div></section>`,
+        `<section><h2>Deterministic Opportunities</h2><ul class="opportunity-list">${renderOpportunityList(summary)}</ul></section>`,
         `<section><h2>Methodology And Limitations</h2><div class="panel">${renderMethodologyList(metrics)}</div></section>`,
-        `<section><h2>Inventory</h2><ul class="inventory-list">${renderInventoryList(metrics)}</ul></section>`,
+        `<section><h2>Inventory</h2>${renderInventoryList(metrics)}</section>`,
+        renderReportMetadata(summary, metrics),
       ];
 
   return [
@@ -187,18 +136,9 @@ export function renderHtmlReport(
     "<header>",
     `<h1>${escapeHtml(title)}</h1>`,
     `<p class="lede">${escapeHtml(
-      skin === "showcase"
-        ? "A deterministic, transcript-first summary of developer-agent sessions for sharing and review."
-        : "A deterministic, transcript-first analytics summary for developer-agent session artifacts. These outputs emphasize operator burden, verification habits, and transcript-visible workflow signals rather than correctness claims.",
+      "A deterministic, transcript-first session triage report for reviewing operator burden, verification habits, and transcript-visible workflow behavior.",
     )}</p>`,
-    `<div class="meta-row">
-      <span class="pill">engine ${escapeHtml(summary.engineVersion)}</span>
-      <span class="pill">schema ${escapeHtml(summary.schemaVersion)}</span>
-      <span class="pill">sources ${escapeHtml(providers.join(", "))}</span>
-      <span class="pill">${escapeHtml(scope.pill)}</span>
-      <span class="pill">${escapeHtml(summary.generatedAt)}</span>
-      <span class="pill">parse warnings ${metrics.parseWarningCount}</span>
-    </div>`,
+    `<p class="context-line">${escapeHtml(renderHeaderContext(summary, metrics))}</p>`,
     `<div class="scope-banner${scope.isWindowed ? " scope-banner-windowed" : ""}">
       <p class="scope-banner-title">${escapeHtml(scope.headline)}</p>
       <p>${escapeHtml(scope.detail)}</p>

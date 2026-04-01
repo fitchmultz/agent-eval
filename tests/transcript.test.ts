@@ -13,6 +13,7 @@ import { TranscriptParseError } from "../src/errors.js";
 import {
   parseClaudeTranscriptFile,
   parseEventLine,
+  parsePiTranscriptFile,
   parseTranscriptFile,
 } from "../src/transcript/index.js";
 
@@ -534,6 +535,214 @@ describe("parseClaudeTranscriptFile", () => {
     await expect(
       parseTranscriptFile(sessionPath, {
         sourceProvider: "claude",
+        signal: abortController.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
+});
+
+describe("parsePiTranscriptFile", () => {
+  async function writePiTranscript(
+    name: string,
+    records: unknown[],
+  ): Promise<string> {
+    const root = await mkdtemp(join(tmpdir(), "agent-eval-pi-transcript-"));
+    const sessionsDir = join(root, "agent", "sessions", "--Users-test-project");
+    await mkdir(sessionsDir, { recursive: true });
+    await writeFile(
+      join(sessionsDir, `${name}.jsonl`),
+      `${records.map((record) => JSON.stringify(record)).join("\n")}\n`,
+      "utf8",
+    );
+    return join(sessionsDir, `${name}.jsonl`);
+  }
+
+  it("merges a user prompt, assistant tool call, and tool result into one turn", async () => {
+    const sessionPath = await writePiTranscript("single-turn", [
+      {
+        type: "session",
+        version: 3,
+        id: "pi-session-1",
+        timestamp: "2026-03-06T19:00:00.000Z",
+        cwd: "/workspace/demo",
+      },
+      {
+        type: "message",
+        id: "user-1",
+        parentId: null,
+        timestamp: "2026-03-06T19:00:01.000Z",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Run the tests and report back." }],
+        },
+      },
+      {
+        type: "message",
+        id: "assistant-1",
+        parentId: "user-1",
+        timestamp: "2026-03-06T19:00:02.000Z",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: "I will run the tests now." },
+            {
+              type: "toolCall",
+              id: "tool-1",
+              name: "bash",
+              arguments: { command: "pnpm test" },
+            },
+          ],
+        },
+      },
+      {
+        type: "message",
+        id: "tool-result-1",
+        parentId: "assistant-1",
+        timestamp: "2026-03-06T19:00:03.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: "tool-1",
+          toolName: "bash",
+          content: [{ type: "text", text: "Process exited with code 0" }],
+          isError: false,
+        },
+      },
+    ]);
+
+    const session = await parsePiTranscriptFile(sessionPath);
+
+    expect(session.sessionId).toBe("pi-session-1");
+    expect(session.turns).toHaveLength(1);
+    expect(session.turns[0]?.userMessages).toEqual([
+      "Run the tests and report back.",
+    ]);
+    expect(session.turns[0]?.assistantMessages).toContain(
+      "I will run the tests now.",
+    );
+    expect(session.turns[0]?.toolCalls[0]?.toolName).toBe("bash");
+    expect(session.turns[0]?.toolCalls[0]?.outputText).toContain(
+      "Process exited with code 0",
+    );
+  });
+
+  it("parses only the current persisted branch path", async () => {
+    const sessionPath = await writePiTranscript("branched", [
+      {
+        type: "session",
+        version: 3,
+        id: "pi-session-2",
+        timestamp: "2026-03-06T19:00:00.000Z",
+        cwd: "/workspace/demo",
+      },
+      {
+        type: "message",
+        id: "user-1",
+        parentId: null,
+        timestamp: "2026-03-06T19:00:01.000Z",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Inspect the repo first." }],
+        },
+      },
+      {
+        type: "message",
+        id: "assistant-1",
+        parentId: "user-1",
+        timestamp: "2026-03-06T19:00:02.000Z",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "I inspected the repo." }],
+        },
+      },
+      {
+        type: "message",
+        id: "user-abandoned",
+        parentId: "assistant-1",
+        timestamp: "2026-03-06T19:00:03.000Z",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Take the abandoned path." }],
+        },
+      },
+      {
+        type: "message",
+        id: "assistant-abandoned",
+        parentId: "user-abandoned",
+        timestamp: "2026-03-06T19:00:04.000Z",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Abandoned branch response." }],
+        },
+      },
+      {
+        type: "branch_summary",
+        id: "branch-summary-1",
+        parentId: "assistant-1",
+        timestamp: "2026-03-06T19:00:05.000Z",
+        fromId: "assistant-abandoned",
+        summary: "Abandoned path summary.",
+      },
+      {
+        type: "message",
+        id: "user-2",
+        parentId: "branch-summary-1",
+        timestamp: "2026-03-06T19:00:06.000Z",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Now fix the failing test." }],
+        },
+      },
+      {
+        type: "message",
+        id: "assistant-2",
+        parentId: "user-2",
+        timestamp: "2026-03-06T19:00:07.000Z",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "I fixed the failing test." }],
+        },
+      },
+    ]);
+
+    const session = await parsePiTranscriptFile(sessionPath);
+
+    expect(session.turns).toHaveLength(2);
+    expect(session.turns[0]?.userMessages[0]).toBe("Inspect the repo first.");
+    expect(session.turns[1]?.userMessages[0]).toBe("Now fix the failing test.");
+    expect(session.turns[1]?.assistantMessages).toContain(
+      "I fixed the failing test.",
+    );
+    expect(session.turns.flatMap((turn) => turn.userMessages)).not.toContain(
+      "Take the abandoned path.",
+    );
+  });
+
+  it("honors abort signals on the pi parser path", async () => {
+    const sessionPath = await writePiTranscript("aborted", [
+      {
+        type: "session",
+        version: 3,
+        id: "pi-session-3",
+        timestamp: "2026-03-06T19:00:00.000Z",
+        cwd: "/workspace/demo",
+      },
+      {
+        type: "message",
+        id: "user-1",
+        parentId: null,
+        timestamp: "2026-03-06T19:00:01.000Z",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Inspect the repo." }],
+        },
+      },
+    ]);
+    const abortController = new AbortController();
+    abortController.abort();
+
+    await expect(
+      parseTranscriptFile(sessionPath, {
+        sourceProvider: "pi",
         signal: abortController.signal,
       }),
     ).rejects.toMatchObject({ name: "AbortError" });

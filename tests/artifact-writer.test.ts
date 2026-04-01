@@ -155,6 +155,13 @@ function createSummary(): SummaryArtifact {
     comparativeSlices: [],
     topSessions: [],
     topIncidents: [],
+    executiveSummary: {
+      problem: "No write sessions were observed.",
+      change: "No recent change summary is available.",
+      action: "Start with inventory review.",
+    },
+    operatorMetrics: [],
+    metricGlossary: [],
     scoreCards: [],
     highlightCards: [],
     recognitions: [],

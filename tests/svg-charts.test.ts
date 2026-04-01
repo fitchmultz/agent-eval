@@ -35,6 +35,8 @@ const baseSummary: SummaryArtifact = {
       failCount: 1,
       notApplicableCount: 0,
       unknownCount: 0,
+      passRate: 83.3,
+      affectedSessionCount: 6,
     },
     {
       rule: "cwd_or_repo_echoed_before_write",
@@ -42,6 +44,8 @@ const baseSummary: SummaryArtifact = {
       failCount: 2,
       notApplicableCount: 1,
       unknownCount: 0,
+      passRate: 60,
+      affectedSessionCount: 5,
     },
   ],
   rates: {
@@ -60,6 +64,13 @@ const baseSummary: SummaryArtifact = {
   topSessions: [],
   endedVerifiedDeliverySpotlights: [],
   topIncidents: [],
+  executiveSummary: {
+    problem: "No operator problem summary for chart-only tests.",
+    change: "No recent change summary for chart-only tests.",
+    action: "No next action for chart-only tests.",
+  },
+  operatorMetrics: [],
+  metricGlossary: [],
   opportunities: [],
   highlightCards: [],
   scoreCards: [],

@@ -112,7 +112,7 @@ function buildProgram(): Command {
     .showHelpAfterError()
     .option(
       "--source <provider>",
-      "Source provider to inspect: codex or claude (env: CODEX_EVAL_SOURCE)",
+      "Source provider to inspect: codex, claude, or pi (env: CODEX_EVAL_SOURCE)",
       defaultSource,
     )
     .option(
@@ -161,7 +161,7 @@ function buildProgram(): Command {
         "    - agent-eval.config.json",
         "",
         "  Environment variables:",
-        "    CODEX_EVAL_SOURCE              - Source provider (codex|claude)",
+        "    CODEX_EVAL_SOURCE              - Source provider (codex|claude|pi)",
         "    CODEX_EVAL_SOURCE_HOME         - Source home directory",
         "    CODEX_EVAL_OUTPUT_DIR          - Output directory for artifacts",
         "    CODEX_EVAL_REPORT_SKIN         - Report skin (operator|showcase)",
@@ -172,13 +172,14 @@ function buildProgram(): Command {
         "Examples:",
         "  agent-eval inspect --source codex --home ~/.codex",
         "  agent-eval inspect --source claude --home ~/.claude",
+        "  agent-eval inspect --source pi --home ~/.pi",
         "  agent-eval parse --source codex --home ~/.codex --output-dir artifacts",
         "  cat artifacts/raw-turns.jsonl",
         "  agent-eval eval --source claude --home ~/.claude --output-dir artifacts",
+        "  agent-eval eval --source pi --home ~/.pi --summary-only --session-limit 25",
         "  agent-eval benchmark --output-dir artifacts/benchmark",
         "  agent-eval report --source codex --home ~/.codex --output-dir artifacts",
-        "  agent-eval eval --source claude --home ~/.claude --summary-only --session-limit 25",
-        "  agent-eval report --source codex --home ~/.codex --report-skin showcase",
+        "  agent-eval report --source pi --home ~/.pi --report-skin showcase",
         "",
         "Exit codes:",
         "  0 success",

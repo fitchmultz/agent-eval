@@ -44,6 +44,10 @@ export function extractCommandTextFromArgumentsText(
       return cmd;
     }
 
+    if (typeof command === "string") {
+      return command;
+    }
+
     if (Array.isArray(command)) {
       const commandParts = command.filter(
         (item): item is string => typeof item === "string",

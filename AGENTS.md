@@ -19,7 +19,7 @@ Constraints:
 - Emit machine-readable artifacts and a markdown report.
 
 Notes:
-- Exploration outputs live under `notes/`.
+- Exploration outputs live under `notes/`; temporary redesign/QA investigation folders should stay ignored unless explicitly curated for publication, and binary screenshots/verification captures should live under ignored `notes/**/screenshots/` or `notes/**/verification/` paths.
 - Canonical methodology should treat transcript JSONL under the selected source home as required input.
 - Treat SQLite/log/history/shell snapshot stores as optional enrichment only.
 - Keep generated analytics outputs under `artifacts/` untracked for this public repo.
@@ -32,4 +32,4 @@ Notes:
 - Keep the public-facing layer useful for non-experts: maintain shareable scorecards, recognitions, and verified-delivery spotlight sections as deterministic derivatives.
 - Keep trend reporting deterministic too: comparative slices should come from aggregated session metrics, and headline momentum should prefer a stable recent window over a twitchy tiny slice when possible.
 - Keep summary logic split by responsibility: canonical core math, optional presentation decorations, and shared report section derivation should not collapse back into one giant module.
-- Supported providers currently include Codex and Claude Code; parser and discovery changes should preserve a shared normalized session model.
+- Supported providers currently include Codex, Claude Code, and pi; parser and discovery changes should preserve a shared normalized session model.

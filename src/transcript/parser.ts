@@ -1,9 +1,9 @@
 /**
  * Purpose: Main transcript parsing dispatcher for supported developer-agent transcript formats.
- * Responsibilities: Parse Codex transcript files directly and route Claude Code files to the Claude adapter.
+ * Responsibilities: Parse Codex transcript files directly and route Claude Code and pi files to source-specific adapters.
  * Scope: Shared entrypoint used by the evaluator to normalize transcript files into ParsedSession objects.
  * Usage: Call `parseTranscriptFile(path, options)` and optionally set `sourceProvider` to skip path inference.
- * Invariants/Assumptions: Codex transcript parsing remains Zod-validated; Claude Code uses a source-specific adapter.
+ * Invariants/Assumptions: Codex transcript parsing remains Zod-validated; Claude Code and pi use source-specific adapters.
  */
 
 import { normalizeError, TranscriptParseError } from "../errors.js";
@@ -16,6 +16,7 @@ import {
 import { parseClaudeTranscriptFile } from "./claude-parser.js";
 import { createSourceRef, routeEvent } from "./event-router.js";
 import { createTranscriptLineReader, getReaderStream } from "./file-reader.js";
+import { parsePiTranscriptFile } from "./pi-parser.js";
 import { validateEventRecord } from "./schema.js";
 import {
   buildParsedSession,
@@ -197,6 +198,14 @@ export async function parseTranscriptFile(
 
     if (sourceProvider === "claude") {
       return await parseClaudeTranscriptFile(path, {
+        ...options,
+        signal: combinedSignal,
+        sourceProvider,
+      });
+    }
+
+    if (sourceProvider === "pi") {
+      return await parsePiTranscriptFile(path, {
         ...options,
         signal: combinedSignal,
         sourceProvider,

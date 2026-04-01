@@ -1,7 +1,7 @@
 /**
  * Purpose: File I/O wrapper for transcript parsing.
  * Responsibilities: Provide line-by-line JSONL reading with typed stream access for cleanup.
- * Scope: Shared by Codex and Claude transcript parsers.
+ * Scope: Shared by Codex, Claude, and pi transcript parsers.
  * Usage: Create a reader with `createTranscriptLineReader()` and close its stream with `getReaderStream()`.
  * Invariants/Assumptions: Underlying readline instances expose either `input` or `_inputStream`.
  */

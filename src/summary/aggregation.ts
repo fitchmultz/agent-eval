@@ -1,12 +1,12 @@
 /**
  * Purpose: Aggregation functions for summary generation.
  * Entrypoint: Used by summary-core for data aggregation.
- * Notes: Handles label counts, session aggregation, and data collection.
+ * Notes: Handles label counts, session contexts, top-incident selection, and shared artifact collection.
  */
 
 import { getConfig } from "../config/index.js";
 import {
-  chooseIncidentEvidencePreview,
+  buildTopIncidentSummary,
   insertTopIncident,
 } from "../incident-selection.js";
 import { isLowSignalPreview, isUnsafePreview } from "../sanitization.js";
@@ -21,6 +21,7 @@ import {
   createEmptySessionLabelMap,
   createEmptySeverityCounts,
 } from "./scoring.js";
+import { collectSessionContexts } from "./session-display.js";
 import type { SummaryInputs } from "./types.js";
 
 /**
@@ -58,10 +59,40 @@ export function countWriteTurns(rawTurns: readonly RawTurnRecord[]): number {
   ).length;
 }
 
+function buildTopIncidents(
+  incidents: readonly IncidentRecord[],
+  rawTurns: readonly RawTurnRecord[],
+): SummaryArtifact["topIncidents"] {
+  const sessionContexts = collectSessionContexts(rawTurns);
+  let topIncidents: SummaryArtifact["topIncidents"] = [];
+
+  for (const incident of incidents) {
+    const summary = buildTopIncidentSummary(
+      incident,
+      rawTurns,
+      sessionContexts.get(incident.sessionId),
+    );
+    if (
+      !summary.evidencePreview ||
+      isLowSignalPreview(summary.evidencePreview) ||
+      isUnsafePreview(summary.evidencePreview)
+    ) {
+      continue;
+    }
+    topIncidents = insertTopIncident(
+      topIncidents,
+      summary,
+      getConfig().previews.maxTopIncidents,
+    );
+  }
+
+  return topIncidents;
+}
+
 /**
  * Builds summary inputs from raw turn and incident data.
  *
- * Collects session label counts, severity counts, and top incidents
+ * Collects session label counts, session contexts, severity counts, and top incidents
  * for use in summary generation.
  *
  * @param rawTurns - All parsed and labeled turns
@@ -73,36 +104,15 @@ export function buildSummaryInputsFromArtifacts(
   incidents: readonly IncidentRecord[],
 ): SummaryInputs {
   const severityCounts = createEmptySeverityCounts();
-  let topIncidents: SummaryArtifact["topIncidents"] = [];
 
   for (const incident of incidents) {
     severityCounts[incident.severity] += 1;
-    const evidencePreview = chooseIncidentEvidencePreview(incident, rawTurns);
-    if (
-      !evidencePreview ||
-      isLowSignalPreview(evidencePreview) ||
-      isUnsafePreview(evidencePreview)
-    ) {
-      continue;
-    }
-    topIncidents = insertTopIncident(
-      topIncidents,
-      {
-        incidentId: incident.incidentId,
-        sessionId: incident.sessionId,
-        summary: incident.summary,
-        severity: incident.severity,
-        confidence: incident.confidence,
-        turnSpan: incident.turnIndices.length,
-        evidencePreview,
-      },
-      getConfig().previews.maxTopIncidents,
-    );
   }
 
   return {
     sessionLabelCounts: collectSessionLabelCounts(rawTurns),
-    topIncidents,
+    sessionContexts: collectSessionContexts(rawTurns),
+    topIncidents: buildTopIncidents(incidents, rawTurns),
     severityCounts,
     writeTurnCount: countWriteTurns(rawTurns),
   };

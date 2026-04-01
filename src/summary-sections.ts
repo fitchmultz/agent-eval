@@ -1,41 +1,24 @@
 /**
  * Purpose: Builds shared section data for markdown and HTML reports from the canonical summary artifact.
- * Entrypoint: `buildSummarySections()` is consumed by both report.ts and presentation.ts to reduce structural drift.
- * Notes: Derived headline and momentum sections are computed here instead of being persisted in summary.json.
+ * Entrypoint: `buildSummarySections()` is consumed by report renderers for lightweight derived sections.
+ * Notes: Executive summary stays persisted in summary.json; this module now focuses on momentum helpers for presentation.
  */
-import {
-  INTERRUPTION_LOAD,
-  MOMENTUM_TONE,
-  SCORING,
-} from "./constants/index.js";
+import { MOMENTUM_TONE } from "./constants/index.js";
 import type { SummaryArtifact } from "./schema.js";
 
 /**
  * A card in a summary section with a title, value, detail, and visual tone.
  */
 export interface SummarySectionCard {
-  /** Card title displayed as the label */
   title: string;
-  /** Primary value displayed prominently */
   value: string;
-  /** Presentation mode for the primary value */
   valueKind?: "default" | "session-id";
-  /** Detailed explanation or context */
   detail: string;
-  /** Visual tone for styling (affects color/border) */
   tone: "neutral" | "good" | "warn" | "danger";
 }
 
-/**
- * Model containing all derived summary sections.
- *
- * These sections are computed at render time and not persisted
- * in the summary artifact to avoid structural drift.
- */
 export interface SummarySectionModel {
-  /** Headline insights for the top of reports */
   headlineInsights: SummarySectionCard[];
-  /** Recent momentum comparisons (recent vs corpus) */
   recentMomentum: SummarySectionCard[];
 }
 
@@ -71,7 +54,7 @@ function buildMomentumCard(
     };
   }
 
-  const delta = recentScore - corpusScore;
+  const delta = Number((recentScore - corpusScore).toFixed(1));
   return {
     title,
     value: `${formatSignedDelta(delta)} pts`,
@@ -83,50 +66,34 @@ function buildMomentumCard(
 function buildHeadlineInsights(
   summary: SummaryArtifact,
 ): SummarySectionModel["headlineInsights"] {
-  const highestFriction = summary.topSessions[0];
+  const executiveSummary = summary.executiveSummary ?? {
+    problem: "No persisted executive problem summary was available.",
+    change: "No persisted recent-change summary was available.",
+    action: "No persisted next-action summary was available.",
+  };
 
   return [
     {
-      title: "Terminal Verification",
-      value:
-        summary.delivery.sessionsWithWrites > 0
-          ? `${summary.delivery.sessionsEndingVerified}/${summary.delivery.sessionsWithWrites}`
-          : "N/A",
-      detail:
-        summary.delivery.sessionsWithWrites > 0
-          ? `${summary.delivery.writeSessionVerificationRate}% of write sessions ended with a passing verification signal.`
-          : "No write sessions were observed.",
+      title: "Problem",
+      value: "What is wrong",
+      detail: executiveSummary.problem,
       tone:
-        summary.delivery.sessionsWithWrites === 0
-          ? "neutral"
-          : summary.delivery.sessionsEndingVerified ===
-              summary.delivery.sessionsWithWrites
-            ? "good"
-            : "warn",
-    },
-    {
-      title: "Interruption Load",
-      value: `${summary.rates.interruptionsPer100Turns}`,
-      detail:
-        "Interrupt labels per 100 turns, useful for spotting redirected or churn-heavy sessions.",
-      tone:
-        summary.rates.interruptionsPer100Turns >=
-        INTERRUPTION_LOAD.WARN_THRESHOLD
-          ? "warn"
-          : "neutral",
-    },
-    {
-      title: "Highest Friction Session",
-      value: highestFriction ? highestFriction.sessionId : "none",
-      valueKind: highestFriction ? "session-id" : "default",
-      detail: highestFriction
-        ? `${highestFriction.frictionScore} friction points, profile ${highestFriction.archetypeLabel}.`
-        : "No sessions were available.",
-      tone:
-        highestFriction &&
-        highestFriction.frictionScore >= SCORING.HIGH_FRICTION_THRESHOLD
+        summary.delivery.sessionsWithWrites >
+        summary.delivery.sessionsEndingVerified
           ? "danger"
           : "neutral",
+    },
+    {
+      title: "Recent Change",
+      value: "What changed",
+      detail: executiveSummary.change,
+      tone: "neutral",
+    },
+    {
+      title: "Next Action",
+      value: "What to inspect first",
+      detail: executiveSummary.action,
+      tone: "warn",
     },
   ];
 }
@@ -148,40 +115,26 @@ function buildRecentMomentum(
 
   return [
     buildMomentumCard(
-      "Verification Proxy Momentum",
-      `${recent.label} vs selected corpus on terminal verification outcomes.`,
-      corpus.verificationProxyScore,
-      recent.verificationProxyScore,
+      "Verification Discipline Momentum",
+      `${recent.label} vs selected corpus on write-session verification rate.`,
+      corpus.writeSessionVerificationRate,
+      recent.writeSessionVerificationRate,
     ),
     buildMomentumCard(
-      "Flow Proxy Momentum",
-      `${recent.label} vs selected corpus on calmer sessions.`,
-      corpus.flowProxyScore,
-      recent.flowProxyScore,
-    ),
-    buildMomentumCard(
-      "Workflow Proxy Momentum",
-      `${recent.label} vs selected corpus on operating-rule compliance.`,
+      "Workflow Hygiene Momentum",
+      `${recent.label} vs selected corpus on workflow proxy score.`,
       corpus.workflowProxyScore,
       recent.workflowProxyScore,
+    ),
+    buildMomentumCard(
+      "Flow Stability Momentum",
+      `${recent.label} vs selected corpus on calmer-session flow proxy score.`,
+      corpus.flowProxyScore,
+      recent.flowProxyScore,
     ),
   ];
 }
 
-/**
- * Builds shared section data for markdown and HTML reports.
- *
- * Creates derived sections that are used by both report renderers:
- * - Headline insights: Write verification, interruption load, highest friction session
- * - Recent momentum: Comparative scores between recent sessions and corpus
- *
- * These sections are computed at render time from the summary artifact
- * rather than being persisted, ensuring reports stay consistent with
- * the canonical summary data.
- *
- * @param summary - The complete summary artifact
- * @returns SummarySectionModel containing headline and momentum sections
- */
 export function buildSummarySections(
   summary: SummaryArtifact,
 ): SummarySectionModel {

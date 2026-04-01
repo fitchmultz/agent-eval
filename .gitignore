@@ -5,6 +5,16 @@ artifacts/
 coverage/
 dist/
 
+# Local agent homes and repo-local session copies
+.pi/
+.codex/
+.claude/
+
+# Investigation notes and captures: keep only intentionally curated public notes
+notes/pi-report-redesign/
+notes/**/screenshots/
+notes/**/verification/
+
 # Configuration files (local only)
 .agent-evalrc
 .agent-evalrc.json

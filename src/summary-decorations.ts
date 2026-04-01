@@ -13,7 +13,6 @@ import {
   filterWriteSessions,
 } from "./session-filters.js";
 import { countLabel, safeRate, toneForScore } from "./summary/index.js";
-import type { SessionInsightRow } from "./summary/types.js";
 
 /**
  * Presentation-oriented decorations added to the summary core.
@@ -113,7 +112,7 @@ function buildHighlightCards(
 
 function buildRecognitions(
   metrics: MetricsRecord,
-  topSessions: readonly SessionInsightRow[],
+  topSessions: SummaryArtifact["topSessions"],
 ): SummaryArtifact["recognitions"] {
   if (metrics.sessionCount === 0) {
     return [];
@@ -159,7 +158,7 @@ function buildRecognitions(
 
 function buildOpportunities(
   metrics: MetricsRecord,
-  topSessions: readonly SessionInsightRow[],
+  topSessions: SummaryArtifact["topSessions"],
 ): SummaryArtifact["opportunities"] {
   const opportunities: SummaryArtifact["opportunities"] = [];
   const verificationDemand = safeRate(
@@ -175,34 +174,33 @@ function buildOpportunities(
   if (verificationDemand >= OPPORTUNITIES.MIN_VERIFICATION_DEMAND) {
     opportunities.push({
       title: "Reduce verification prompting burden",
-      rationale:
-        "Users are frequently asking for verification explicitly. Consider stronger default post-change verification behavior or more visible verification status updates.",
+      rationale: `Verification requests appear at ${verificationDemand} per 100 turns. The corpus is signaling that post-change verification should be more automatic and more visible.`,
     });
   }
 
   if (reinjectionDemand >= OPPORTUNITIES.MIN_REINJECTION_DEMAND) {
     opportunities.push({
       title: "Improve context retention",
-      rationale:
-        "Repeated goal or constraint restatement suggests sessions may need better plan persistence or clearer progress anchors.",
+      rationale: `Context reinjection appears at ${reinjectionDemand} per 100 turns, suggesting sessions need stronger progress anchors or state carry-forward between steps.`,
     });
   }
 
   if (driftSignals > 0) {
     opportunities.push({
       title: "Guard against scope drift",
-      rationale:
-        "At least one session included an explicit context drift complaint. This is a strong candidate for turn-level reminders and tighter write gating.",
+      rationale: `${driftSignals} explicit drift signal${driftSignals === 1 ? "" : "s"} appeared in this corpus. Tighten scope reminders before major writes and keep user intent visible during long runs.`,
     });
   }
 
   if (
     topSessions.some((session) => session.archetype === "unverified_delivery")
   ) {
+    const unverifiedCount = topSessions.filter(
+      (session) => session.archetype === "unverified_delivery",
+    ).length;
     opportunities.push({
       title: "Block unverified deliveries",
-      rationale:
-        "Some write sessions ended without a passing verification signal. The analytics engine should keep surfacing this as a policy breach, not just a metric.",
+      rationale: `${unverifiedCount} ranked review session${unverifiedCount === 1 ? "" : "s"} ended with code changes but without a passing post-write verification signal. Keep treating this as a triage priority, not just a score movement.`,
     });
   }
 
@@ -227,7 +225,7 @@ function buildOpportunities(
  */
 export function buildSummaryDecorations(
   metrics: MetricsRecord,
-  topSessions: readonly SessionInsightRow[],
+  topSessions: SummaryArtifact["topSessions"],
 ): SummaryDecorations {
   return {
     scoreCards: buildScoreCards(metrics),

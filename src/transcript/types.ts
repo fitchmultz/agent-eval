@@ -3,7 +3,7 @@
  * Responsibilities: Define normalized parsed-session shapes shared by source-specific parsers.
  * Scope: Used by all transcript parsing modules and downstream evaluation code.
  * Usage: Import parsed transcript types from this module instead of redefining source-specific variants.
- * Invariants/Assumptions: Parsed sessions normalize Codex and Claude Code into the same turn/tool/message model.
+ * Invariants/Assumptions: Parsed sessions normalize Codex, Claude Code, and pi into the same turn/tool/message model.
  */
 
 import type {
