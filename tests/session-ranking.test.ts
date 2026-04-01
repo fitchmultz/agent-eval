@@ -342,6 +342,72 @@ describe("buildTopSessions", () => {
     );
   });
 
+  it("flags metadata fallback when no strong lead preview is available", () => {
+    const sessions = [
+      createSession("metadata-fallback", {
+        writeCount: 1,
+        endedVerified: false,
+        verificationPassedCount: 0,
+        verificationFailedCount: 1,
+        complianceRules: [
+          {
+            rule: "verification_after_code_changes",
+            status: "fail",
+            rationale: "missing verification",
+          },
+        ],
+      }),
+    ];
+    const metrics: MetricsRecord = {
+      engineVersion: "0.1.0",
+      schemaVersion: "2",
+      generatedAt: "2026-03-06T00:00:00.000Z",
+      sessionCount: 1,
+      corpusScope: {
+        selection: "all_discovered",
+        discoveredSessionCount: 1,
+        appliedSessionLimit: null,
+      },
+      turnCount: 10,
+      incidentCount: 0,
+      parseWarningCount: 0,
+      labelCounts: {},
+      complianceSummary: [],
+      sessions,
+      inventory: [],
+    };
+    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
+    sessionLabelCounts.set("metadata-fallback", createEmptySessionLabelMap());
+    const sessionContexts = new Map([
+      [
+        "metadata-fallback",
+        {
+          sessionId: "metadata-fallback",
+          evidencePreviews: [
+            "**Default assumption: Codex is already very smart.** Only add context Codex doesn't already have...",
+          ],
+          sourceRefs: [
+            {
+              provider: "codex" as const,
+              kind: "session_jsonl" as const,
+              path: "/tmp/session.jsonl",
+            },
+          ],
+        },
+      ],
+    ]);
+
+    const result = buildTopSessions(
+      metrics,
+      sessionLabelCounts,
+      sessionContexts,
+    );
+    expect(result[0]?.sessionDisplayLabel).toContain("fallback");
+    expect(result[0]?.trustFlags).toContain(
+      "No strong human problem statement was available, so the queue title falls back to metadata.",
+    );
+  });
+
   it("includes dominant labels in results", () => {
     const sessions = [createSession("with-labels", { complianceScore: 100 })];
     const metrics: MetricsRecord = {

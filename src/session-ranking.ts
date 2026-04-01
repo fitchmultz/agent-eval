@@ -133,6 +133,12 @@ function buildTrustFlags(
     flags.push("No source references were captured for this session.");
   }
 
+  if (!context?.leadPreview && context?.evidencePreviews.length) {
+    flags.push(
+      "No strong human problem statement was available, so the queue title falls back to metadata.",
+    );
+  }
+
   if (context?.leadPreviewSource === "assistant") {
     flags.push(
       "Queue title fell back to assistant text because no stronger user preview was available.",

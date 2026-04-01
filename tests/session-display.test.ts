@@ -107,4 +107,20 @@ describe("collectSessionContexts", () => {
     expect(context?.leadPreviewSource).toBe("assistant");
     expect(context?.leadPreview).toContain("login callback");
   });
+
+  it("falls back to metadata when only instruction-heavy previews are available", () => {
+    const contexts = collectSessionContexts([
+      createTurn({
+        userMessagePreviews: [
+          "**Default assumption: Codex is already very smart.** Only add context Codex doesn't already have.",
+          "When done, report: 1. All issues found 2. Exact fixes made 3. Remaining risks.",
+        ],
+        assistantMessagePreviews: [],
+      }),
+    ]);
+
+    const context = contexts.get("session-1");
+    expect(context?.leadPreview).toBeUndefined();
+    expect(context?.evidencePreviews.length).toBeGreaterThan(0);
+  });
 });

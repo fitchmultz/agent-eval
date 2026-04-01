@@ -327,6 +327,16 @@ describe("isLowSignalPreview", () => {
       ),
     ).toBe(true);
     expect(
+      isLowSignalPreview(
+        "**Default assumption: Codex is already very smart.** Only add context Codex doesn't already have.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "When done, report: 1. All issues found 2. Exact fixes made 3. Remaining risks.",
+      ),
+    ).toBe(true);
+    expect(
       isLowSignalPreview("Please verify after the patch and rerun the tests."),
     ).toBe(false);
   });

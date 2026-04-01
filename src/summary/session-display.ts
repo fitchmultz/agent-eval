@@ -90,12 +90,6 @@ function chooseLeadPreview(
       source: "user",
     },
     {
-      previews: userPreviews.filter(
-        (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
-      ),
-      source: "user",
-    },
-    {
       previews: assistantPreviews.filter(
         (preview) =>
           !isLowSignalPreview(preview) &&
@@ -104,24 +98,6 @@ function chooseLeadPreview(
       ),
       source: "assistant",
     },
-    {
-      previews: assistantPreviews.filter(
-        (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
-      ),
-      source: "assistant",
-    },
-    {
-      previews: userPreviews.filter((preview) => !isUnsafePreview(preview)),
-      source: "user",
-    },
-    {
-      previews: assistantPreviews.filter(
-        (preview) => !isUnsafePreview(preview),
-      ),
-      source: "assistant",
-    },
-    { previews: userPreviews, source: "user" },
-    { previews: assistantPreviews, source: "assistant" },
   ];
 
   for (const group of groups) {
