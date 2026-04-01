@@ -322,6 +322,11 @@ describe("isLowSignalPreview", () => {
       ),
     ).toBe(true);
     expect(
+      isLowSignalPreview(
+        "BOTTOM LINE - what you think I want + your recommendation",
+      ),
+    ).toBe(true);
+    expect(
       isLowSignalPreview("Please verify after the patch and rerun the tests."),
     ).toBe(false);
   });

@@ -39,7 +39,7 @@ describe("aggregateMetrics", () => {
     turns: [
       {
         engineVersion: "1.0.0",
-        schemaVersion: "1.0.0",
+        schemaVersion: "2",
         sessionId: id,
         turnIndex: 0,
         userMessageCount: 1,
@@ -64,7 +64,7 @@ describe("aggregateMetrics", () => {
         ? [
             {
               engineVersion: "1.0.0",
-              schemaVersion: "1.0.0",
+              schemaVersion: "2",
               incidentId: `${id}:incident:0`,
               sessionId: id,
               turnIds: ["turn-1"],
@@ -203,7 +203,7 @@ describe("countLabel", () => {
     sessionId: "test",
     turns: Array.from({ length: count }, (_, i) => ({
       engineVersion: "1.0.0",
-      schemaVersion: "1.0.0",
+      schemaVersion: "2",
       sessionId: "test",
       turnIndex: i,
       userMessageCount: 1,
@@ -264,7 +264,7 @@ describe("countWriteTurns", () => {
     sessionId: "test",
     turns: Array.from({ length: writeTurnCount }, (_, i) => ({
       engineVersion: "1.0.0",
-      schemaVersion: "1.0.0",
+      schemaVersion: "2",
       sessionId: "test",
       turnIndex: i,
       userMessageCount: 1,
@@ -326,7 +326,7 @@ describe("countWriteTurns", () => {
         turns: [
           {
             engineVersion: "1.0.0",
-            schemaVersion: "1.0.0",
+            schemaVersion: "2",
             sessionId: "test",
             turnIndex: 0,
             userMessageCount: 1,

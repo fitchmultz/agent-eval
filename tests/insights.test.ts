@@ -80,7 +80,7 @@ describe("buildSummaryArtifact", () => {
 
     const metrics: MetricsRecord = {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       generatedAt: "2026-03-06T19:00:00.000Z",
       sessionCount: sessions.length,
       corpusScope: {
@@ -214,7 +214,7 @@ describe("buildSummaryArtifact", () => {
 
     const metrics: MetricsRecord = {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       generatedAt: "2026-03-06T19:00:00.000Z",
       sessionCount: sessions.length,
       corpusScope: {
@@ -306,7 +306,7 @@ describe("buildSummaryArtifact", () => {
 
     const metrics: MetricsRecord = {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       generatedAt: "2026-03-06T19:00:00.000Z",
       sessionCount: sessions.length,
       corpusScope: {

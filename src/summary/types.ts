@@ -20,7 +20,9 @@ export interface SessionContext {
   sessionId: string;
   startedAt?: string;
   cwd?: string;
-  leadUserPreview?: string;
+  leadPreview?: string;
+  leadPreviewSource?: "user" | "assistant";
+  leadPreviewIsCodeLike?: boolean;
   evidencePreviews: string[];
   sourceRefs: SourceRef[];
 }

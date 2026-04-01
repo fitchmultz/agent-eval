@@ -16,7 +16,7 @@ const baseCharts = {
 
 const baseMetrics: MetricsRecord = {
   engineVersion: "0.1.0",
-  schemaVersion: "1",
+  schemaVersion: "2",
   generatedAt: "2026-03-06T19:00:00.000Z",
   sessionCount: 2,
   corpusScope: {
@@ -73,7 +73,7 @@ const baseMetrics: MetricsRecord = {
 
 const baseSummary: SummaryArtifact = {
   engineVersion: "0.1.0",
-  schemaVersion: "1",
+  schemaVersion: "2",
   generatedAt: "2026-03-06T19:00:00.000Z",
   sessions: 2,
   turns: 8,
@@ -252,6 +252,8 @@ describe("renderHtmlReport", () => {
     expect(html).toContain("Compliance Breakdown");
     expect(html).toContain("Comparative Slices");
     expect(html).toContain("Recurring Patterns And Incidents");
+    expect(html).toContain('href="#sessions-to-review"');
+    expect(html).toContain('href="#session-14174000"');
     expect(html.indexOf("Executive Summary")).toBeLessThan(
       html.indexOf("Sessions To Review First"),
     );

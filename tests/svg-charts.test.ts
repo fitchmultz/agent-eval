@@ -14,7 +14,7 @@ import {
 
 const baseSummary: SummaryArtifact = {
   engineVersion: "0.1.0",
-  schemaVersion: "1",
+  schemaVersion: "2",
   generatedAt: "2026-03-06T19:00:00.000Z",
   sessions: 2,
   turns: 8,

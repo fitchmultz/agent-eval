@@ -85,7 +85,7 @@ function createInventory(): InventoryRecord[] {
 function createRawTurn(sessionId: string, turnIndex = 0): RawTurnRecord {
   return {
     engineVersion: "1.0.0",
-    schemaVersion: "1.0.0",
+    schemaVersion: "2",
     sessionId,
     turnId: `${sessionId}:turn:${turnIndex}`,
     turnIndex,
@@ -108,7 +108,7 @@ function createRawTurn(sessionId: string, turnIndex = 0): RawTurnRecord {
 function createIncident(sessionId: string): IncidentRecord {
   return {
     engineVersion: "1.0.0",
-    schemaVersion: "1.0.0",
+    schemaVersion: "2",
     incidentId: `${sessionId}:incident:0`,
     sessionId,
     turnIds: [`${sessionId}:turn:0`],
@@ -139,7 +139,7 @@ function createIncident(sessionId: string): IncidentRecord {
 function createMetrics(sessionIds: string[]): MetricsRecord {
   return {
     engineVersion: "1.0.0",
-    schemaVersion: "1.0.0",
+    schemaVersion: "2",
     generatedAt: "2026-03-10T00:00:00.000Z",
     sessionCount: sessionIds.length,
     corpusScope: {
@@ -176,7 +176,7 @@ function createMetrics(sessionIds: string[]): MetricsRecord {
 function createSummary(): SummaryArtifact {
   return {
     engineVersion: "1.0.0",
-    schemaVersion: "1.0.0",
+    schemaVersion: "2",
     generatedAt: "2026-03-10T00:00:00.000Z",
     sessions: 1,
     turns: 1,
@@ -248,7 +248,7 @@ describe("evaluator", () => {
     mockBuildMetricsRecord.mockImplementation(
       (parts, inventory, corpusScope) => ({
         engineVersion: "1.0.0",
-        schemaVersion: "1.0.0",
+        schemaVersion: "2",
         generatedAt: "2026-03-10T00:00:00.000Z",
         sessionCount: parts.sessionMetrics.length,
         corpusScope: corpusScope ?? {

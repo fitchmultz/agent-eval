@@ -15,6 +15,16 @@ import {
 import type { RawTurnRecord, SourceRef } from "../schema.js";
 import type { SessionContext } from "./types.js";
 
+interface PreviewCandidateGroup {
+  previews: readonly string[];
+  source: "user" | "assistant";
+}
+
+interface LeadPreviewSelection {
+  preview?: string;
+  source?: "user" | "assistant";
+}
+
 function uniqueSourceRefKey(sourceRef: SourceRef): string {
   return [
     sourceRef.provider,
@@ -26,36 +36,142 @@ function uniqueSourceRefKey(sourceRef: SourceRef): string {
   ].join("::");
 }
 
-function chooseLeadPreview(previews: readonly string[]): string | undefined {
-  const highSignal = previews.filter(
-    (preview) => !isLowSignalPreview(preview) && !isUnsafePreview(preview),
+export function isCodeLikePreview(preview: string): boolean {
+  const normalized = preview.trim();
+  const symbolCount = normalized.match(/[{}()[\];=<>`]/g)?.length ?? 0;
+  const hasCodeKeyword =
+    /\b(function|const|let|var|class|interface|type|return|import|export|def|fn|struct|impl|SELECT|INSERT|UPDATE|DELETE)\b/.test(
+      normalized,
+    ) || /=>/.test(normalized);
+  const looksLikeSignature =
+    /^\s*[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\{?/.test(normalized) ||
+    /^\s*(pub\s+)?fn\s+[A-Za-z_][\w]*\s*\(/.test(normalized);
+
+  return (
+    (symbolCount >= 4 && hasCodeKeyword) ||
+    (symbolCount >= 6 && /[`{};]/.test(normalized)) ||
+    looksLikeSignature
   );
-  if (highSignal.length > 0) {
-    return selectBestPreviews(highSignal, 1)[0];
-  }
-
-  const safe = previews.filter((preview) => !isUnsafePreview(preview));
-  if (safe.length > 0) {
-    return selectBestPreviews(safe, 1)[0];
-  }
-
-  return previews[0];
 }
 
-function chooseEvidencePreviews(previews: readonly string[]): string[] {
-  const highSignal = previews.filter(
-    (preview) => !isLowSignalPreview(preview) && !isUnsafePreview(preview),
-  );
-  if (highSignal.length > 0) {
-    return selectBestPreviews(highSignal, 3);
+export function isTruncatedPreview(preview: string): boolean {
+  const normalized = preview.trimEnd();
+  return normalized.endsWith("...") || normalized.endsWith("…");
+}
+
+function appendUniquePreviews(
+  target: string[],
+  previews: readonly string[],
+  maxItems: number,
+): void {
+  for (const preview of selectBestPreviews(previews, maxItems)) {
+    if (target.includes(preview)) {
+      continue;
+    }
+    target.push(preview);
+    if (target.length >= maxItems) {
+      return;
+    }
+  }
+}
+
+function chooseLeadPreview(
+  userPreviews: readonly string[],
+  assistantPreviews: readonly string[],
+): LeadPreviewSelection {
+  const groups: PreviewCandidateGroup[] = [
+    {
+      previews: userPreviews.filter(
+        (preview) =>
+          !isLowSignalPreview(preview) &&
+          !isUnsafePreview(preview) &&
+          !isCodeLikePreview(preview),
+      ),
+      source: "user",
+    },
+    {
+      previews: userPreviews.filter(
+        (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
+      ),
+      source: "user",
+    },
+    {
+      previews: assistantPreviews.filter(
+        (preview) =>
+          !isLowSignalPreview(preview) &&
+          !isUnsafePreview(preview) &&
+          !isCodeLikePreview(preview),
+      ),
+      source: "assistant",
+    },
+    {
+      previews: assistantPreviews.filter(
+        (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
+      ),
+      source: "assistant",
+    },
+    {
+      previews: userPreviews.filter((preview) => !isUnsafePreview(preview)),
+      source: "user",
+    },
+    {
+      previews: assistantPreviews.filter(
+        (preview) => !isUnsafePreview(preview),
+      ),
+      source: "assistant",
+    },
+    { previews: userPreviews, source: "user" },
+    { previews: assistantPreviews, source: "assistant" },
+  ];
+
+  for (const group of groups) {
+    const preview = selectBestPreviews(group.previews, 1)[0];
+    if (preview) {
+      return { preview, source: group.source };
+    }
   }
 
-  const safe = previews.filter((preview) => !isUnsafePreview(preview));
-  if (safe.length > 0) {
-    return selectBestPreviews(safe, 3);
+  return {};
+}
+
+function chooseEvidencePreviews(
+  userPreviews: readonly string[],
+  assistantPreviews: readonly string[],
+): string[] {
+  const selected: string[] = [];
+  const groups = [
+    userPreviews.filter(
+      (preview) =>
+        !isLowSignalPreview(preview) &&
+        !isUnsafePreview(preview) &&
+        !isCodeLikePreview(preview),
+    ),
+    userPreviews.filter(
+      (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
+    ),
+    assistantPreviews.filter(
+      (preview) =>
+        !isLowSignalPreview(preview) &&
+        !isUnsafePreview(preview) &&
+        !isCodeLikePreview(preview),
+    ),
+    assistantPreviews.filter(
+      (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
+    ),
+    userPreviews.filter((preview) => !isUnsafePreview(preview)),
+    assistantPreviews.filter((preview) => !isUnsafePreview(preview)),
+    userPreviews,
+    assistantPreviews,
+  ];
+
+  for (const group of groups) {
+    appendUniquePreviews(selected, group, 3);
+    if (selected.length >= 3) {
+      return selected;
+    }
   }
 
-  return selectBestPreviews(previews, 3);
+  return selected;
 }
 
 function stableEarliestTimestamp(
@@ -180,7 +296,7 @@ export function deriveSessionDisplayLabel(
   sessionId: string,
   context?: SessionContext,
 ): string {
-  const leadPreview = context?.leadUserPreview;
+  const leadPreview = context?.leadPreview;
   if (leadPreview) {
     return truncateLabel(leadPreview, 88);
   }
@@ -202,14 +318,16 @@ export function collectSessionContexts(
     {
       startedAt?: string;
       cwd?: string;
-      previews: string[];
+      userPreviews: string[];
+      assistantPreviews: string[];
       sourceRefs: Map<string, SourceRef>;
     }
   >();
 
   for (const turn of rawTurns) {
     const existing = grouped.get(turn.sessionId) ?? {
-      previews: [],
+      userPreviews: [],
+      assistantPreviews: [],
       sourceRefs: new Map<string, SourceRef>(),
     };
 
@@ -224,12 +342,15 @@ export function collectSessionContexts(
       existing.cwd = turn.cwd;
     }
 
-    for (const preview of [
-      ...turn.userMessagePreviews,
-      ...turn.assistantMessagePreviews,
-    ]) {
+    for (const preview of turn.userMessagePreviews) {
       if (preview.trim().length > 0) {
-        existing.previews.push(preview);
+        existing.userPreviews.push(preview);
+      }
+    }
+
+    for (const preview of turn.assistantMessagePreviews) {
+      if (preview.trim().length > 0) {
+        existing.assistantPreviews.push(preview);
       }
     }
 
@@ -243,10 +364,16 @@ export function collectSessionContexts(
   return new Map(
     [...grouped.entries()].map(([sessionId, context]) => {
       const sourceRefs = [...context.sourceRefs.values()].slice(0, 5);
-      const leadUserPreview = chooseLeadPreview(context.previews);
+      const leadPreview = chooseLeadPreview(
+        context.userPreviews,
+        context.assistantPreviews,
+      );
       const sessionContext: SessionContext = {
         sessionId,
-        evidencePreviews: chooseEvidencePreviews(context.previews),
+        evidencePreviews: chooseEvidencePreviews(
+          context.userPreviews,
+          context.assistantPreviews,
+        ),
         sourceRefs,
       };
       if (context.startedAt) {
@@ -255,8 +382,14 @@ export function collectSessionContexts(
       if (context.cwd) {
         sessionContext.cwd = context.cwd;
       }
-      if (leadUserPreview) {
-        sessionContext.leadUserPreview = leadUserPreview;
+      if (leadPreview.preview) {
+        sessionContext.leadPreview = leadPreview.preview;
+        if (leadPreview.source) {
+          sessionContext.leadPreviewSource = leadPreview.source;
+        }
+        sessionContext.leadPreviewIsCodeLike = isCodeLikePreview(
+          leadPreview.preview,
+        );
       }
       return [sessionId, sessionContext];
     }),

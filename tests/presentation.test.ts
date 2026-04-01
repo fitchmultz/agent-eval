@@ -21,7 +21,7 @@ import type {
 
 const metrics: MetricsRecord = {
   engineVersion: "0.1.0",
-  schemaVersion: "1",
+  schemaVersion: "2",
   generatedAt: "2026-03-06T19:00:00.000Z",
   sessionCount: 2,
   corpusScope: {
@@ -109,7 +109,7 @@ const metrics: MetricsRecord = {
 const incidents: IncidentRecord[] = [
   {
     engineVersion: "0.1.0",
-    schemaVersion: "1",
+    schemaVersion: "2",
     incidentId: "incident-1",
     sessionId: "session-1",
     turnIds: ["turn-1"],
@@ -140,7 +140,7 @@ const incidents: IncidentRecord[] = [
 const rawTurns: RawTurnRecord[] = [
   {
     engineVersion: "0.1.0",
-    schemaVersion: "1",
+    schemaVersion: "2",
     sessionId: "session-1",
     turnId: "turn-1",
     turnIndex: 0,

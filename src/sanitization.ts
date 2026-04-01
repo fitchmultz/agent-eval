@@ -82,6 +82,8 @@ const lowSignalPatterns = [
   /^-?\s*Safety and fallback:/i,
   /^If you want, I will do exactly one of these next\b/i,
   /^If you want, I can now do the same\b/i,
+  /^BOTTOM LINE\b/i,
+  /\bwhat you think I want\s*\+\s*your recommendation\b/i,
   /^[-•]\s*[a-z0-9._-]+:\s+.+\bUse when\b/i,
   /^(?:[-•]\s*)?[a-z0-9]+(?:-[a-z0-9]+){1,}:\s+[A-Z]/i,
   /^(?:[-•]\s*)?[a-z0-9._-]+:\s+(?:Helps|Guides|Use when|Integration-research workflow)\b/i,

@@ -23,7 +23,7 @@ function createRawTurns(): RawTurnRecord[] {
   return [
     {
       engineVersion: "1.0.0",
-      schemaVersion: "1.0.0",
+      schemaVersion: "2",
       sessionId: "session-1",
       turnId: "turn-1",
       turnIndex: 0,
@@ -49,7 +49,7 @@ function createIncidents(): IncidentRecord[] {
   return [
     {
       engineVersion: "1.0.0",
-      schemaVersion: "1.0.0",
+      schemaVersion: "2",
       incidentId: "session-1:incident:0",
       sessionId: "session-1",
       turnIds: ["turn-1"],
@@ -82,7 +82,7 @@ function createIncidents(): IncidentRecord[] {
 function createMetrics(): MetricsRecord {
   return {
     engineVersion: "1.0.0",
-    schemaVersion: "1.0.0",
+    schemaVersion: "2",
     generatedAt: "2026-03-10T00:00:00.000Z",
     sessionCount: 1,
     corpusScope: {
@@ -130,7 +130,7 @@ function createMetrics(): MetricsRecord {
 function createSummary(): SummaryArtifact {
   return {
     engineVersion: "1.0.0",
-    schemaVersion: "1.0.0",
+    schemaVersion: "2",
     generatedAt: "2026-03-10T00:00:00.000Z",
     sessions: 1,
     turns: 1,

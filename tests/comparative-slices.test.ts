@@ -43,7 +43,7 @@ function createMockMetricsRecord(
 ): MetricsRecord {
   return {
     engineVersion: "1.0.0",
-    schemaVersion: "1",
+    schemaVersion: "2",
     generatedAt: new Date().toISOString(),
     sessionCount: 1,
     corpusScope: {

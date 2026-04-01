@@ -22,6 +22,7 @@ import {
   deriveSessionProjectLabel,
   deriveSessionShortId,
   deriveSessionTimestampLabel,
+  isTruncatedPreview,
 } from "./summary/session-display.js";
 import type {
   SessionContext,
@@ -132,6 +133,22 @@ function buildTrustFlags(
     flags.push("No source references were captured for this session.");
   }
 
+  if (context?.leadPreviewSource === "assistant") {
+    flags.push(
+      "Queue title fell back to assistant text because no stronger user preview was available.",
+    );
+  }
+
+  if (context?.leadPreviewIsCodeLike) {
+    flags.push(
+      "Queue title fell back to code-like text; inspect the source refs for full context.",
+    );
+  }
+
+  if (context?.evidencePreviews.some(isTruncatedPreview)) {
+    flags.push("Evidence previews were truncated for compact reporting.");
+  }
+
   return flags;
 }
 
@@ -198,6 +215,40 @@ function hasMeaningfulReviewSignal(session: SessionInsightRow): boolean {
   );
 }
 
+function hasActiveDeliveryRisk(session: SessionInsightRow): boolean {
+  return (
+    session.writeCount > 0 &&
+    (!session.endedVerified || session.failedRules.length > 0)
+  );
+}
+
+function operatorActionBucket(session: SessionInsightRow): number {
+  if (hasActiveDeliveryRisk(session)) {
+    return 0;
+  }
+
+  if (session.writeCount > 0) {
+    return 1;
+  }
+
+  return 2;
+}
+
+function compareSessionInsights(
+  left: SessionInsightRow,
+  right: SessionInsightRow,
+): number {
+  return (
+    operatorActionBucket(left) - operatorActionBucket(right) ||
+    left.complianceScore - right.complianceScore ||
+    right.frictionScore - left.frictionScore ||
+    right.incidentCount - left.incidentCount ||
+    right.failedRules.length - left.failedRules.length ||
+    left.sessionDisplayLabel.localeCompare(right.sessionDisplayLabel) ||
+    left.sessionId.localeCompare(right.sessionId)
+  );
+}
+
 /**
  * Builds a ranked list of session insights sorted by friction (highest first).
  * @param metrics - Metrics record containing session data
@@ -215,15 +266,7 @@ export function buildTopSessions(
       buildSessionInsight(session, sessionLabelCounts, sessionContexts),
     )
     .filter(hasMeaningfulReviewSignal)
-    .sort(
-      (left, right) =>
-        right.frictionScore - left.frictionScore ||
-        right.incidentCount - left.incidentCount ||
-        (left.sessionDisplayLabel ?? left.sessionId).localeCompare(
-          right.sessionDisplayLabel ?? right.sessionId,
-        ) ||
-        left.sessionId.localeCompare(right.sessionId),
-    );
+    .sort(compareSessionInsights);
 
   return dedupeSessionInsights(rankedSessions);
 }

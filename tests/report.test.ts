@@ -15,7 +15,7 @@ import type {
 function createMetrics(overrides: Partial<MetricsRecord> = {}): MetricsRecord {
   return {
     engineVersion: "0.1.0",
-    schemaVersion: "1",
+    schemaVersion: "2",
     generatedAt: "2026-03-06T19:00:00.000Z",
     sessionCount: 2,
     corpusScope: {
@@ -111,7 +111,7 @@ function createRawTurns(): RawTurnRecord[] {
   return [
     {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       sessionId: "session-1",
       turnId: "turn-1",
       turnIndex: 0,
@@ -153,7 +153,7 @@ function createIncidents(): IncidentRecord[] {
   return [
     {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       incidentId: "incident-1",
       sessionId: "session-1",
       turnIds: ["turn-1"],
@@ -181,7 +181,7 @@ function createIncidents(): IncidentRecord[] {
 function createSummary(): SummaryArtifact {
   return {
     engineVersion: "0.1.0",
-    schemaVersion: "1",
+    schemaVersion: "2",
     generatedAt: "2026-03-06T19:00:00.000Z",
     sessions: 2,
     turns: 10,

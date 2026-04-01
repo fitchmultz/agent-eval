@@ -13,7 +13,7 @@ function createMockSummaryArtifact(
   const now = new Date().toISOString();
   return {
     engineVersion: "1.0.0",
-    schemaVersion: "1",
+    schemaVersion: "2",
     generatedAt: now,
     sessions: 10,
     turns: 100,

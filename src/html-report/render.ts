@@ -8,6 +8,7 @@
 
 import { describeCorpusScope } from "../report-scope.js";
 import type { MetricsRecord, SummaryArtifact } from "../schema.js";
+import { deriveSessionShortId } from "../summary/session-display.js";
 import {
   renderExecutiveSummaryCards,
   renderIncidentCards,
@@ -70,6 +71,31 @@ function renderHeaderContext(
   return `${providers.join(", ")} corpus · ${summary.sessions} sessions · ${metrics.corpusScope.selection === "most_recent_window" ? "recent-window" : "full corpus"} · generated ${summary.generatedAt}`;
 }
 
+function renderSectionNavigation(summary: SummaryArtifact): string {
+  const links: Array<[string, string]> = [
+    ["#executive-summary", "Executive Summary"],
+    ["#operator-metrics", "Action Metrics"],
+    ["#sessions-to-review", "Sessions To Review"],
+    ["#compliance-breakdown", "Compliance"],
+    ["#comparative-slices", "Comparative Slices"],
+    ["#recurring-patterns", "Patterns And Incidents"],
+  ];
+  const firstSession = summary.topSessions[0];
+  if (firstSession) {
+    links.push([
+      `#session-${deriveSessionShortId(firstSession.sessionId)}`,
+      "Jump to first ranked session",
+    ]);
+  }
+
+  return `<nav class="section-nav" aria-label="Report sections"><ul>${links
+    .map(
+      ([href, label]) =>
+        `<li><a href="${escapeHtml(href)}">${escapeHtml(label)}</a></li>`,
+    )
+    .join("")}</ul></nav>`;
+}
+
 function renderReportMetadata(
   summary: SummaryArtifact,
   metrics: MetricsRecord,
@@ -108,15 +134,15 @@ export function renderHtmlReport(
         `<section><h2>Methodology And Limitations</h2><div class="panel">${renderMethodologyList(metrics)}</div></section>`,
       ]
     : [
-        `<section><h2>Executive Summary</h2><div class="metric-grid executive-grid">${renderExecutiveSummaryCards(summary)}</div></section>`,
-        `<section><h2>Operator Action Metrics</h2><div class="metric-grid">${renderOperatorMetrics(summary)}</div></section>`,
-        `<section><h2>Sessions To Review First</h2><div class="sessions-grid">${renderSessionCards(summary)}</div></section>`,
-        `<section><h2>Compliance Breakdown</h2><div class="panel">${renderComplianceTable(summary)}</div></section>`,
-        `<section><h2>Comparative Slices</h2><div class="panel">${renderComparativeSliceTable(summary)}</div>${renderMetricGlossary(summary)}</section>`,
-        `<section><h2>Recurring Patterns And Incidents</h2><div class="incident-grid">${renderIncidentCards(summary)}</div></section>`,
-        `<section><h2>Deterministic Opportunities</h2><ul class="opportunity-list">${renderOpportunityList(summary)}</ul></section>`,
-        `<section><h2>Methodology And Limitations</h2><div class="panel">${renderMethodologyList(metrics)}</div></section>`,
-        `<section><h2>Inventory</h2>${renderInventoryList(metrics)}</section>`,
+        `<section id="executive-summary"><h2>Executive Summary</h2><div class="metric-grid executive-grid">${renderExecutiveSummaryCards(summary)}</div></section>`,
+        `<section id="operator-metrics"><h2>Operator Action Metrics</h2><div class="metric-grid">${renderOperatorMetrics(summary)}</div></section>`,
+        `<section id="sessions-to-review"><h2>Sessions To Review First</h2><div class="sessions-grid">${renderSessionCards(summary)}</div></section>`,
+        `<section id="compliance-breakdown"><h2>Compliance Breakdown</h2><div class="panel">${renderComplianceTable(summary)}</div></section>`,
+        `<section id="comparative-slices"><h2>Comparative Slices</h2><div class="panel">${renderComparativeSliceTable(summary)}</div>${renderMetricGlossary(summary)}</section>`,
+        `<section id="recurring-patterns"><h2>Recurring Patterns And Incidents</h2><div class="incident-grid">${renderIncidentCards(summary)}</div></section>`,
+        `<section id="deterministic-opportunities"><h2>Deterministic Opportunities</h2><ul class="opportunity-list">${renderOpportunityList(summary)}</ul></section>`,
+        `<section id="methodology-and-limitations"><h2>Methodology And Limitations</h2><div class="panel">${renderMethodologyList(metrics)}</div></section>`,
+        `<section id="inventory"><h2>Inventory</h2>${renderInventoryList(metrics)}</section>`,
         renderReportMetadata(summary, metrics),
       ];
 
@@ -144,6 +170,7 @@ export function renderHtmlReport(
       <p>${escapeHtml(scope.detail)}</p>
       <p>${escapeHtml(scope.comparability)}</p>
     </div>`,
+    isEmptyCorpus ? "" : renderSectionNavigation(summary),
     "</header>",
     ...contentSections,
     `<p class="footer-note">${escapeHtml(

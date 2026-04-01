@@ -5,6 +5,7 @@
  */
 import { z } from "zod";
 import { sourceProviderValues } from "./sources.js";
+import { SCHEMA_VERSION } from "./version.js";
 
 export const labelTaxonomy = [
   "context_drift",
@@ -88,9 +89,11 @@ export const toolCallSummarySchema = z.object({
   status: z.enum(["completed", "errored", "unknown"]),
 });
 
+const schemaVersionSchema = z.literal(SCHEMA_VERSION);
+
 export const rawTurnSchema = z.object({
   engineVersion: z.string().min(1),
-  schemaVersion: z.string().min(1),
+  schemaVersion: schemaVersionSchema,
   sessionId: z.string().min(1),
   parentSessionId: z.string().min(1).optional(),
   turnId: z.string().min(1).optional(),
@@ -108,7 +111,7 @@ export const rawTurnSchema = z.object({
 
 export const incidentSchema = z.object({
   engineVersion: z.string().min(1),
-  schemaVersion: z.string().min(1),
+  schemaVersion: schemaVersionSchema,
   incidentId: z.string().min(1),
   sessionId: z.string().min(1),
   turnIds: z.array(z.string().min(1)),
@@ -183,7 +186,7 @@ export const labelCountSchema = z.object({
 
 export const metricsSchema = z.object({
   engineVersion: z.string().min(1),
-  schemaVersion: z.string().min(1),
+  schemaVersion: schemaVersionSchema,
   generatedAt: z.string().min(1),
   sessionCount: z.int().nonnegative(),
   corpusScope: z.object({
@@ -235,7 +238,7 @@ const sessionHighlightSchema = z.object({
 
 const summaryCoreSchema = z.object({
   engineVersion: z.string().min(1),
-  schemaVersion: z.string().min(1),
+  schemaVersion: schemaVersionSchema,
   generatedAt: z.string().min(1),
   sessions: z.int().nonnegative(),
   turns: z.int().nonnegative(),

@@ -87,7 +87,7 @@ export function clusterIncidents(
   turns: readonly RawTurnRecord[],
   options: ClusterOptions,
   engineVersion: string,
-  schemaVersion: string,
+  schemaVersion: IncidentRecord["schemaVersion"],
 ): IncidentRecord[] {
   const incidents: IncidentRecord[] = [];
   let currentCluster: RawTurnRecord[] = [];

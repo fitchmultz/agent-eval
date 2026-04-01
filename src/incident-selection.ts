@@ -18,6 +18,7 @@ import type {
 import {
   deriveSessionDisplayLabel,
   deriveSessionShortId,
+  isTruncatedPreview,
 } from "./summary/session-display.js";
 import type { SessionContext } from "./summary/types.js";
 
@@ -152,6 +153,16 @@ function buildIncidentTrustFlags(
 
   if (!evidencePreview) {
     flags.push("No safe evidence preview was available.");
+  }
+  if (evidencePreview && isLowSignalPreview(evidencePreview)) {
+    flags.push(
+      "Incident evidence fell back to a lower-signal preview, so inspect source refs before acting on it.",
+    );
+  }
+  if (evidencePreview && isTruncatedPreview(evidencePreview)) {
+    flags.push(
+      "Incident evidence preview was truncated for compact reporting.",
+    );
   }
   if (incident.sourceRefs.length === 0) {
     flags.push("No source references were captured for this incident.");

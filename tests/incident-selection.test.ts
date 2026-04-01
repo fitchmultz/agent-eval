@@ -39,7 +39,7 @@ function createIncident(overrides: Partial<TopIncident> = {}): TopIncident {
 function createRawTurn(overrides: Partial<RawTurnRecord> = {}): RawTurnRecord {
   return {
     engineVersion: "0.1.0",
-    schemaVersion: "1",
+    schemaVersion: "2",
     sessionId: "session-1",
     turnId: "turn-1",
     turnIndex: 0,
@@ -59,7 +59,7 @@ function createIncidentRecord(
 ): IncidentRecord {
   return {
     engineVersion: "0.1.0",
-    schemaVersion: "1",
+    schemaVersion: "2",
     incidentId: "incident-1",
     sessionId: "session-1",
     turnIds: ["turn-1"],
@@ -339,6 +339,24 @@ describe("insertTopIncident", () => {
     const result = insertTopIncident([], withoutPreview, 8);
     expect(result).toHaveLength(1);
     expect(result[0]?.incidentId).toBe("no-preview");
+  });
+
+  it("preserves trust flags that explain truncated incident evidence", () => {
+    const truncatedPreview: TopIncident = createIncident({
+      incidentId: "truncated-preview",
+      sessionId: "session-1",
+      summary: "test incident",
+      severity: "high",
+      evidencePreview: "Please verify the patch before you finish...",
+      trustFlags: [
+        "Incident evidence preview was truncated for compact reporting.",
+      ],
+    });
+
+    const result = insertTopIncident([], truncatedPreview, 8);
+    expect(result[0]?.trustFlags).toContain(
+      "Incident evidence preview was truncated for compact reporting.",
+    );
   });
 });
 

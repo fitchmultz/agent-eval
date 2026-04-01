@@ -61,7 +61,7 @@ describe("buildTopSessions", () => {
   it("returns empty array when no sessions", () => {
     const metrics: MetricsRecord = {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: 0,
       corpusScope: {
@@ -105,7 +105,7 @@ describe("buildTopSessions", () => {
     ];
     const metrics: MetricsRecord = {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: sessions.length,
       corpusScope: {
@@ -132,6 +132,72 @@ describe("buildTopSessions", () => {
     ]);
   });
 
+  it("prioritizes active delivery risk ahead of higher-friction analysis-only sessions", () => {
+    const sessions = [
+      createSession("analysis-only", {
+        writeCount: 0,
+        endedVerified: false,
+        complianceScore: 20,
+        incidentCount: 5,
+        verificationCount: 0,
+        verificationPassedCount: 0,
+        verificationFailedCount: 0,
+        postWriteVerificationAttempted: false,
+        postWriteVerificationPassed: false,
+        complianceRules: [],
+      }),
+      createSession("unverified-delivery", {
+        writeCount: 2,
+        endedVerified: false,
+        complianceScore: 60,
+        incidentCount: 0,
+        verificationPassedCount: 0,
+        verificationFailedCount: 1,
+        complianceRules: [
+          {
+            rule: "verification_after_code_changes",
+            status: "fail",
+            rationale: "missing verification",
+          },
+          {
+            rule: "no_unverified_ending",
+            status: "fail",
+            rationale: "ended unverified",
+          },
+        ],
+      }),
+    ];
+    const metrics: MetricsRecord = {
+      engineVersion: "0.1.0",
+      schemaVersion: "2",
+      generatedAt: "2026-03-06T00:00:00.000Z",
+      sessionCount: sessions.length,
+      corpusScope: {
+        selection: "all_discovered",
+        discoveredSessionCount: sessions.length,
+        appliedSessionLimit: null,
+      },
+      turnCount: 20,
+      incidentCount: 5,
+      parseWarningCount: 0,
+      labelCounts: {},
+      complianceSummary: [],
+      sessions,
+      inventory: [],
+    };
+    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
+    sessionLabelCounts.set("analysis-only", {
+      ...createEmptySessionLabelMap(),
+      regression_report: 3,
+      stalled_or_guessing: 2,
+    });
+    sessionLabelCounts.set("unverified-delivery", createEmptySessionLabelMap());
+
+    const result = buildTopSessions(metrics, sessionLabelCounts);
+    expect(result[0]?.sessionId).toBe("unverified-delivery");
+    expect(result[1]?.sessionId).toBe("analysis-only");
+  });
+
   it("ranks sessions by friction score descending", () => {
     const sessions = [
       createSession("low-friction", { complianceScore: 100, incidentCount: 0 }),
@@ -139,7 +205,7 @@ describe("buildTopSessions", () => {
     ];
     const metrics: MetricsRecord = {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: sessions.length,
       corpusScope: {
@@ -181,7 +247,7 @@ describe("buildTopSessions", () => {
     ];
     const metrics: MetricsRecord = {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: 1,
       corpusScope: {
@@ -205,11 +271,82 @@ describe("buildTopSessions", () => {
     expect(result[0]?.archetypeLabel).toBe("Ended-Verified Delivery");
   });
 
+  it("adds trust flags when queue titles fall back to assistant text or truncated previews", () => {
+    const sessions = [
+      createSession("assistant-fallback", {
+        writeCount: 1,
+        endedVerified: false,
+        verificationPassedCount: 0,
+        verificationFailedCount: 1,
+        complianceRules: [
+          {
+            rule: "verification_after_code_changes",
+            status: "fail",
+            rationale: "missing verification",
+          },
+        ],
+      }),
+    ];
+    const metrics: MetricsRecord = {
+      engineVersion: "0.1.0",
+      schemaVersion: "2",
+      generatedAt: "2026-03-06T00:00:00.000Z",
+      sessionCount: 1,
+      corpusScope: {
+        selection: "all_discovered",
+        discoveredSessionCount: 1,
+        appliedSessionLimit: null,
+      },
+      turnCount: 10,
+      incidentCount: 0,
+      parseWarningCount: 0,
+      labelCounts: {},
+      complianceSummary: [],
+      sessions,
+      inventory: [],
+    };
+    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
+    sessionLabelCounts.set("assistant-fallback", createEmptySessionLabelMap());
+    const sessionContexts = new Map([
+      [
+        "assistant-fallback",
+        {
+          sessionId: "assistant-fallback",
+          leadPreview: "I checked the callback path and will verify the patch.",
+          leadPreviewSource: "assistant" as const,
+          leadPreviewIsCodeLike: false,
+          evidencePreviews: [
+            "I checked the callback path and will verify the patch...",
+          ],
+          sourceRefs: [
+            {
+              provider: "codex" as const,
+              kind: "session_jsonl" as const,
+              path: "/tmp/session.jsonl",
+            },
+          ],
+        },
+      ],
+    ]);
+
+    const result = buildTopSessions(
+      metrics,
+      sessionLabelCounts,
+      sessionContexts,
+    );
+    expect(result[0]?.trustFlags).toContain(
+      "Queue title fell back to assistant text because no stronger user preview was available.",
+    );
+    expect(result[0]?.trustFlags).toContain(
+      "Evidence previews were truncated for compact reporting.",
+    );
+  });
+
   it("includes dominant labels in results", () => {
     const sessions = [createSession("with-labels", { complianceScore: 100 })];
     const metrics: MetricsRecord = {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: 1,
       corpusScope: {
@@ -250,7 +387,7 @@ describe("buildTopSessions", () => {
     ];
     const metrics: MetricsRecord = {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: 2,
       corpusScope: {
@@ -284,7 +421,7 @@ describe("buildTopSessions", () => {
     ];
     const metrics: MetricsRecord = {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: 2,
       corpusScope: {
@@ -328,7 +465,7 @@ describe("buildTopSessions", () => {
     ];
     const metrics: MetricsRecord = {
       engineVersion: "0.1.0",
-      schemaVersion: "1",
+      schemaVersion: "2",
       generatedAt: "2026-03-06T00:00:00.000Z",
       sessionCount: sessions.length,
       corpusScope: {
