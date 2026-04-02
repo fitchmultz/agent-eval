@@ -240,6 +240,26 @@ function operatorActionBucket(session: SessionInsightRow): number {
   return 2;
 }
 
+function titleConfidenceBucket(session: SessionInsightRow): number {
+  if (
+    session.trustFlags.includes(
+      "No strong human problem statement was available, so the queue title falls back to metadata.",
+    )
+  ) {
+    return 2;
+  }
+
+  if (
+    session.trustFlags.includes(
+      "Queue title fell back to assistant text because no stronger user preview was available.",
+    )
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
 function compareSessionInsights(
   left: SessionInsightRow,
   right: SessionInsightRow,
@@ -250,6 +270,7 @@ function compareSessionInsights(
     right.frictionScore - left.frictionScore ||
     right.incidentCount - left.incidentCount ||
     right.failedRules.length - left.failedRules.length ||
+    titleConfidenceBucket(left) - titleConfidenceBucket(right) ||
     left.sessionDisplayLabel.localeCompare(right.sessionDisplayLabel) ||
     left.sessionId.localeCompare(right.sessionId)
   );

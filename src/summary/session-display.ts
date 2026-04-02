@@ -77,6 +77,25 @@ function appendUniquePreviews(
   }
 }
 
+function isWeakLeadPreview(preview: string): boolean {
+  return (
+    /^(?:sounds good|okay|ok|alright|all right)\b/i.test(preview) ||
+    /^(?:so,?\s+)?i(?:['’]m| am) going to\b/i.test(preview) ||
+    /^(?:so,?\s+)?let me\b/i.test(preview) ||
+    /^i(?:['’]m| am)\s+(?:checking|reading|reviewing|inspecting|looking|trying|focusing)\b/i.test(
+      preview,
+    ) ||
+    /^there(?:['’]s| is) one more important thing to verify before\b/i.test(
+      preview,
+    ) ||
+    /^also,?\s+i need to consider\b/i.test(preview) ||
+    /^this way,?\s+i can\b/i.test(preview) ||
+    /^the helper scripts are present\b/i.test(preview) ||
+    /^stabilize them\./i.test(preview) ||
+    /^why:\s/i.test(preview)
+  );
+}
+
 function hasUserLeadSignalPreview(preview: string): boolean {
   return /\b(please|help me|can you|could you|would you|i need|i want|i just|we need|we want|bug|issue|problem|broken|broke|failing|failure|regression|error|wrong|confusing|stuck|fix|remove|replace)\b/i.test(
     preview,
@@ -100,6 +119,7 @@ function chooseLeadPreview(
           !isLowSignalPreview(preview) &&
           !isUnsafePreview(preview) &&
           !isCodeLikePreview(preview) &&
+          !isWeakLeadPreview(preview) &&
           hasUserLeadSignalPreview(preview),
       ),
       source: "user",
@@ -110,6 +130,7 @@ function chooseLeadPreview(
           !isLowSignalPreview(preview) &&
           !isUnsafePreview(preview) &&
           !isCodeLikePreview(preview) &&
+          !isWeakLeadPreview(preview) &&
           hasAssistantLeadSignalPreview(preview),
       ),
       source: "assistant",

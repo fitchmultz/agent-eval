@@ -480,6 +480,77 @@ describe("buildTopSessions", () => {
     expect(result[1]?.sessionId).toBe("fewer-incidents");
   });
 
+  it("prefers stronger title confidence over metadata fallback on ties", () => {
+    const sessions = [
+      createSession("metadata-title", { complianceScore: 100 }),
+      createSession("user-title", { complianceScore: 100 }),
+    ];
+    const metrics: MetricsRecord = {
+      engineVersion: "0.1.0",
+      schemaVersion: "2",
+      generatedAt: "2026-03-06T00:00:00.000Z",
+      sessionCount: 2,
+      corpusScope: {
+        selection: "all_discovered",
+        discoveredSessionCount: 2,
+        appliedSessionLimit: null,
+      },
+      turnCount: 20,
+      incidentCount: 0,
+      parseWarningCount: 0,
+      labelCounts: {},
+      complianceSummary: [],
+      sessions,
+      inventory: [],
+    };
+    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
+    sessionLabelCounts.set("metadata-title", createEmptySessionLabelMap());
+    sessionLabelCounts.set("user-title", createEmptySessionLabelMap());
+    const sessionContexts = new Map([
+      [
+        "metadata-title",
+        {
+          sessionId: "metadata-title",
+          evidencePreviews: ["Stabilize them. - Add or update tests."],
+          sourceRefs: [
+            {
+              provider: "codex" as const,
+              kind: "session_jsonl" as const,
+              path: "/tmp/metadata.jsonl",
+            },
+          ],
+        },
+      ],
+      [
+        "user-title",
+        {
+          sessionId: "user-title",
+          leadPreview:
+            "Please fix the failing export path and rerun verification.",
+          leadPreviewSource: "user" as const,
+          leadPreviewIsCodeLike: false,
+          evidencePreviews: [
+            "Please fix the failing export path and rerun verification.",
+          ],
+          sourceRefs: [
+            {
+              provider: "codex" as const,
+              kind: "session_jsonl" as const,
+              path: "/tmp/user.jsonl",
+            },
+          ],
+        },
+      ],
+    ]);
+
+    const result = buildTopSessions(
+      metrics,
+      sessionLabelCounts,
+      sessionContexts,
+    );
+    expect(result[0]?.sessionId).toBe("user-title");
+  });
+
   it("breaks ties by session ID alphabetically", () => {
     const sessions = [
       createSession("session-b", { complianceScore: 100 }),

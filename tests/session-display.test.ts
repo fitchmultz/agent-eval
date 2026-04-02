@@ -115,6 +115,9 @@ describe("collectSessionContexts", () => {
         assistantMessagePreviews: [
           "Alright, let me dig a bit deeper into this to make sure I'm understanding how to proceed.",
           "So, I'm going to read through the documentation at docs/roadmap.md.",
+          "I'm checking the curated catalog first so we can confirm the exact skill name.",
+          "There's one more important thing to verify before we touch prompts.",
+          "Also, I need to consider root cause triage for fixing bugs.",
         ],
       }),
     ]);
@@ -122,6 +125,39 @@ describe("collectSessionContexts", () => {
     const context = contexts.get("session-1");
     expect(context?.leadPreview).toBeUndefined();
     expect(context?.evidencePreviews.length).toBeGreaterThan(0);
+  });
+
+  it("does not use weak conversational acknowledgements as the session title", () => {
+    const contexts = collectSessionContexts([
+      createTurn({
+        userMessagePreviews: [
+          "sounds good. let's do the changes and then explain explicitly what changed for each please.",
+          "scout can continue to use openai-codex/gpt-5.4-mini if needed.",
+        ],
+        assistantMessagePreviews: [],
+      }),
+    ]);
+
+    const context = contexts.get("session-1");
+    expect(context?.leadPreview).toBeUndefined();
+    expect(context?.evidencePreviews.length).toBeGreaterThan(0);
+  });
+
+  it("does not use assistant process chatter with regression words as the session title", () => {
+    const contexts = collectSessionContexts([
+      createTurn({
+        userMessagePreviews: [],
+        assistantMessagePreviews: [
+          "This way, I can add multiple entries and justify that there's no regression in behavior.",
+          "The issue is that the env file needs updated and host.json may be unnecessary.",
+        ],
+      }),
+    ]);
+
+    const context = contexts.get("session-1");
+    expect(context?.leadPreview).toBe(
+      "The issue is that the env file needs updated and host.json may be unnecessary.",
+    );
   });
 
   it("falls back to metadata when only instruction-heavy previews are available", () => {
