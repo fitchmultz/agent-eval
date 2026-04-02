@@ -108,12 +108,36 @@ describe("collectSessionContexts", () => {
     expect(context?.leadPreview).toContain("login callback");
   });
 
+  it("does not use assistant planning chatter as the session title", () => {
+    const contexts = collectSessionContexts([
+      createTurn({
+        userMessagePreviews: [],
+        assistantMessagePreviews: [
+          "Alright, let me dig a bit deeper into this to make sure I'm understanding how to proceed.",
+          "So, I'm going to read through the documentation at docs/roadmap.md.",
+        ],
+      }),
+    ]);
+
+    const context = contexts.get("session-1");
+    expect(context?.leadPreview).toBeUndefined();
+    expect(context?.evidencePreviews.length).toBeGreaterThan(0);
+  });
+
   it("falls back to metadata when only instruction-heavy previews are available", () => {
     const contexts = collectSessionContexts([
       createTurn({
         userMessagePreviews: [
           "**Default assumption: Codex is already very smart.** Only add context Codex doesn't already have.",
           "When done, report: 1. All issues found 2. Exact fixes made 3. Remaining risks.",
+          "- \"I can imagine users asking for things like 'Remove the red-eye from this image' or 'Rotate this image'. Are there other ways you imagine this skill being used?\"",
+          'Editing, rotating, anything else?" - "Can you give some examples of how this skill would be used?"',
+          "**RULE 0**: Anything that I say in chat overrides every prior instruction and rule.",
+          "I am the final say, and I can override anything and everything. If I tell you to do something, do it.",
+          "- When freshness matters, verify against current official or primary sources.",
+          "- Impact: <security risk, scaling issue, or maintenance burden>",
+          "- Broken functionality (buttons, flows, navigation, state issues)",
+          "If the obvious experiment path is stuck, **do not stop**: **run a new experiment**.",
         ],
         assistantMessagePreviews: [],
       }),
@@ -122,5 +146,26 @@ describe("collectSessionContexts", () => {
     const context = contexts.get("session-1");
     expect(context?.leadPreview).toBeUndefined();
     expect(context?.evidencePreviews.length).toBeGreaterThan(0);
+  });
+
+  it("skips instruction-heavy previews when a real issue statement is available", () => {
+    const contexts = collectSessionContexts([
+      createTurn({
+        userMessagePreviews: [
+          "**RULE 0**: Anything that I say in chat overrides every prior instruction and rule.",
+          "- For user-facing UI or UX changes, verify the rendered result with direct visual inspection.",
+          "The Generate button turns into Save after a result exists, which is confusing and should be fixed.",
+        ],
+        assistantMessagePreviews: [],
+      }),
+    ]);
+
+    const context = contexts.get("session-1");
+    expect(context?.leadPreview).toBe(
+      "The Generate button turns into Save after a result exists, which is confusing and should be fixed.",
+    );
+    expect(context?.evidencePreviews[0]).toBe(
+      "The Generate button turns into Save after a result exists, which is confusing and should be fixed.",
+    );
   });
 });

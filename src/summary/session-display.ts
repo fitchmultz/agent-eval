@@ -46,11 +46,13 @@ export function isCodeLikePreview(preview: string): boolean {
   const looksLikeSignature =
     /^\s*[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\{?/.test(normalized) ||
     /^\s*(pub\s+)?fn\s+[A-Za-z_][\w]*\s*\(/.test(normalized);
+  const looksLikeRegexLiteral = /^\s*\/.+\/[a-z]*,?\s*$/.test(normalized);
 
   return (
     (symbolCount >= 4 && hasCodeKeyword) ||
     (symbolCount >= 6 && /[`{};]/.test(normalized)) ||
-    looksLikeSignature
+    looksLikeSignature ||
+    looksLikeRegexLiteral
   );
 }
 
@@ -75,6 +77,18 @@ function appendUniquePreviews(
   }
 }
 
+function hasUserLeadSignalPreview(preview: string): boolean {
+  return /\b(please|help me|can you|could you|would you|i need|i want|i just|we need|we want|bug|issue|problem|broken|broke|failing|failure|regression|error|wrong|confusing|stuck|fix|remove|replace)\b/i.test(
+    preview,
+  );
+}
+
+function hasAssistantLeadSignalPreview(preview: string): boolean {
+  return /\b(bug|issue|problem|broken|broke|failing|failure|regression|error|wrong|confusing|stuck|fix|fixed|remove|replace|verify|verified|root cause|user-visible)\b/i.test(
+    preview,
+  );
+}
+
 function chooseLeadPreview(
   userPreviews: readonly string[],
   assistantPreviews: readonly string[],
@@ -85,7 +99,8 @@ function chooseLeadPreview(
         (preview) =>
           !isLowSignalPreview(preview) &&
           !isUnsafePreview(preview) &&
-          !isCodeLikePreview(preview),
+          !isCodeLikePreview(preview) &&
+          hasUserLeadSignalPreview(preview),
       ),
       source: "user",
     },
@@ -94,7 +109,8 @@ function chooseLeadPreview(
         (preview) =>
           !isLowSignalPreview(preview) &&
           !isUnsafePreview(preview) &&
-          !isCodeLikePreview(preview),
+          !isCodeLikePreview(preview) &&
+          hasAssistantLeadSignalPreview(preview),
       ),
       source: "assistant",
     },
@@ -120,10 +136,24 @@ function chooseEvidencePreviews(
       (preview) =>
         !isLowSignalPreview(preview) &&
         !isUnsafePreview(preview) &&
+        !isCodeLikePreview(preview) &&
+        hasUserLeadSignalPreview(preview),
+    ),
+    userPreviews.filter(
+      (preview) =>
+        !isLowSignalPreview(preview) &&
+        !isUnsafePreview(preview) &&
         !isCodeLikePreview(preview),
     ),
     userPreviews.filter(
       (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
+    ),
+    assistantPreviews.filter(
+      (preview) =>
+        !isLowSignalPreview(preview) &&
+        !isUnsafePreview(preview) &&
+        !isCodeLikePreview(preview) &&
+        hasAssistantLeadSignalPreview(preview),
     ),
     assistantPreviews.filter(
       (preview) =>

@@ -337,6 +337,61 @@ describe("isLowSignalPreview", () => {
       ),
     ).toBe(true);
     expect(
+      isLowSignalPreview(
+        "- \"I can imagine users asking for things like 'Remove the red-eye from this image' or 'Rotate this image'. Are there other ways you imagine this skill being used?\"",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "**RULE 0**: Anything that I say in chat overrides every prior instruction and rule.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "I am the final say, and I can override anything and everything. If I tell you to do something, do it.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        'Editing, rotating, anything else?" - "Can you give some examples of how this skill would be used?"',
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "- For user-facing UI or UX changes, verify the rendered result with direct visual inspection.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "- When freshness matters, verify against current official or primary sources.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "- If validation surfaces failures, you always own triage and remediation even if the issue appears unrelated to your work.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "- Execute obvious, low-risk next steps within scope.",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "- Impact: <security risk, scaling issue, or maintenance burden>",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "- Broken functionality (buttons, flows, navigation, state issues)",
+      ),
+    ).toBe(true);
+    expect(
+      isLowSignalPreview(
+        "If the obvious experiment path is stuck, **do not stop**: **run a new experiment**.",
+      ),
+    ).toBe(true);
+    expect(
       isLowSignalPreview("Please verify after the patch and rerun the tests."),
     ).toBe(false);
   });
