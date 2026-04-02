@@ -5,12 +5,16 @@
  */
 
 import type {
+  EvidenceIssue,
+  EvidenceSource,
   LabelName,
   MetricsRecord,
   SessionArchetype,
+  SessionTitleSource,
   Severity,
   SourceRef,
   SummaryArtifact,
+  SummaryConfidence,
 } from "../schema.js";
 
 // Re-export for convenience
@@ -22,8 +26,12 @@ export interface SessionContext {
   cwd?: string;
   leadPreview?: string;
   leadPreviewSource?: "user" | "assistant";
+  leadPreviewConfidence?: SummaryConfidence;
   leadPreviewIsCodeLike?: boolean;
   evidencePreviews: string[];
+  evidenceSource: EvidenceSource;
+  evidenceConfidence: SummaryConfidence;
+  evidenceIssues: EvidenceIssue[];
   sourceRefs: SourceRef[];
 }
 
@@ -70,6 +78,11 @@ export interface SessionInsightRow {
   whySelected: string[];
   failedRules: string[];
   evidencePreviews: string[];
+  titleSource: SessionTitleSource;
+  titleConfidence: SummaryConfidence;
+  evidenceSource: EvidenceSource;
+  evidenceConfidence: SummaryConfidence;
+  evidenceIssues: EvidenceIssue[];
   sourceRefs: SourceRef[];
   trustFlags: string[];
   note: string;

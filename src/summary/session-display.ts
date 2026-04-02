@@ -12,17 +12,32 @@ import {
   isUnsafePreview,
   selectBestPreviews,
 } from "../sanitization.js";
-import type { RawTurnRecord, SourceRef } from "../schema.js";
+import type {
+  EvidenceIssue,
+  EvidenceSource,
+  RawTurnRecord,
+  SourceRef,
+  SummaryConfidence,
+} from "../schema.js";
 import type { SessionContext } from "./types.js";
 
 interface PreviewCandidateGroup {
   previews: readonly string[];
   source: "user" | "assistant";
+  confidence: SummaryConfidence;
 }
 
 interface LeadPreviewSelection {
   preview?: string;
   source?: "user" | "assistant";
+  confidence?: SummaryConfidence;
+}
+
+interface EvidencePreviewSelection {
+  previews: string[];
+  source: EvidenceSource;
+  confidence: SummaryConfidence;
+  issues: EvidenceIssue[];
 }
 
 function uniqueSourceRefKey(sourceRef: SourceRef): string {
@@ -61,16 +76,17 @@ export function isTruncatedPreview(preview: string): boolean {
   return normalized.endsWith("...") || normalized.endsWith("…");
 }
 
-function appendUniquePreviews(
-  target: string[],
+function appendUniquePreviewEntries(
+  target: Array<{ preview: string; source: "user" | "assistant" }>,
   previews: readonly string[],
+  source: "user" | "assistant",
   maxItems: number,
 ): void {
   for (const preview of selectBestPreviews(previews, maxItems)) {
-    if (target.includes(preview)) {
+    if (target.some((entry) => entry.preview === preview)) {
       continue;
     }
-    target.push(preview);
+    target.push({ preview, source });
     if (target.length >= maxItems) {
       return;
     }
@@ -92,6 +108,8 @@ function isWeakLeadPreview(preview: string): boolean {
     /^this way,?\s+i can\b/i.test(preview) ||
     /^the helper scripts are present\b/i.test(preview) ||
     /^stabilize them\./i.test(preview) ||
+    /^no additional runs at this time please\b/i.test(preview) ||
+    /^no docs\/report\. just fix the code\b/i.test(preview) ||
     /^why:\s/i.test(preview)
   );
 }
@@ -123,6 +141,7 @@ function chooseLeadPreview(
           hasUserLeadSignalPreview(preview),
       ),
       source: "user",
+      confidence: "strong",
     },
     {
       previews: assistantPreviews.filter(
@@ -134,13 +153,14 @@ function chooseLeadPreview(
           hasAssistantLeadSignalPreview(preview),
       ),
       source: "assistant",
+      confidence: "medium",
     },
   ];
 
   for (const group of groups) {
     const preview = selectBestPreviews(group.previews, 1)[0];
     if (preview) {
-      return { preview, source: group.source };
+      return { preview, source: group.source, confidence: group.confidence };
     }
   }
 
@@ -150,55 +170,117 @@ function chooseLeadPreview(
 function chooseEvidencePreviews(
   userPreviews: readonly string[],
   assistantPreviews: readonly string[],
-): string[] {
-  const selected: string[] = [];
-  const groups = [
-    userPreviews.filter(
-      (preview) =>
-        !isLowSignalPreview(preview) &&
-        !isUnsafePreview(preview) &&
-        !isCodeLikePreview(preview) &&
-        hasUserLeadSignalPreview(preview),
-    ),
-    userPreviews.filter(
-      (preview) =>
-        !isLowSignalPreview(preview) &&
-        !isUnsafePreview(preview) &&
-        !isCodeLikePreview(preview),
-    ),
-    userPreviews.filter(
-      (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
-    ),
-    assistantPreviews.filter(
-      (preview) =>
-        !isLowSignalPreview(preview) &&
-        !isUnsafePreview(preview) &&
-        !isCodeLikePreview(preview) &&
-        hasAssistantLeadSignalPreview(preview),
-    ),
-    assistantPreviews.filter(
-      (preview) =>
-        !isLowSignalPreview(preview) &&
-        !isUnsafePreview(preview) &&
-        !isCodeLikePreview(preview),
-    ),
-    assistantPreviews.filter(
-      (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
-    ),
-    userPreviews.filter((preview) => !isUnsafePreview(preview)),
-    assistantPreviews.filter((preview) => !isUnsafePreview(preview)),
-    userPreviews,
-    assistantPreviews,
+): EvidencePreviewSelection {
+  const selected: Array<{ preview: string; source: "user" | "assistant" }> = [];
+  const groups: PreviewCandidateGroup[] = [
+    {
+      previews: userPreviews.filter(
+        (preview) =>
+          !isLowSignalPreview(preview) &&
+          !isUnsafePreview(preview) &&
+          !isCodeLikePreview(preview) &&
+          hasUserLeadSignalPreview(preview),
+      ),
+      source: "user",
+      confidence: "strong",
+    },
+    {
+      previews: userPreviews.filter(
+        (preview) =>
+          !isLowSignalPreview(preview) &&
+          !isUnsafePreview(preview) &&
+          !isCodeLikePreview(preview),
+      ),
+      source: "user",
+      confidence: "medium",
+    },
+    {
+      previews: userPreviews.filter(
+        (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
+      ),
+      source: "user",
+      confidence: "weak",
+    },
+    {
+      previews: assistantPreviews.filter(
+        (preview) =>
+          !isLowSignalPreview(preview) &&
+          !isUnsafePreview(preview) &&
+          !isCodeLikePreview(preview) &&
+          hasAssistantLeadSignalPreview(preview),
+      ),
+      source: "assistant",
+      confidence: "medium",
+    },
+    {
+      previews: assistantPreviews.filter(
+        (preview) =>
+          !isLowSignalPreview(preview) &&
+          !isUnsafePreview(preview) &&
+          !isCodeLikePreview(preview),
+      ),
+      source: "assistant",
+      confidence: "weak",
+    },
+    {
+      previews: assistantPreviews.filter(
+        (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
+      ),
+      source: "assistant",
+      confidence: "weak",
+    },
+    {
+      previews: userPreviews.filter((preview) => !isUnsafePreview(preview)),
+      source: "user",
+      confidence: "weak",
+    },
+    {
+      previews: assistantPreviews.filter(
+        (preview) => !isUnsafePreview(preview),
+      ),
+      source: "assistant",
+      confidence: "weak",
+    },
+    { previews: userPreviews, source: "user", confidence: "weak" },
+    { previews: assistantPreviews, source: "assistant", confidence: "weak" },
   ];
 
+  let evidenceConfidence: SummaryConfidence = "weak";
   for (const group of groups) {
-    appendUniquePreviews(selected, group, 3);
+    appendUniquePreviewEntries(selected, group.previews, group.source, 3);
+    if (selected.length > 0 && evidenceConfidence === "weak") {
+      evidenceConfidence = group.confidence;
+    }
     if (selected.length >= 3) {
-      return selected;
+      break;
     }
   }
 
-  return selected;
+  const previews = selected.map((entry) => entry.preview);
+  const sourceSet = new Set(selected.map((entry) => entry.source));
+  const source: EvidenceSource =
+    sourceSet.size === 0
+      ? "none"
+      : sourceSet.size > 1
+        ? "mixed"
+        : (sourceSet.values().next().value ?? "none");
+  const issues = new Set<EvidenceIssue>();
+  if (previews.length === 0) {
+    issues.add("missing_evidence");
+  }
+  if (previews.some((preview) => isLowSignalPreview(preview))) {
+    issues.add("low_signal_evidence");
+  }
+  if (previews.some((preview) => isTruncatedPreview(preview))) {
+    issues.add("truncated_evidence");
+  }
+
+  return {
+    previews,
+    source,
+    confidence: evidenceConfidence,
+    issues: [...issues],
+  };
 }
 
 function stableEarliestTimestamp(
@@ -395,12 +477,16 @@ export function collectSessionContexts(
         context.userPreviews,
         context.assistantPreviews,
       );
+      const evidenceSelection = chooseEvidencePreviews(
+        context.userPreviews,
+        context.assistantPreviews,
+      );
       const sessionContext: SessionContext = {
         sessionId,
-        evidencePreviews: chooseEvidencePreviews(
-          context.userPreviews,
-          context.assistantPreviews,
-        ),
+        evidencePreviews: evidenceSelection.previews,
+        evidenceSource: evidenceSelection.source,
+        evidenceConfidence: evidenceSelection.confidence,
+        evidenceIssues: evidenceSelection.issues,
         sourceRefs,
       };
       if (context.startedAt) {
@@ -413,6 +499,9 @@ export function collectSessionContexts(
         sessionContext.leadPreview = leadPreview.preview;
         if (leadPreview.source) {
           sessionContext.leadPreviewSource = leadPreview.source;
+        }
+        if (leadPreview.confidence) {
+          sessionContext.leadPreviewConfidence = leadPreview.confidence;
         }
         sessionContext.leadPreviewIsCodeLike = isCodeLikePreview(
           leadPreview.preview,

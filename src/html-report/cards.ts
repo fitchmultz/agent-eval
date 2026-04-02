@@ -31,6 +31,31 @@ function renderPill(value: string, extraClass = ""): string {
   return `<span class="pill ${extraClass}">${escapeHtml(value)}</span>`;
 }
 
+function renderSessionTrustPills(
+  session: SummaryArtifact["topSessions"][number],
+): string {
+  const pills: string[] = [];
+
+  if (session.titleSource !== "user") {
+    pills.push(renderPill(`${session.titleSource} title`, "warn"));
+  }
+  if (session.titleConfidence !== "strong") {
+    pills.push(
+      renderPill(`title ${session.titleConfidence} confidence`, "warn"),
+    );
+  }
+  if (session.evidenceConfidence !== "strong") {
+    pills.push(
+      renderPill(`evidence ${session.evidenceConfidence} confidence`, "warn"),
+    );
+  }
+  for (const issue of session.evidenceIssues) {
+    pills.push(renderPill(issue.replaceAll("_", " "), "warn"));
+  }
+
+  return pills.join("");
+}
+
 function renderStringList(
   items: readonly string[],
   emptyMessage?: string,
@@ -132,6 +157,7 @@ export function renderSessionCards(summary: SummaryArtifact): string {
           ${renderPill(`friction ${session.frictionScore}`)}
           ${renderPill(`compliance ${session.complianceScore}`)}
           ${renderPill(`${session.incidentCount} incidents`)}
+          ${renderSessionTrustPills(session)}
         </div>
         <h3>${escapeHtml(displayLabel)}</h3>
         <p class="session-subline">${escapeHtml(

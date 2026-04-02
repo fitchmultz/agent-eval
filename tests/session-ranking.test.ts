@@ -10,6 +10,7 @@ import {
   buildTopSessions,
 } from "../src/session-ranking.js";
 import { createEmptySessionLabelMap } from "../src/summary/index.js";
+import type { SessionContext } from "../src/summary/types.js";
 
 function createSession(
   sessionId: string,
@@ -307,21 +308,25 @@ describe("buildTopSessions", () => {
     };
     const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
     sessionLabelCounts.set("assistant-fallback", createEmptySessionLabelMap());
-    const sessionContexts = new Map([
+    const sessionContexts: Map<string, SessionContext> = new Map([
       [
         "assistant-fallback",
         {
           sessionId: "assistant-fallback",
           leadPreview: "I checked the callback path and will verify the patch.",
-          leadPreviewSource: "assistant" as const,
+          leadPreviewSource: "assistant",
+          leadPreviewConfidence: "medium",
           leadPreviewIsCodeLike: false,
           evidencePreviews: [
             "I checked the callback path and will verify the patch...",
           ],
+          evidenceSource: "assistant",
+          evidenceConfidence: "medium",
+          evidenceIssues: ["truncated_evidence"],
           sourceRefs: [
             {
-              provider: "codex" as const,
-              kind: "session_jsonl" as const,
+              provider: "codex",
+              kind: "session_jsonl",
               path: "/tmp/session.jsonl",
             },
           ],
@@ -378,7 +383,7 @@ describe("buildTopSessions", () => {
     };
     const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
     sessionLabelCounts.set("metadata-fallback", createEmptySessionLabelMap());
-    const sessionContexts = new Map([
+    const sessionContexts: Map<string, SessionContext> = new Map([
       [
         "metadata-fallback",
         {
@@ -386,10 +391,17 @@ describe("buildTopSessions", () => {
           evidencePreviews: [
             "**Default assumption: Codex is already very smart.** Only add context Codex doesn't already have...",
           ],
+          evidenceSource: "user",
+          evidenceConfidence: "weak",
+          evidenceIssues: [
+            "metadata_fallback_title",
+            "low_signal_evidence",
+            "truncated_evidence",
+          ],
           sourceRefs: [
             {
-              provider: "codex" as const,
-              kind: "session_jsonl" as const,
+              provider: "codex",
+              kind: "session_jsonl",
               path: "/tmp/session.jsonl",
             },
           ],
@@ -506,16 +518,19 @@ describe("buildTopSessions", () => {
     const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
     sessionLabelCounts.set("metadata-title", createEmptySessionLabelMap());
     sessionLabelCounts.set("user-title", createEmptySessionLabelMap());
-    const sessionContexts = new Map([
+    const sessionContexts: Map<string, SessionContext> = new Map([
       [
         "metadata-title",
         {
           sessionId: "metadata-title",
           evidencePreviews: ["Stabilize them. - Add or update tests."],
+          evidenceSource: "user",
+          evidenceConfidence: "weak",
+          evidenceIssues: ["metadata_fallback_title", "low_signal_evidence"],
           sourceRefs: [
             {
-              provider: "codex" as const,
-              kind: "session_jsonl" as const,
+              provider: "codex",
+              kind: "session_jsonl",
               path: "/tmp/metadata.jsonl",
             },
           ],
@@ -527,15 +542,19 @@ describe("buildTopSessions", () => {
           sessionId: "user-title",
           leadPreview:
             "Please fix the failing export path and rerun verification.",
-          leadPreviewSource: "user" as const,
+          leadPreviewSource: "user",
+          leadPreviewConfidence: "strong",
           leadPreviewIsCodeLike: false,
           evidencePreviews: [
             "Please fix the failing export path and rerun verification.",
           ],
+          evidenceSource: "user",
+          evidenceConfidence: "strong",
+          evidenceIssues: [],
           sourceRefs: [
             {
-              provider: "codex" as const,
-              kind: "session_jsonl" as const,
+              provider: "codex",
+              kind: "session_jsonl",
               path: "/tmp/user.jsonl",
             },
           ],
@@ -634,7 +653,7 @@ describe("buildTopSessions", () => {
 function createSpotlightSession(
   sessionId: string,
   overrides: Partial<ReturnType<typeof buildTopSessions>[number]> = {},
-) {
+): ReturnType<typeof buildTopSessions>[number] {
   return {
     sessionId,
     sessionShortId: sessionId,
@@ -654,6 +673,11 @@ function createSpotlightSession(
     whySelected: ["Test reason."],
     failedRules: [],
     evidencePreviews: [],
+    titleSource: "user",
+    titleConfidence: "strong",
+    evidenceSource: "none",
+    evidenceConfidence: "weak",
+    evidenceIssues: ["missing_evidence", "missing_source_refs"],
     sourceRefs: [],
     trustFlags: [],
     note: "test",

@@ -161,6 +161,11 @@ const baseSummary: SummaryArtifact = {
       evidencePreviews: [
         "Please fix login and verify the patch before you finish.",
       ],
+      titleSource: "user",
+      titleConfidence: "strong",
+      evidenceSource: "user",
+      evidenceConfidence: "strong",
+      evidenceIssues: [],
       sourceRefs: [
         {
           provider: "codex",

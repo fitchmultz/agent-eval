@@ -20,6 +20,12 @@ import type {
   RawTurnRecord,
   SummaryArtifact,
 } from "./schema.js";
+import {
+  incidentSchema,
+  metricsSchema,
+  rawTurnSchema,
+  summaryArtifactSchema,
+} from "./schema.js";
 
 /**
  * Canonical evaluation result used by the CLI and artifact writer.
@@ -44,6 +50,9 @@ export async function writeParseArtifacts(
   },
   outputDir: string,
 ): Promise<void> {
+  for (const turn of result.rawTurns) {
+    rawTurnSchema.parse(turn);
+  }
   await writeJsonLinesFile(join(outputDir, "raw-turns.jsonl"), result.rawTurns);
   await writeTextFile(
     join(outputDir, "parse-metrics.json"),
@@ -66,7 +75,13 @@ export async function writeArtifacts(
   result: EvaluationArtifacts,
   outputDir: string,
 ): Promise<void> {
+  metricsSchema.parse(result.metrics);
+  summaryArtifactSchema.parse(result.summary);
+
   if (result.rawTurns) {
+    for (const turn of result.rawTurns) {
+      rawTurnSchema.parse(turn);
+    }
     await writeJsonLinesFile(
       join(outputDir, "raw-turns.jsonl"),
       result.rawTurns,
@@ -74,6 +89,9 @@ export async function writeArtifacts(
   }
 
   if (result.incidents) {
+    for (const incident of result.incidents) {
+      incidentSchema.parse(incident);
+    }
     await writeJsonLinesFile(
       join(outputDir, "incidents.jsonl"),
       result.incidents,

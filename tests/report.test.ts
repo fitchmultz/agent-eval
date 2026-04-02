@@ -252,6 +252,11 @@ function createSummary(): SummaryArtifact {
           "No unverified ending",
         ],
         evidencePreviews: ["Please fix the login flow and verify the patch."],
+        titleSource: "user",
+        titleConfidence: "strong",
+        evidenceSource: "user",
+        evidenceConfidence: "strong",
+        evidenceIssues: [],
         sourceRefs: [
           { provider: "codex", kind: "session_jsonl", path: "/test.jsonl" },
         ],

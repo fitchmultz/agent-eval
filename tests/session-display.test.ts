@@ -133,6 +133,8 @@ describe("collectSessionContexts", () => {
         userMessagePreviews: [
           "sounds good. let's do the changes and then explain explicitly what changed for each please.",
           "scout can continue to use openai-codex/gpt-5.4-mini if needed.",
+          "no additional runs at this time please. finish the turn",
+          "no docs/report. just fix the code",
         ],
         assistantMessagePreviews: [],
       }),

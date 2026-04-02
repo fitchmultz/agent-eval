@@ -145,6 +145,9 @@ describe("buildSummaryArtifact", () => {
     );
     expect(summary.metricGlossary?.length).toBeGreaterThan(0);
     expect(summary.topSessions[0]?.whySelected?.length).toBeGreaterThan(0);
+    expect(summary.topSessions[0]?.titleSource).toBeDefined();
+    expect(summary.topSessions[0]?.titleConfidence).toBeDefined();
+    expect(summary.topSessions[0]?.evidenceConfidence).toBeDefined();
   });
 
   it("deduplicates top incidents that would otherwise burn multiple slots on the same session summary", () => {

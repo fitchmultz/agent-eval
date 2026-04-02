@@ -10,7 +10,14 @@ import {
   calculateFrictionScore,
   dominantLabelsForSession,
 } from "./friction-scoring.js";
-import type { LabelName, MetricsRecord } from "./schema.js";
+import type {
+  EvidenceIssue,
+  EvidenceSource,
+  LabelName,
+  MetricsRecord,
+  SessionTitleSource,
+  SummaryConfidence,
+} from "./schema.js";
 import {
   archetypeLabel,
   createArchetypeNote,
@@ -115,7 +122,8 @@ function buildWhySelected(
 
 function buildTrustFlags(
   session: SessionMetricRecord,
-  context?: SessionContext,
+  titleSource: SessionTitleSource,
+  evidenceIssues: readonly EvidenceIssue[],
 ): string[] {
   const flags: string[] = [];
 
@@ -123,39 +131,102 @@ function buildTrustFlags(
     flags.push("Parse warnings were present, so this session may be partial.");
   }
 
-  if (!context || context.evidencePreviews.length === 0) {
-    flags.push(
-      "No strong evidence preview was available in summary-only output.",
-    );
-  }
-
-  if (!context || context.sourceRefs.length === 0) {
-    flags.push("No source references were captured for this session.");
-  }
-
-  if (!context?.leadPreview && context?.evidencePreviews.length) {
+  if (titleSource === "metadata") {
     flags.push(
       "No strong human problem statement was available, so the queue title falls back to metadata.",
     );
   }
 
-  if (context?.leadPreviewSource === "assistant") {
+  if (titleSource === "assistant") {
     flags.push(
       "Queue title fell back to assistant text because no stronger user preview was available.",
     );
   }
 
-  if (context?.leadPreviewIsCodeLike) {
+  if (evidenceIssues.includes("missing_evidence")) {
+    flags.push(
+      "No strong evidence preview was available in summary-only output.",
+    );
+  }
+
+  if (evidenceIssues.includes("missing_source_refs")) {
+    flags.push("No source references were captured for this session.");
+  }
+
+  if (evidenceIssues.includes("code_like_title")) {
     flags.push(
       "Queue title fell back to code-like text; inspect the source refs for full context.",
     );
   }
 
-  if (context?.evidencePreviews.some(isTruncatedPreview)) {
+  if (evidenceIssues.includes("low_signal_evidence")) {
+    flags.push(
+      "Evidence previews include lower-signal text, so inspect source refs before acting on them.",
+    );
+  }
+
+  if (evidenceIssues.includes("truncated_evidence")) {
     flags.push("Evidence previews were truncated for compact reporting.");
   }
 
   return flags;
+}
+
+function deriveTitleSource(context?: SessionContext): SessionTitleSource {
+  if (!context?.leadPreview) {
+    return "metadata";
+  }
+
+  return context.leadPreviewSource === "assistant" ? "assistant" : "user";
+}
+
+function deriveTitleConfidence(context?: SessionContext): SummaryConfidence {
+  const titleSource = deriveTitleSource(context);
+  if (titleSource === "metadata") {
+    return "weak";
+  }
+
+  if (context?.leadPreviewIsCodeLike) {
+    return "weak";
+  }
+
+  return (
+    context?.leadPreviewConfidence ??
+    (titleSource === "assistant" ? "medium" : "strong")
+  );
+}
+
+function deriveEvidenceSource(context?: SessionContext): EvidenceSource {
+  return context?.evidenceSource ?? "none";
+}
+
+function deriveEvidenceConfidence(context?: SessionContext): SummaryConfidence {
+  return context?.evidenceConfidence ?? "weak";
+}
+
+function deriveEvidenceIssues(context?: SessionContext): EvidenceIssue[] {
+  const issues = new Set<EvidenceIssue>(context?.evidenceIssues ?? []);
+
+  if (!context || context.evidencePreviews.length === 0) {
+    issues.add("missing_evidence");
+  }
+  if (!context || context.sourceRefs.length === 0) {
+    issues.add("missing_source_refs");
+  }
+  if (!context?.leadPreview) {
+    issues.add("metadata_fallback_title");
+  }
+  if (context?.leadPreviewSource === "assistant") {
+    issues.add("assistant_fallback_title");
+  }
+  if (context?.leadPreviewIsCodeLike) {
+    issues.add("code_like_title");
+  }
+  if ((context?.evidencePreviews ?? []).some(isTruncatedPreview)) {
+    issues.add("truncated_evidence");
+  }
+
+  return [...issues];
 }
 
 function buildSessionInsight(
@@ -177,6 +248,11 @@ function buildSessionInsight(
     frictionScore,
   );
   const failedRules = buildFailedRules(session);
+  const titleSource = deriveTitleSource(context);
+  const titleConfidence = deriveTitleConfidence(context);
+  const evidenceSource = deriveEvidenceSource(context);
+  const evidenceConfidence = deriveEvidenceConfidence(context);
+  const evidenceIssues = deriveEvidenceIssues(context);
 
   return {
     sessionId: session.sessionId,
@@ -205,8 +281,13 @@ function buildSessionInsight(
     ),
     failedRules,
     evidencePreviews: context?.evidencePreviews ?? [],
+    titleSource,
+    titleConfidence,
+    evidenceSource,
+    evidenceConfidence,
+    evidenceIssues,
     sourceRefs: context?.sourceRefs ?? [],
-    trustFlags: buildTrustFlags(session, context),
+    trustFlags: buildTrustFlags(session, titleSource, evidenceIssues),
     note: createArchetypeNote(archetype, dominantLabels, session),
   };
 }
@@ -241,23 +322,14 @@ function operatorActionBucket(session: SessionInsightRow): number {
 }
 
 function titleConfidenceBucket(session: SessionInsightRow): number {
-  if (
-    session.trustFlags.includes(
-      "No strong human problem statement was available, so the queue title falls back to metadata.",
-    )
-  ) {
-    return 2;
+  switch (session.titleConfidence) {
+    case "weak":
+      return 2;
+    case "medium":
+      return 1;
+    default:
+      return 0;
   }
-
-  if (
-    session.trustFlags.includes(
-      "Queue title fell back to assistant text because no stronger user preview was available.",
-    )
-  ) {
-    return 1;
-  }
-
-  return 0;
 }
 
 function compareSessionInsights(
@@ -267,10 +339,10 @@ function compareSessionInsights(
   return (
     operatorActionBucket(left) - operatorActionBucket(right) ||
     left.complianceScore - right.complianceScore ||
+    titleConfidenceBucket(left) - titleConfidenceBucket(right) ||
     right.frictionScore - left.frictionScore ||
     right.incidentCount - left.incidentCount ||
     right.failedRules.length - left.failedRules.length ||
-    titleConfidenceBucket(left) - titleConfidenceBucket(right) ||
     left.sessionDisplayLabel.localeCompare(right.sessionDisplayLabel) ||
     left.sessionId.localeCompare(right.sessionId)
   );

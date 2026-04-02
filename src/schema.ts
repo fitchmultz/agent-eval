@@ -51,6 +51,27 @@ export const complianceStatusValues = [
   "not_applicable",
   "unknown",
 ] as const;
+export const summaryConfidenceValues = ["strong", "medium", "weak"] as const;
+export const sessionTitleSourceValues = [
+  "user",
+  "assistant",
+  "metadata",
+] as const;
+export const evidenceSourceValues = [
+  "user",
+  "assistant",
+  "mixed",
+  "none",
+] as const;
+export const evidenceIssueValues = [
+  "missing_evidence",
+  "missing_source_refs",
+  "metadata_fallback_title",
+  "assistant_fallback_title",
+  "code_like_title",
+  "truncated_evidence",
+  "low_signal_evidence",
+] as const;
 
 export type LabelName = (typeof labelTaxonomy)[number];
 export type Severity = (typeof severityValues)[number];
@@ -62,6 +83,10 @@ export type SourceKind = (typeof sourceKindValues)[number];
 export type ToolCategory = (typeof toolCategoryValues)[number];
 export type ComplianceRuleName = (typeof complianceRuleValues)[number];
 export type ComplianceStatus = (typeof complianceStatusValues)[number];
+export type SummaryConfidence = (typeof summaryConfidenceValues)[number];
+export type SessionTitleSource = (typeof sessionTitleSourceValues)[number];
+export type EvidenceSource = (typeof evidenceSourceValues)[number];
+export type EvidenceIssue = (typeof evidenceIssueValues)[number];
 
 export const sourceRefSchema = z.object({
   provider: z.enum(sourceProviderValues),
@@ -231,6 +256,11 @@ const sessionHighlightSchema = z.object({
   whySelected: z.array(z.string().min(1)),
   failedRules: z.array(z.string().min(1)),
   evidencePreviews: z.array(z.string().min(1)),
+  titleSource: z.enum(sessionTitleSourceValues),
+  titleConfidence: z.enum(summaryConfidenceValues),
+  evidenceSource: z.enum(evidenceSourceValues),
+  evidenceConfidence: z.enum(summaryConfidenceValues),
+  evidenceIssues: z.array(z.enum(evidenceIssueValues)),
   sourceRefs: z.array(sourceRefSchema),
   trustFlags: z.array(z.string().min(1)),
   note: z.string().min(1),

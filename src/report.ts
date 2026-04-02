@@ -68,6 +68,27 @@ function renderOperatorMetricLines(summary: SummaryArtifact): string[] {
   );
 }
 
+function renderSessionProvenanceTags(
+  session: SummaryArtifact["topSessions"][number],
+): string {
+  const tags: string[] = [];
+
+  if (session.titleSource !== "user") {
+    tags.push(`title=${session.titleSource}`);
+  }
+  if (session.titleConfidence !== "strong") {
+    tags.push(`title-confidence=${session.titleConfidence}`);
+  }
+  if (session.evidenceConfidence !== "strong") {
+    tags.push(`evidence-confidence=${session.evidenceConfidence}`);
+  }
+  for (const issue of session.evidenceIssues) {
+    tags.push(issue);
+  }
+
+  return tags.length > 0 ? ` | trust: ${tags.join(", ")}` : "";
+}
+
 function renderSessionLines(summary: SummaryArtifact): string[] {
   return renderLines(
     summary.topSessions,
@@ -95,7 +116,8 @@ function renderSessionLines(summary: SummaryArtifact): string[] {
         failedRulesList.length > 0
           ? ` | failed rules: ${failedRulesList.join(", ")}`
           : "";
-      return `- ${displayLabel} (${projectLabel} · ${timestampLabel} · ${shortId}) | why: ${whySelected.join("; ")}${failedRules}${evidencePreview}`;
+      const trust = renderSessionProvenanceTags(session);
+      return `- ${displayLabel} (${projectLabel} · ${timestampLabel} · ${shortId}) | why: ${whySelected.join("; ")}${failedRules}${trust}${evidencePreview}`;
     },
   );
 }

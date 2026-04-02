@@ -262,6 +262,51 @@ describe("artifact-writer", () => {
     ).toContain("<svg>");
   });
 
+  it("rejects malformed summary artifacts before writing", async () => {
+    const invalid = createEvaluationArtifacts({
+      summary: {
+        ...createSummary(),
+        topSessions: [
+          {
+            sessionId: "session-1",
+            sessionShortId: "session-1",
+            sessionDisplayLabel: "Broken summary",
+            sessionTimestampLabel: "2026-03-06 19:00Z",
+            sessionProjectLabel: "agent-eval",
+            archetype: "unverified_delivery",
+            archetypeLabel: "Unverified Ending Delivery",
+            frictionScore: 8,
+            complianceScore: 80,
+            incidentCount: 1,
+            labeledTurnCount: 1,
+            writeCount: 2,
+            endedVerified: false,
+            verificationPassedCount: 0,
+            dominantLabels: ["verification_request"],
+            whySelected: ["Ended without verification."],
+            failedRules: ["Verification after code changes"],
+            evidencePreviews: ["Please verify the patch."],
+            titleSource: "user",
+            titleConfidence: "strong",
+            evidenceSource: "user",
+            evidenceConfidence: "strong",
+            sourceRefs: [
+              {
+                provider: "codex",
+                kind: "session_jsonl",
+                path: "/test.jsonl",
+              },
+            ],
+            trustFlags: [],
+            note: "Missing evidenceIssues should fail schema validation.",
+          },
+        ],
+      } as unknown as SummaryArtifact,
+    });
+
+    await expect(writeArtifacts(invalid, tempDir)).rejects.toThrow();
+  });
+
   it("omits raw-turn and incident files in summary-only bundles", async () => {
     await writeArtifacts(
       createEvaluationArtifacts({
