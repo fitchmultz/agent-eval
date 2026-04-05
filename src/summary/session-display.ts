@@ -230,7 +230,23 @@ function isContextSetupPreview(preview: string): boolean {
 
 function isSecondaryEvidenceResiduePreview(preview: string): boolean {
   return (
+    /^context optimization strategy:\s*/i.test(preview) ||
+    /^for mcp modes \(like the current discover mode\), selected files are automatically compressed\b/i.test(
+      preview,
+    ) ||
     /^now i have a thorough understanding of the problem\b/i.test(preview) ||
+    /^now i have a thorough understanding of the continuity system\b/i.test(
+      preview,
+    ) ||
+    /^now i have everything i need\.\s*let me craft the handoff prompt:?$/i.test(
+      preview,
+    ) ||
+    /^good\s*[,—-].*\bwell within\b/i.test(preview) ||
+    /^we['’]re at\s*~?\d/i.test(preview) ||
+    /\bwell within budget\b/i.test(preview) ||
+    /\bwell within (?:the )?\d{1,3}(?:,\d{3})*\b/i.test(preview) ||
+    /\bcheck token budget\b/i.test(preview) ||
+    /\blet me (?:craft|set) the handoff prompt\b/i.test(preview) ||
     /^here'?s the full review output from reviewer model\b/i.test(preview) ||
     /^my best evidence-backed bet is:\s*/i.test(preview) ||
     /^i reloaded\.\s*/i.test(preview) ||
@@ -608,6 +624,12 @@ function isMeaningfulProjectLabel(value: string): boolean {
     normalized === ".pi" ||
     normalized === ".codex" ||
     normalized === ".claude" ||
+    normalized === "Downloads" ||
+    normalized === "Desktop" ||
+    normalized === "Documents" ||
+    normalized === "Movies" ||
+    normalized === "Music" ||
+    normalized === "Pictures" ||
     normalized === "redacted-session-root" ||
     normalized.startsWith("-private-var-folders-") ||
     /^--.+--$/.test(normalized)

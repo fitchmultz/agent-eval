@@ -26,6 +26,12 @@ describe("deriveSessionProjectLabel", () => {
     ).toBe("project unknown");
   });
 
+  it("falls back to project unknown for generic user-home folders", () => {
+    expect(deriveSessionProjectLabel("/Users/example/Downloads", [])).toBe(
+      "project unknown",
+    );
+  });
+
   it("does not derive a project name from encoded pi source paths when cwd is absent", () => {
     const sourceRefs: SourceRef[] = [
       {
@@ -162,6 +168,27 @@ describe("collectSessionContexts", () => {
     const context = contexts.get("session-1");
     expect(context?.evidencePreviews).toEqual([
       "Do the highest-risk wake-path spike before porting the full worker.",
+    ]);
+  });
+
+  it("drops claude handoff and token-budget residue from unsurfaced evidence", () => {
+    const contexts = collectSessionContexts([
+      createTurn({
+        userMessagePreviews: [
+          "Add concise diffs against the latest healthy system diagnostics baseline across Control Center exports, assistant tooling, and operator validation artifacts.",
+        ],
+        assistantMessagePreviews: [
+          "Context Optimization Strategy: For MCP modes (like the current discover mode), selected files are automatically compressed to show only their codemaps.",
+          "Now I have everything I need. Let me craft the handoff prompt:",
+          "We're at ~115K tokens, well within budget. Let me add the DB schema for continuity tables since the next model will need to understand migration options:",
+          "Good, 98k tokens - well within budget. Now let me also add the docs features that cover queue/recovery/task docs since those may need updating:",
+        ],
+      }),
+    ]);
+
+    const context = contexts.get("session-1");
+    expect(context?.evidencePreviews).toEqual([
+      "Add concise diffs against the latest healthy system diagnostics baseline across Control Center exports, assistant tooling, and operator validation artifacts.",
     ]);
   });
 
