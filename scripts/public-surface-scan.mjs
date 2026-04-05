@@ -10,20 +10,13 @@ import { execFileSync } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 
-const TEXT_EXTENSIONS_BY_MODE = {
-  artifacts: new Set([".json", ".jsonl", ".md", ".html", ".svg"]),
-  repo: new Set([
-    ".json",
-    ".jsonl",
-    ".md",
-    ".html",
-    ".svg",
-    ".ts",
-    ".js",
-    ".mjs",
-    ".cjs",
-  ]),
-};
+const ARTIFACT_TEXT_EXTENSIONS = new Set([
+  ".json",
+  ".jsonl",
+  ".md",
+  ".html",
+  ".svg",
+]);
 
 const LEAK_PATTERNS = [
   { label: "absolute-macos-home", regex: /\/Users\//g },
@@ -52,8 +45,28 @@ const REPO_MODE_ALLOWLIST = [
   },
   {
     path: /\/scripts\/public-surface-scan\.mjs$/,
-    label: /.*/,
-    sample: /.*/,
+    label: "absolute-macos-home",
+    sample: /\/Users\//,
+  },
+  {
+    path: /\/scripts\/public-surface-scan\.mjs$/,
+    label: "private-var-folders",
+    sample: /\/private\/var\/folders\//,
+  },
+  {
+    path: /\/scripts\/public-surface-scan\.mjs$/,
+    label: "ssh-directory",
+    sample: /\.ssh\//,
+  },
+  {
+    path: /\/scripts\/public-surface-scan\.mjs$/,
+    label: "encoded-user-segment",
+    sample: /-Users-test-project--/,
+  },
+  {
+    path: /\/scripts\/public-surface-scan\.mjs$/,
+    label: "encoded-temp-root",
+    sample: /-private-var-folders-rf-t1b4c-cn7sgc-f6tkyg0wsk00000gn-T/,
   },
   {
     path: /\/tests\/corpus-regression\.test\.ts$/,
@@ -158,7 +171,7 @@ function printHelp() {
     `Artifact mode extensions: .json, .jsonl, .md, .html, .svg\n`,
   );
   process.stdout.write(
-    `Repo mode extensions: .json, .jsonl, .md, .html, .svg, .ts, .js, .mjs, .cjs\n\n`,
+    `Repo mode scans tracked files discovered via git ls-files (or explicit paths) with a narrow fixture allowlist.\n\n`,
   );
   process.stdout.write(`Exit codes:\n`);
   process.stdout.write(`  0 success\n`);
@@ -166,17 +179,17 @@ function printHelp() {
   process.stdout.write(`  2 usage error\n`);
 }
 
-async function collectFiles(targetPath, files, textExtensions) {
+async function collectFiles(targetPath, files, mode) {
   const targetStat = await stat(targetPath);
   if (targetStat.isDirectory()) {
     const entries = await readdir(targetPath, { withFileTypes: true });
     for (const entry of entries) {
-      await collectFiles(join(targetPath, entry.name), files, textExtensions);
+      await collectFiles(join(targetPath, entry.name), files, mode);
     }
     return;
   }
 
-  if (textExtensions.has(extname(targetPath))) {
+  if (mode === "repo" || ARTIFACT_TEXT_EXTENSIONS.has(extname(targetPath))) {
     files.push(targetPath);
   }
 }
@@ -216,7 +229,7 @@ async function main() {
 
   const modeArg = rawArgs.find((arg) => arg.startsWith("--mode="));
   const mode = modeArg ? modeArg.slice("--mode=".length) : "artifacts";
-  if (!(mode in TEXT_EXTENSIONS_BY_MODE)) {
+  if (!["artifacts", "repo"].includes(mode)) {
     process.stderr.write(`unsupported mode: ${mode}\n`);
     process.exitCode = 2;
     return;
@@ -233,10 +246,9 @@ async function main() {
     return;
   }
 
-  const textExtensions = TEXT_EXTENSIONS_BY_MODE[mode];
   const files = [];
   for (const rawPath of scanTargets) {
-    await collectFiles(resolve(rawPath), files, textExtensions);
+    await collectFiles(resolve(rawPath), files, mode);
   }
 
   const findings = [];
