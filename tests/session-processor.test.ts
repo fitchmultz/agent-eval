@@ -10,6 +10,7 @@ import {
   processSession,
   type SessionMetrics,
 } from "../src/session-processor.js";
+import { buildTemplateRegistry } from "../src/template-analysis.js";
 import type { ParsedSession } from "../src/transcript/index.js";
 
 describe("processSession", () => {
@@ -209,6 +210,53 @@ describe("processSession", () => {
     expect(result.incidents).toHaveLength(0);
     expect(result.metrics.turnCount).toBe(0);
     expect(result.metrics.labeledTurnCount).toBe(0);
+  });
+
+  it("applies de-templated filtered messages from the template registry", async () => {
+    const scaffold =
+      "You are an autonomous coding agent. Do not stop early. Always run the relevant tests before ending your turn.";
+    const repeatedA: ParsedSession = {
+      sessionId: "template-a",
+      provider: "codex",
+      path: "/tmp/template-a.jsonl",
+      turns: [
+        {
+          turnIndex: 0,
+          userMessages: [`${scaffold}\n\nFix login bug.`],
+          assistantMessages: ["Working on it."],
+          toolCalls: [],
+          sourceRefs: [],
+        },
+      ],
+    };
+    const repeatedB: ParsedSession = {
+      sessionId: "template-b",
+      provider: "codex",
+      path: "/tmp/template-b.jsonl",
+      turns: [
+        {
+          turnIndex: 0,
+          userMessages: [`${scaffold}\n\nFix billing bug.`],
+          assistantMessages: ["Working on it."],
+          toolCalls: [],
+          sourceRefs: [],
+        },
+      ],
+    };
+
+    const registry = buildTemplateRegistry([repeatedA, repeatedB]);
+    const result = await processSession(repeatedA, undefined, {
+      templateAnalysis: registry.sessionAnalyses.get("template-a"),
+    });
+
+    expect(result.turns[0]?.userMessagePreviews).toContain("Fix login bug.");
+    expect(result.turns[0]?.userMessagePreviews.join(" ")).not.toContain(
+      "autonomous coding agent",
+    );
+    expect(result.analysis?.rawLabelCounts.interrupt ?? 0).toBe(1);
+    expect(result.analysis?.deTemplatedLabelCounts.interrupt ?? 0).toBe(0);
+    expect(result.incidents).toHaveLength(0);
+    expect(result.metrics.incidentCount).toBe(0);
   });
 
   it("should categorize tool calls correctly", async () => {

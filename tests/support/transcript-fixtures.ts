@@ -169,24 +169,39 @@ export function createClaudeSessionContent(sessionId: string): string {
   ]);
 }
 
-export async function createCodexHome(
+export async function createCodexHomeFromSessions(
   baseDir: string,
   name: string,
-  sessionCount = 1,
+  sessions: readonly { filename: string; content: string }[],
 ): Promise<string> {
   const homeDir = join(baseDir, name);
   const sessionsDir = join(homeDir, "sessions", "2026", "03");
   await mkdir(sessionsDir, { recursive: true });
 
-  for (let index = 0; index < sessionCount; index += 1) {
+  for (const session of sessions) {
     await writeFile(
-      join(sessionsDir, `session-${index + 1}.jsonl`),
-      createCodexSessionContent(`codex-session-${index + 1}`),
+      join(sessionsDir, session.filename),
+      session.content,
       "utf8",
     );
   }
 
   return homeDir;
+}
+
+export async function createCodexHome(
+  baseDir: string,
+  name: string,
+  sessionCount = 1,
+): Promise<string> {
+  return createCodexHomeFromSessions(
+    baseDir,
+    name,
+    Array.from({ length: sessionCount }, (_, index) => ({
+      filename: `session-${index + 1}.jsonl`,
+      content: createCodexSessionContent(`codex-session-${index + 1}`),
+    })),
+  );
 }
 
 export function createPiSessionContent(sessionId: string): string {
@@ -279,20 +294,20 @@ export function createPiSessionContent(sessionId: string): string {
   ]);
 }
 
-export async function createClaudeHome(
+export async function createClaudeHomeFromSessions(
   baseDir: string,
   name: string,
-  sessionCount = 1,
+  sessions: readonly { filename: string; content: string }[],
   options: { includeOptionalStores?: boolean } = {},
 ): Promise<string> {
   const homeDir = join(baseDir, name);
   const projectsDir = join(homeDir, "projects", "-Users-test-project");
   await mkdir(projectsDir, { recursive: true });
 
-  for (let index = 0; index < sessionCount; index += 1) {
+  for (const session of sessions) {
     await writeFile(
-      join(projectsDir, `session-${index + 1}.jsonl`),
-      createClaudeSessionContent(`claude-session-${index + 1}`),
+      join(projectsDir, session.filename),
+      session.content,
       "utf8",
     );
   }
@@ -306,10 +321,27 @@ export async function createClaudeHome(
   return homeDir;
 }
 
-export async function createPiHome(
+export async function createClaudeHome(
   baseDir: string,
   name: string,
   sessionCount = 1,
+  options: { includeOptionalStores?: boolean } = {},
+): Promise<string> {
+  return createClaudeHomeFromSessions(
+    baseDir,
+    name,
+    Array.from({ length: sessionCount }, (_, index) => ({
+      filename: `session-${index + 1}.jsonl`,
+      content: createClaudeSessionContent(`claude-session-${index + 1}`),
+    })),
+    options,
+  );
+}
+
+export async function createPiHomeFromSessions(
+  baseDir: string,
+  name: string,
+  sessions: readonly { filename: string; content: string }[],
 ): Promise<string> {
   const homeDir = join(baseDir, name);
   const sessionsDir = join(
@@ -320,13 +352,28 @@ export async function createPiHome(
   );
   await mkdir(sessionsDir, { recursive: true });
 
-  for (let index = 0; index < sessionCount; index += 1) {
+  for (const session of sessions) {
     await writeFile(
-      join(sessionsDir, `session-${index + 1}.jsonl`),
-      createPiSessionContent(`pi-session-${index + 1}`),
+      join(sessionsDir, session.filename),
+      session.content,
       "utf8",
     );
   }
 
   return homeDir;
+}
+
+export async function createPiHome(
+  baseDir: string,
+  name: string,
+  sessionCount = 1,
+): Promise<string> {
+  return createPiHomeFromSessions(
+    baseDir,
+    name,
+    Array.from({ length: sessionCount }, (_, index) => ({
+      filename: `session-${index + 1}.jsonl`,
+      content: createPiSessionContent(`pi-session-${index + 1}`),
+    })),
+  );
 }

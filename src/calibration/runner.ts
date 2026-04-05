@@ -1,17 +1,18 @@
 /**
- * Purpose: Execute the synthetic calibration corpus and compute deterministic benchmark artifacts.
- * Responsibilities: Parse transcript fixtures, process sessions, compare actual outputs to expectations, and aggregate benchmark metrics.
- * Scope: Standalone methodology validation subsystem outside the runtime evaluation pipeline.
+ * Purpose: Execute the synthetic calibration corpus through the canonical evaluator and compute deterministic benchmark artifacts.
+ * Responsibilities: Materialize provider-shaped synthetic homes, run the real v3 pipeline, compare actual outputs to expectations, and aggregate benchmark metrics.
+ * Scope: Standalone methodology validation subsystem outside the runtime evaluation CLI flow.
  * Usage: Call `runCalibrationBenchmark()` from the benchmark CLI command or tests.
- * Invariants/Assumptions: The corpus is synthetic, deterministic, and evaluated without external providers or network access.
+ * Invariants/Assumptions: The corpus is synthetic, deterministic, and validated through the canonical evaluator path.
  */
 
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { evaluateArtifacts } from "../evaluator.js";
 import { writeTextFile } from "../filesystem.js";
 import { sanitizeMessageText } from "../sanitization.js";
 import { type LabelName, labelTaxonomy } from "../schema.js";
-import { processSession } from "../session-processor.js";
-import { parseTranscriptFile } from "../transcript/index.js";
 import { ENGINE_VERSION, SCHEMA_VERSION } from "../version.js";
 import { loadCalibrationCorpus } from "./corpus.js";
 import { renderBenchmarkReport } from "./report.js";
@@ -22,7 +23,7 @@ import {
   type CalibrationCaseResult,
 } from "./types.js";
 
-const BENCHMARK_VERSION = "2";
+const BENCHMARK_VERSION = "3";
 const BENCHMARK_HOME = "/Users/benchmark";
 
 function safeRate(numerator: number, denominator: number): number {
@@ -38,19 +39,6 @@ function normalizeLabelInstances(
   return [...instances].sort(
     (left, right) =>
       left.turnIndex - right.turnIndex || left.label.localeCompare(right.label),
-  );
-}
-
-function collectActualLabelInstances(
-  processed: Awaited<ReturnType<typeof processSession>>,
-): Array<{ turnIndex: number; label: LabelName }> {
-  return normalizeLabelInstances(
-    processed.turns.flatMap((turn) =>
-      turn.labels.map((label) => ({
-        turnIndex: turn.turnIndex,
-        label: label.label,
-      })),
-    ),
   );
 }
 
@@ -218,7 +206,7 @@ function aggregateIncidentMetrics(
 }
 
 function evaluateSanitizationChecks(testCase: CalibrationCase) {
-  return testCase.sanitizationChecks.map((check) => {
+  return testCase.sanitizationChecks.map((check, index) => {
     const sanitized = sanitizeMessageText(check.input, {
       homeDirectory: BENCHMARK_HOME,
       maxLength: 240,
@@ -230,14 +218,56 @@ function evaluateSanitizationChecks(testCase: CalibrationCase) {
       sanitized.includes(needle),
     );
     return {
-      input: check.input,
+      checkId: `${testCase.id}:sanitization_${index + 1}`,
       passed:
         mustContainMisses.length === 0 && mustNotContainViolations.length === 0,
       mustContainMisses,
       mustNotContainViolations,
-      sanitized,
     };
   });
+}
+
+async function materializeCalibrationHome(
+  testCase: ReturnType<typeof loadCalibrationCorpus>[number],
+): Promise<string> {
+  const root = await mkdtemp(
+    join(tmpdir(), `agent-eval-calibration-${testCase.id}-`),
+  );
+  const fixtureContent = await readFile(testCase.fixturePath, "utf8");
+
+  if (testCase.provider === "codex") {
+    const fixturePath = join(root, "sessions", "2026", "03", testCase.fixture);
+    await mkdir(join(root, "sessions", "2026", "03"), { recursive: true });
+    await writeFile(fixturePath, fixtureContent, "utf8");
+    return root;
+  }
+
+  if (testCase.provider === "claude") {
+    const fixturePath = join(
+      root,
+      "projects",
+      "-Users-benchmark-project",
+      testCase.fixture,
+    );
+    await mkdir(join(root, "projects", "-Users-benchmark-project"), {
+      recursive: true,
+    });
+    await writeFile(fixturePath, fixtureContent, "utf8");
+    return root;
+  }
+
+  const fixturePath = join(
+    root,
+    "agent",
+    "sessions",
+    "--Users-benchmark-project--",
+    testCase.fixture,
+  );
+  await mkdir(join(root, "agent", "sessions", "--Users-benchmark-project--"), {
+    recursive: true,
+  });
+  await writeFile(fixturePath, fixtureContent, "utf8");
+  return root;
 }
 
 export async function runCalibrationBenchmark(outputDir?: string): Promise<{
@@ -248,56 +278,83 @@ export async function runCalibrationBenchmark(outputDir?: string): Promise<{
   const caseResults: CalibrationCaseResult[] = [];
 
   for (const testCase of corpus) {
-    const parsed = await parseTranscriptFile(testCase.fixturePath, {
-      sourceProvider: testCase.provider,
-      strict: false,
-    });
-    const processed = await processSession(parsed, BENCHMARK_HOME);
-    const expectedLabelInstances = normalizeLabelInstances(
-      testCase.expectedLabelInstances,
-    );
-    const actualLabelInstances = collectActualLabelInstances(processed);
-    const expectedIncidents = normalizeIncidents(testCase.expectedIncidents);
-    const actualIncidents = normalizeIncidents(processed.incidents);
+    const homeDir = await materializeCalibrationHome(testCase);
 
-    caseResults.push({
-      id: testCase.id,
-      provider: testCase.provider,
-      fixture: testCase.fixture,
-      parseWarnings: {
-        expectedCount: testCase.expectedParseWarningCount,
-        actualCount: processed.metrics.parseWarningCount,
-        passed:
-          testCase.expectedParseWarningCount ===
-          processed.metrics.parseWarningCount,
-      },
-      expectedLabelInstances,
-      actualLabelInstances,
-      labelMetrics: buildLabelMetricsForCase(
+    try {
+      const result = await evaluateArtifacts({
+        source: testCase.provider,
+        home: homeDir,
+        outputMode: "full",
+      });
+      const expectedLabelInstances = normalizeLabelInstances(
+        testCase.expectedLabelInstances,
+      );
+      const actualLabelInstances = normalizeLabelInstances(
+        (result.rawTurns ?? []).flatMap((turn) =>
+          turn.labels.map((label) => ({
+            turnIndex: turn.turnIndex,
+            label: label.label,
+          })),
+        ),
+      );
+      const expectedIncidents = normalizeIncidents(testCase.expectedIncidents);
+      const actualIncidents = normalizeIncidents(result.incidents ?? []);
+      const sessionFact = result.sessionFacts[0];
+
+      caseResults.push({
+        id: testCase.id,
+        provider: testCase.provider,
+        fixture: testCase.fixture,
+        parseWarnings: {
+          expectedCount: testCase.expectedParseWarningCount,
+          actualCount: result.metrics.parseWarningCount,
+          passed:
+            testCase.expectedParseWarningCount ===
+            result.metrics.parseWarningCount,
+        },
         expectedLabelInstances,
         actualLabelInstances,
-      ),
-      expectedIncidents,
-      actualIncidents,
-      incidentMetrics: buildIncidentMetricsForCase(
-        testCase.id,
+        labelMetrics: buildLabelMetricsForCase(
+          expectedLabelInstances,
+          actualLabelInstances,
+        ),
         expectedIncidents,
         actualIncidents,
-      ),
-      expectedTerminalVerification: testCase.expectedTerminalVerification,
-      actualTerminalVerification: {
-        postWriteVerificationAttempted:
-          processed.metrics.postWriteVerificationAttempted,
-        postWriteVerificationPassed:
-          processed.metrics.postWriteVerificationPassed,
-        endedVerified: processed.metrics.endedVerified,
-      },
-      sanitizationChecks: evaluateSanitizationChecks(testCase),
-    });
+        incidentMetrics: buildIncidentMetricsForCase(
+          testCase.id,
+          expectedIncidents,
+          actualIncidents,
+        ),
+        expectedTerminalVerification: testCase.expectedTerminalVerification,
+        actualTerminalVerification: {
+          postWriteVerificationAttempted:
+            result.metrics.sessions[0]?.postWriteVerificationAttempted ?? false,
+          postWriteVerificationPassed:
+            result.metrics.sessions[0]?.postWriteVerificationPassed ?? false,
+          endedVerified: result.metrics.sessions[0]?.endedVerified ?? false,
+        },
+        expectedAttribution: testCase.expectedAttribution ?? null,
+        actualAttribution: sessionFact?.attribution.primary ?? "unknown",
+        expectedSurfacedIn: testCase.expectedSurfacedIn ?? null,
+        actualSurfacedIn: sessionFact?.surfacedIn ?? {
+          exemplar: false,
+          reviewQueue: false,
+        },
+        sanitizationChecks: evaluateSanitizationChecks(testCase),
+      });
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
   }
 
   const sanitizationResults = caseResults.flatMap(
     (testCase) => testCase.sanitizationChecks,
+  );
+  const attributionCases = caseResults.filter(
+    (testCase) => testCase.expectedAttribution !== null,
+  );
+  const surfacedCases = caseResults.filter(
+    (testCase) => testCase.expectedSurfacedIn !== null,
   );
 
   const results = benchmarkResultsSchema.parse({
@@ -336,6 +393,42 @@ export async function runCalibrationBenchmark(outputDir?: string): Promise<{
         caseResults.length,
       ),
     },
+    attributionMetrics: {
+      caseCount: caseResults.length,
+      expectedCaseCount: attributionCases.length,
+      matchedCaseCount: attributionCases.filter(
+        (testCase) =>
+          testCase.expectedAttribution === testCase.actualAttribution,
+      ).length,
+      accuracy: safeRate(
+        attributionCases.filter(
+          (testCase) =>
+            testCase.expectedAttribution === testCase.actualAttribution,
+        ).length,
+        attributionCases.length,
+      ),
+    },
+    surfacedMetrics: {
+      caseCount: caseResults.length,
+      expectedCaseCount: surfacedCases.length,
+      matchedCaseCount: surfacedCases.filter(
+        (testCase) =>
+          testCase.expectedSurfacedIn?.exemplar ===
+            testCase.actualSurfacedIn.exemplar &&
+          testCase.expectedSurfacedIn?.reviewQueue ===
+            testCase.actualSurfacedIn.reviewQueue,
+      ).length,
+      accuracy: safeRate(
+        surfacedCases.filter(
+          (testCase) =>
+            testCase.expectedSurfacedIn?.exemplar ===
+              testCase.actualSurfacedIn.exemplar &&
+            testCase.expectedSurfacedIn?.reviewQueue ===
+              testCase.actualSurfacedIn.reviewQueue,
+        ).length,
+        surfacedCases.length,
+      ),
+    },
     parseWarningMetrics: {
       caseCount: caseResults.length,
       expectedCount: caseResults.reduce(
@@ -359,10 +452,10 @@ export async function runCalibrationBenchmark(outputDir?: string): Promise<{
       passedCount: sanitizationResults.filter((check) => check.passed).length,
       falsePositiveExamples: sanitizationResults
         .filter((check) => check.mustContainMisses.length > 0)
-        .map((check) => check.input),
+        .map((check) => check.checkId),
       falseNegativeExamples: sanitizationResults
         .filter((check) => check.mustNotContainViolations.length > 0)
-        .map((check) => check.input),
+        .map((check) => check.checkId),
     },
     cases: caseResults,
   });

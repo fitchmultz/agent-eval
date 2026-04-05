@@ -36,6 +36,8 @@ import type {
 export function createParserContext(path: string): ParserContext {
   return {
     sessionId: inferSessionIdFromFilename(path),
+    sessionMetaSeen: false,
+    sessionHarness: "codex",
     turns: [],
     currentTurn: createTurn(0),
     nextTurnIndex: 0,
@@ -146,6 +148,10 @@ async function doParseCodexTranscriptFile(
 
       if (!event.payload) {
         continue;
+      }
+
+      if (event.timestamp) {
+        context.sessionEndedAt = event.timestamp;
       }
 
       const sourceRef = createSourceRef("codex", path, context.lineNumber);

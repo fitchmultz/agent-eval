@@ -487,6 +487,43 @@ describe("scoreCompliance", () => {
       expect(planRule?.status).toBe("pass");
     });
 
+    it("detects short planning phrasing with before or after sequencing", () => {
+      const scorecard = scoreCompliance(
+        createMockSession({
+          turns: [
+            createMockTurn({
+              turnIndex: 0,
+              userMessages: ["Patch the docs"],
+              assistantMessages: [
+                "I will patch the docs and verify after the final write.",
+              ],
+              toolCalls: [
+                {
+                  callId: "call-1",
+                  toolName: "apply_patch",
+                  categoryHint: "custom_tool_call",
+                  status: "completed",
+                },
+                {
+                  callId: "call-2",
+                  toolName: "exec_command",
+                  categoryHint: "function_call",
+                  argumentsText: '{"cmd":"pnpm test"}',
+                  outputText: "Tests passed",
+                  status: "completed",
+                },
+              ],
+            }),
+          ],
+        }),
+      );
+
+      const planRule = scorecard.rules.find(
+        (rule) => rule.rule === "short_plan_before_large_change",
+      );
+      expect(planRule?.status).toBe("pass");
+    });
+
     it("detects verification failure and marks no_unverified_ending as fail", () => {
       const scorecard = scoreCompliance(
         createMockSession({

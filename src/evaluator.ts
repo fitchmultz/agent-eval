@@ -1,41 +1,52 @@
 /**
  * Purpose: Orchestrates source-aware evaluation from discovery through canonical artifact generation.
- * Responsibilities: Discover transcripts, probe recency, parse sessions, process metrics, and build summary/report/presentation artifacts.
+ * Responsibilities: Discover transcripts, probe recency, filter sessions, parse sessions, process metrics, and build summary/report/presentation artifacts.
  * Scope: Shared pipeline for supported developer-agent sources.
  * Usage: `evaluateArtifacts({ source, home, outputMode: "full" })`.
  * Invariants/Assumptions: Discovery and parsing are source-aware while scoring, reporting, and presentation remain shared.
  */
 
 import type { EvaluationArtifacts } from "./artifact-writer.js";
+import { assignSessionAttribution } from "./attribution.js";
 import { getConfig } from "./config/index.js";
 import { discoverArtifacts } from "./discovery.js";
 import { MissingTranscriptInputError } from "./errors.js";
-import {
-  buildTopIncidentSummary,
-  insertTopIncident,
-} from "./incident-selection.js";
-import { buildSummaryArtifact, type SummaryInputs } from "./insights.js";
-import { aggregateMetrics, buildMetricsRecord } from "./metrics-aggregation.js";
+import { aggregateMetrics } from "./metrics-aggregation.js";
 import { buildPresentationArtifacts } from "./presentation.js";
+import { buildReleaseManifest } from "./release-manifest.js";
 import { renderSummaryReport } from "./report.js";
-import { isLowSignalPreview, isUnsafePreview } from "./sanitization.js";
 import type {
   IncidentRecord,
-  InventoryRecord,
   LabelCountRecord,
   LabelName,
   MetricsRecord,
   RawTurnRecord,
   Severity,
 } from "./schema.js";
-import { type ProcessedSession, processSession } from "./session-processor.js";
+import {
+  buildSessionFacts,
+  type SessionFactProjection,
+} from "./session-facts.js";
+import {
+  createEmptyProcessedSessionAnalysis,
+  type ProcessedSession,
+  type ProcessedSessionAnalysis,
+  processSession,
+} from "./session-processor.js";
 import type { SourceProvider } from "./sources.js";
-import { countWriteTurns, createEmptySeverityCounts } from "./summary/index.js";
+import {
+  buildSummaryInputsFromSessions,
+  createEmptySeverityCounts,
+} from "./summary/index.js";
 import { collectSessionContexts } from "./summary/session-display.js";
 import type { SessionContext } from "./summary/types.js";
+import { buildSummaryArtifact } from "./summary-core.js";
+import { buildTemplateRegistry } from "./template-analysis.js";
 import { parseTranscriptFile } from "./transcript/index.js";
 import {
+  probeFallsInDateRange,
   probeSessionOrder,
+  resolveProbeTimeValue,
   type SessionOrderProbe,
 } from "./transcript/session-order.js";
 import { throwIfAborted } from "./utils/abort.js";
@@ -68,22 +79,41 @@ export interface EvaluateOptions {
   home: string;
   /** Maximum number of most recent sessions to evaluate (undefined for all) */
   sessionLimit?: number;
+  /** Inclusive UTC start date filter */
+  startDate?: string;
+  /** Inclusive UTC end date filter */
+  endDate?: string;
+  /** Temporal bucket for metrics.json */
+  timeBucket?: MetricsRecord["temporalBuckets"]["bucket"];
   /** Timeout for parsing individual transcript files (milliseconds). Default: 30000 */
   parseTimeoutMs?: number;
   /** Output mode for artifact generation. */
   outputMode?: EvaluationOutputMode;
 }
 
-interface SessionSummaryProjection {
+interface SessionSummaryProjection extends SessionFactProjection {
   metrics: ProcessedSession["metrics"];
-  turnCount: number;
-  incidentCount: number;
+  rawLabelCounts: LabelCountRecord;
   labelCounts: LabelCountRecord;
   sessionLabelCounts: Record<LabelName, number>;
+  attribution: ProcessedSessionAnalysis["attribution"];
+  template: ProcessedSessionAnalysis["template"];
   sessionContext?: SessionContext;
   severityCounts: Record<Severity, number>;
-  topIncidents: SummaryInputs["topIncidents"];
-  writeTurnCount: number;
+}
+
+interface SelectedSessionWindow {
+  sessionPaths: readonly string[];
+  discoveredSessionCount: number;
+  eligibleSessionCount: number;
+  undatedExcludedCount: number;
+  selection: MetricsRecord["corpusScope"]["selection"];
+}
+
+interface DiscoveredSessionInputs {
+  inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
+  sessionInventoryPath: string;
+  sessionFiles: readonly string[];
 }
 
 function createEmptySessionLabelMap(): Record<LabelName, number> {
@@ -103,8 +133,8 @@ function compareSessionProbes(
   left: SessionOrderProbe,
   right: SessionOrderProbe,
 ): number {
-  const leftTimeValue = resolveProbeTime(left);
-  const rightTimeValue = resolveProbeTime(right);
+  const leftTimeValue = resolveProbeTimeValue(left);
+  const rightTimeValue = resolveProbeTimeValue(right);
 
   if (leftTimeValue !== null && rightTimeValue !== null) {
     return (
@@ -119,42 +149,60 @@ function compareSessionProbes(
   return left.path.localeCompare(right.path);
 }
 
-function parseProbeTimestamp(value?: string): number | null {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
-function resolveProbeTime(probe: SessionOrderProbe): number | null {
-  return (
-    parseProbeTimestamp(probe.startedAt) ??
-    parseProbeTimestamp(probe.earliestTimestamp) ??
-    (Number.isFinite(probe.mtimeMs) ? probe.mtimeMs : null)
-  );
-}
-
-async function selectSessionPaths(
+async function selectSessionWindow(
   sessionFiles: readonly string[],
   source: SourceProvider,
   concurrency: number,
-  sessionLimit?: number,
+  options: Pick<EvaluateOptions, "sessionLimit" | "startDate" | "endDate">,
   signal?: AbortSignal,
-): Promise<readonly string[]> {
+): Promise<SelectedSessionWindow> {
   const probes = await mapWithConcurrency(
     sessionFiles,
     concurrency,
     (path) => probeSessionOrder(path, source),
     signal,
   );
-  const sortedPaths = probes
+
+  const filtered: SessionOrderProbe[] = [];
+  let undatedExcludedCount = 0;
+  for (const probe of probes) {
+    const match = probeFallsInDateRange(
+      probe,
+      options.startDate,
+      options.endDate,
+    );
+    if (match.undated) {
+      undatedExcludedCount += 1;
+    }
+    if (match.matches) {
+      filtered.push(probe);
+    }
+  }
+
+  const sortedPaths = filtered
     .sort(compareSessionProbes)
     .map((probe) => probe.path);
-  return typeof sessionLimit === "number"
-    ? sortedPaths.slice(-sessionLimit)
-    : sortedPaths;
+  const sessionPaths =
+    typeof options.sessionLimit === "number"
+      ? sortedPaths.slice(-options.sessionLimit)
+      : sortedPaths;
+  const hasDateFilter = Boolean(options.startDate || options.endDate);
+
+  return {
+    sessionPaths,
+    discoveredSessionCount: sessionFiles.length,
+    eligibleSessionCount: filtered.length,
+    undatedExcludedCount,
+    selection: hasDateFilter
+      ? typeof options.sessionLimit === "number" &&
+        filtered.length > options.sessionLimit
+        ? "date_filtered_window"
+        : "date_filtered"
+      : typeof options.sessionLimit === "number" &&
+          sessionFiles.length > options.sessionLimit
+        ? "most_recent_window"
+        : "all_discovered",
+  };
 }
 
 function extractTurns(
@@ -169,196 +217,130 @@ function extractIncidents(
   return sessions.flatMap((session) => session.incidents);
 }
 
+function assertUniqueSessionIds(
+  sessions: ReadonlyArray<{ sessionId: string; path?: string }>,
+  scope: string,
+): void {
+  const seen = new Map<string, string | undefined>();
+
+  for (const session of sessions) {
+    if (seen.has(session.sessionId)) {
+      const currentPath = session.path ?? "unknown path";
+      const priorPath = seen.get(session.sessionId) ?? "unknown path";
+      throw new Error(
+        `Duplicate sessionId ${session.sessionId} detected in ${scope}: ${priorPath} and ${currentPath}.`,
+      );
+    }
+
+    seen.set(session.sessionId, session.path);
+  }
+}
+
+const FAILED_RULE_LABELS: Record<string, string> = {
+  scope_confirmed_before_major_write: "Scope confirmed before major write",
+  cwd_or_repo_echoed_before_write: "Repo or cwd confirmed before write",
+  short_plan_before_large_change: "Short plan before large change",
+  verification_after_code_changes: "Verification after code changes",
+  no_unverified_ending: "No unverified ending",
+};
+
 function summarizeProcessedSession(
   session: ProcessedSession,
 ): SessionSummaryProjection {
+  const analysis = session.analysis ?? createEmptyProcessedSessionAnalysis();
   const sessionLabelCounts = createEmptySessionLabelMap();
-  const labelCounts: LabelCountRecord = {};
   const severityCounts = createEmptySeverityCounts();
-  let topIncidents: SummaryInputs["topIncidents"] = [];
   const sessionContext = collectSessionContexts(session.turns).get(
     session.metrics.sessionId,
   );
 
-  for (const turn of session.turns) {
-    for (const label of turn.labels) {
-      sessionLabelCounts[label.label] += 1;
-      labelCounts[label.label] = (labelCounts[label.label] ?? 0) + 1;
+  for (const [label, count] of Object.entries(
+    analysis.deTemplatedLabelCounts,
+  )) {
+    if (typeof count !== "number") {
+      continue;
     }
+    sessionLabelCounts[label as LabelName] = count;
   }
 
   for (const incident of session.incidents) {
     severityCounts[incident.severity] += 1;
-    const topIncident = buildTopIncidentSummary(
-      incident,
-      session.turns,
-      sessionContext,
-    );
-    if (
-      !topIncident.evidencePreview ||
-      isLowSignalPreview(topIncident.evidencePreview) ||
-      isUnsafePreview(topIncident.evidencePreview)
-    ) {
-      continue;
-    }
-    topIncidents = insertTopIncident(
-      topIncidents,
-      topIncident,
-      getConfig().previews.maxTopIncidents,
-    );
   }
 
   return {
+    sessionId: session.metrics.sessionId,
+    provider: session.metrics.provider,
+    harness: session.metrics.harness,
+    modelProvider: session.metrics.modelProvider,
+    model: session.metrics.model,
+    startedAt: session.metrics.startedAt,
+    endedAt: session.metrics.endedAt,
+    durationMs: session.metrics.durationMs,
+    turnCount: session.metrics.turnCount,
+    userMessageCount: session.metrics.userMessageCount,
+    assistantMessageCount: session.metrics.assistantMessageCount,
+    toolCallCount: session.metrics.toolCallCount,
+    writeToolCallCount: session.metrics.writeToolCallCount,
+    verificationToolCallCount: session.metrics.verificationToolCallCount,
+    mcpToolCallCount: session.metrics.mcpToolCallCount,
+    writeCount: session.metrics.writeCount,
+    verificationCount: session.metrics.verificationCount,
+    endedVerified: session.metrics.endedVerified,
+    complianceScore: session.metrics.complianceScore,
+    failedRules: session.metrics.complianceRules
+      .filter((rule) => rule.status === "fail")
+      .map((rule) => FAILED_RULE_LABELS[rule.rule] ?? rule.rule),
+    topTools: session.metrics.topTools,
+    mcpServers: session.metrics.mcpServers,
+    title: sessionContext?.leadPreview,
+    evidencePreviews: sessionContext?.evidencePreviews ?? [],
+    sourceRefs: sessionContext?.sourceRefs ?? [],
     metrics: session.metrics,
-    turnCount: session.turns.length,
-    incidentCount: session.incidents.length,
-    labelCounts,
+    rawLabelCounts: analysis.rawLabelCounts,
+    labelCounts: analysis.deTemplatedLabelCounts,
+    deTemplatedLabelCounts: analysis.deTemplatedLabelCounts,
     sessionLabelCounts,
+    attribution: analysis.attribution,
+    template: analysis.template,
     ...(sessionContext ? { sessionContext } : {}),
     severityCounts,
-    topIncidents,
-    writeTurnCount: countWriteTurns(session.turns),
   };
-}
-
-function mergeLabelCounts(
-  target: LabelCountRecord,
-  source: LabelCountRecord,
-): LabelCountRecord {
-  const merged: LabelCountRecord = { ...target };
-  for (const [label, count] of Object.entries(source)) {
-    if (typeof count !== "number" || count <= 0) {
-      continue;
-    }
-    merged[label as LabelName] = (merged[label as LabelName] ?? 0) + count;
-  }
-  return merged;
-}
-
-function mergeSessionLabelCounts(
-  target: Record<LabelName, number>,
-  source: Record<LabelName, number>,
-): Record<LabelName, number> {
-  const merged = { ...target };
-
-  for (const label of Object.keys(source) as LabelName[]) {
-    merged[label] = (merged[label] ?? 0) + (source[label] ?? 0);
-  }
-
-  return merged;
-}
-
-function buildSummaryInputsFromSessions(
-  projections: readonly SessionSummaryProjection[],
-): SummaryInputs {
-  const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-  const sessionContexts = new Map<
-    string,
-    NonNullable<SessionSummaryProjection["sessionContext"]>
-  >();
-  const severityCounts = createEmptySeverityCounts();
-  let topIncidents: SummaryInputs["topIncidents"] = [];
-  let writeTurnCount = 0;
-
-  for (const projection of projections) {
-    const existingSessionLabelCounts = sessionLabelCounts.get(
-      projection.metrics.sessionId,
-    );
-    sessionLabelCounts.set(
-      projection.metrics.sessionId,
-      existingSessionLabelCounts
-        ? mergeSessionLabelCounts(
-            existingSessionLabelCounts,
-            projection.sessionLabelCounts,
-          )
-        : projection.sessionLabelCounts,
-    );
-    if (projection.sessionContext) {
-      sessionContexts.set(
-        projection.metrics.sessionId,
-        projection.sessionContext,
-      );
-    }
-    writeTurnCount += projection.writeTurnCount;
-
-    for (const severity of ["info", "low", "medium", "high"] as const) {
-      severityCounts[severity] += projection.severityCounts[severity];
-    }
-
-    for (const incident of projection.topIncidents) {
-      topIncidents = insertTopIncident(
-        topIncidents,
-        incident,
-        getConfig().previews.maxTopIncidents,
-      );
-    }
-  }
-
-  return {
-    sessionLabelCounts,
-    sessionContexts,
-    topIncidents,
-    severityCounts,
-    writeTurnCount,
-  };
-}
-
-function buildSummaryModeMetrics(
-  projections: readonly SessionSummaryProjection[],
-  inventory: InventoryRecord[],
-  corpusScope: MetricsRecord["corpusScope"],
-) {
-  return buildMetricsRecord(
-    {
-      sessionMetrics: projections.map((projection) => projection.metrics),
-      labelCounts: projections.reduce(
-        (counts, projection) =>
-          mergeLabelCounts(counts, projection.labelCounts),
-        {} as LabelCountRecord,
-      ),
-      turnCount: projections.reduce(
-        (total, projection) => total + projection.turnCount,
-        0,
-      ),
-      incidentCount: projections.reduce(
-        (total, projection) => total + projection.incidentCount,
-        0,
-      ),
-      parseWarningCount: projections.reduce(
-        (total, projection) => total + projection.metrics.parseWarningCount,
-        0,
-      ),
-    },
-    inventory,
-    corpusScope,
-  );
-}
-
-interface DiscoveredSessionInputs {
-  inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
-  sessionInventoryPath: string;
-  sessionFiles: readonly string[];
 }
 
 function buildCorpusScope(
-  discoveredSessionCount: number,
-  sessionLimit: number | undefined,
+  selectionWindow: SelectedSessionWindow,
+  options: Pick<
+    EvaluateOptions,
+    "sessionLimit" | "startDate" | "endDate" | "timeBucket"
+  >,
 ): MetricsRecord["corpusScope"] {
-  if (typeof sessionLimit !== "number") {
-    return {
-      selection: "all_discovered",
-      discoveredSessionCount,
-      appliedSessionLimit: null,
-    };
-  }
-
   return {
-    selection:
-      discoveredSessionCount > sessionLimit
-        ? "most_recent_window"
-        : "all_discovered",
-    discoveredSessionCount,
-    appliedSessionLimit: sessionLimit,
+    selection: selectionWindow.selection,
+    discoveredSessionCount: selectionWindow.discoveredSessionCount,
+    eligibleSessionCount: selectionWindow.eligibleSessionCount,
+    appliedSessionLimit: options.sessionLimit ?? null,
+    startDate: options.startDate ?? null,
+    endDate: options.endDate ?? null,
+    timeBucket: options.timeBucket ?? "week",
+    undatedExcludedCount: selectionWindow.undatedExcludedCount,
+  };
+}
+
+function buildAppliedFilters(
+  selectionWindow: SelectedSessionWindow,
+  options: Pick<
+    EvaluateOptions,
+    "sessionLimit" | "startDate" | "endDate" | "timeBucket"
+  >,
+): MetricsRecord["appliedFilters"] {
+  return {
+    startDate: options.startDate ?? null,
+    endDate: options.endDate ?? null,
+    sessionLimit: options.sessionLimit ?? null,
+    timeBucket: options.timeBucket ?? "week",
+    discoveredSessionCount: selectionWindow.discoveredSessionCount,
+    eligibleSessionCount: selectionWindow.eligibleSessionCount,
+    undatedExcludedCount: selectionWindow.undatedExcludedCount,
   };
 }
 
@@ -407,20 +389,33 @@ async function processDiscoveredSessions(
 ): Promise<{
   inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
   corpusScope: MetricsRecord["corpusScope"];
+  appliedFilters: MetricsRecord["appliedFilters"];
+  templateLabelSummaries: ReturnType<
+    typeof buildTemplateRegistry
+  >["labelSummaries"];
   processed: Awaited<ReturnType<typeof processSession>>[];
 }> {
   const { inventory, sessionInventoryPath, sessionFiles } =
     await discoverSessionInputs(options, signal);
-  const corpusScope = buildCorpusScope(
-    sessionFiles.length,
-    options.sessionLimit,
+
+  const selectionWindow = await selectSessionWindow(
+    sessionFiles,
+    options.source,
+    concurrency,
+    options,
+    signal,
   );
+  const corpusScope = buildCorpusScope(selectionWindow, options);
+  const appliedFilters = buildAppliedFilters(selectionWindow, options);
+  const hasDateFilter = Boolean(options.startDate || options.endDate);
 
   if (sessionFiles.length === 0) {
-    if (allowEmptyCorpus) {
+    if (allowEmptyCorpus || hasDateFilter) {
       return {
         inventory,
         corpusScope,
+        appliedFilters,
+        templateLabelSummaries: [],
         processed: [],
       };
     }
@@ -430,18 +425,13 @@ async function processDiscoveredSessions(
     );
   }
 
-  const sessionPaths = await selectSessionPaths(
-    sessionFiles,
-    options.source,
-    concurrency,
-    options.sessionLimit,
-    signal,
-  );
-  if (sessionPaths.length === 0) {
-    if (allowEmptyCorpus) {
+  if (selectionWindow.sessionPaths.length === 0) {
+    if (allowEmptyCorpus || hasDateFilter) {
       return {
         inventory,
         corpusScope,
+        appliedFilters,
+        templateLabelSummaries: [],
         processed: [],
       };
     }
@@ -452,101 +442,59 @@ async function processDiscoveredSessions(
   }
 
   const parseTimeoutMs = options.parseTimeoutMs ?? 30000;
+  const parsedSessions = await mapWithConcurrency(
+    selectionWindow.sessionPaths,
+    concurrency,
+    (sessionPath) =>
+      parseTranscriptFile(sessionPath, {
+        sourceProvider: options.source,
+        timeoutMs: parseTimeoutMs,
+        signal,
+      }),
+    signal,
+  );
+  const templateRegistry = buildTemplateRegistry(parsedSessions);
   const homeDirectory = getValidatedHomeDirectory();
   const processed = await mapWithConcurrency(
-    sessionPaths,
+    parsedSessions,
     concurrency,
-    async (sessionPath) => {
-      const session = await parseTranscriptFile(sessionPath, {
-        sourceProvider: options.source,
-        timeoutMs: parseTimeoutMs,
-        signal,
+    async (session) => {
+      const baseProcessed = await processSession(session, homeDirectory, {
+        templateAnalysis: templateRegistry.sessionAnalyses.get(
+          session.sessionId,
+        ),
       });
-      return processSession(session, homeDirectory);
+      const analysis =
+        baseProcessed.analysis ?? createEmptyProcessedSessionAnalysis();
+      return {
+        ...baseProcessed,
+        analysis: {
+          ...analysis,
+          attribution: assignSessionAttribution({
+            rawLabelCounts: analysis.rawLabelCounts,
+            deTemplatedLabelCounts: analysis.deTemplatedLabelCounts,
+            template: {
+              artifactScore: analysis.template.artifactScore,
+              textSharePct: analysis.template.textSharePct,
+              flags: analysis.template.flags,
+            },
+            writeCount: baseProcessed.metrics.writeCount,
+            endedVerified: baseProcessed.metrics.endedVerified,
+          }),
+        },
+      } satisfies ProcessedSession;
     },
     signal,
   );
 
+  assertUniqueSessionIds(processed, "processed sessions");
+
   return {
     inventory,
     corpusScope,
+    appliedFilters,
+    templateLabelSummaries: templateRegistry.labelSummaries,
     processed,
-  };
-}
-
-async function processSummarySessions(
-  options: EvaluateOptions,
-  concurrency: number,
-  allowEmptyCorpus = false,
-  signal?: AbortSignal,
-): Promise<{
-  inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
-  corpusScope: MetricsRecord["corpusScope"];
-  projections: SessionSummaryProjection[];
-}> {
-  const { inventory, sessionInventoryPath, sessionFiles } =
-    await discoverSessionInputs(options, signal);
-  const corpusScope = buildCorpusScope(
-    sessionFiles.length,
-    options.sessionLimit,
-  );
-
-  if (sessionFiles.length === 0) {
-    if (allowEmptyCorpus) {
-      return {
-        inventory,
-        corpusScope,
-        projections: [],
-      };
-    }
-    throw new MissingTranscriptInputError(
-      sessionInventoryPath,
-      "no-jsonl-files",
-    );
-  }
-
-  const sessionPaths = await selectSessionPaths(
-    sessionFiles,
-    options.source,
-    concurrency,
-    options.sessionLimit,
-    signal,
-  );
-  if (sessionPaths.length === 0) {
-    if (allowEmptyCorpus) {
-      return {
-        inventory,
-        corpusScope,
-        projections: [],
-      };
-    }
-    throw new MissingTranscriptInputError(
-      sessionInventoryPath,
-      "no-jsonl-files",
-    );
-  }
-
-  const parseTimeoutMs = options.parseTimeoutMs ?? 30000;
-  const homeDirectory = getValidatedHomeDirectory();
-  const projections = await mapWithConcurrency(
-    sessionPaths,
-    concurrency,
-    async (sessionPath) => {
-      const session = await parseTranscriptFile(sessionPath, {
-        sourceProvider: options.source,
-        timeoutMs: parseTimeoutMs,
-        signal,
-      });
-      const processed = await processSession(session, homeDirectory);
-      return summarizeProcessedSession(processed);
-    },
-    signal,
-  );
-
-  return {
-    inventory,
-    corpusScope,
-    projections,
   };
 }
 
@@ -557,11 +505,10 @@ async function collectParsedArtifacts(
   signal?: AbortSignal,
 ): Promise<{
   inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
-  corpusScope: MetricsRecord["corpusScope"];
   processed: Awaited<ReturnType<typeof processSession>>[];
   rawTurns: RawTurnRecord[];
 }> {
-  const { inventory, corpusScope, processed } = await processDiscoveredSessions(
+  const { inventory, processed } = await processDiscoveredSessions(
     options,
     concurrency,
     allowEmptyCorpus,
@@ -571,7 +518,6 @@ async function collectParsedArtifacts(
 
   return {
     inventory,
-    corpusScope,
     processed,
     rawTurns: extractTurns(processed),
   };
@@ -615,35 +561,7 @@ export async function evaluateArtifacts(
       ? getConfig().concurrency.summary
       : getConfig().concurrency.full;
 
-  if (outputMode === "summary") {
-    const { inventory, corpusScope, projections } =
-      await processSummarySessions(
-        { ...options, outputMode },
-        concurrency,
-        true,
-        signal,
-      );
-    const metrics = buildSummaryModeMetrics(
-      projections,
-      inventory,
-      corpusScope,
-    );
-    const summary = buildSummaryArtifact(
-      metrics,
-      buildSummaryInputsFromSessions(projections),
-    );
-    const report = renderSummaryReport(metrics, summary);
-    const presentation = buildPresentationArtifacts(metrics, summary);
-
-    return {
-      metrics,
-      summary,
-      report,
-      presentation,
-    };
-  }
-
-  const parsed = await collectParsedArtifacts(
+  const parsed = await processDiscoveredSessions(
     { ...options, outputMode },
     concurrency,
     true,
@@ -651,27 +569,53 @@ export async function evaluateArtifacts(
   );
   throwIfAborted(signal);
 
-  const rawTurns = parsed.rawTurns;
+  const rawTurns = extractTurns(parsed.processed);
   const incidents = extractIncidents(parsed.processed);
   const projections = parsed.processed.map(summarizeProcessedSession);
-  const metrics = aggregateMetrics(
-    parsed.processed,
-    parsed.inventory,
-    parsed.corpusScope,
-  );
+  const metrics = aggregateMetrics(parsed.processed, parsed.inventory, {
+    corpusScope: parsed.corpusScope,
+    appliedFilters: parsed.appliedFilters,
+    templateLabelSummaries: parsed.templateLabelSummaries,
+  });
   const summary = buildSummaryArtifact(
     metrics,
-    buildSummaryInputsFromSessions(projections),
+    buildSummaryInputsFromSessions(parsed.processed),
   );
+  const sessionFacts = buildSessionFacts(projections, summary);
+  assertUniqueSessionIds(sessionFacts, "session facts");
   const report = renderSummaryReport(metrics, summary);
   const presentation = buildPresentationArtifacts(metrics, summary);
+  const artifactFiles = [
+    "metrics.json",
+    "summary.json",
+    "session-facts.jsonl",
+    "release-manifest.json",
+    "report.md",
+    "report.html",
+    "favicon.ico",
+    "favicon.svg",
+    "sessions-over-time.svg",
+    "provider-share.svg",
+    "harness-share.svg",
+    "tool-family-share.svg",
+    "attribution-mix.svg",
+    ...(outputMode === "full" ? ["raw-turns.jsonl", "incidents.jsonl"] : []),
+  ];
+  const releaseManifest = buildReleaseManifest(
+    metrics,
+    summary,
+    sessionFacts,
+    { ...options, outputMode },
+    artifactFiles,
+  );
 
   return {
     metrics,
     summary,
+    sessionFacts,
+    releaseManifest,
     report,
     presentation,
-    rawTurns,
-    incidents,
+    ...(outputMode === "full" ? { rawTurns, incidents } : {}),
   };
 }

@@ -1,30 +1,27 @@
 /**
- * Purpose: Public exports for the summary module.
- * Entrypoint: Use functions from scoring and aggregation modules.
- * Notes: Centralized exports for summary-related functionality.
+ * Purpose: Public exports for the v3 summary module.
+ * Entrypoint: Used by evaluator, report generation, and focused tests.
+ * Notes: Centralized exports keep the canonical summary surface narrow during the cutover.
  */
 
-// Aggregation functions
 export {
-  aggregateDeliveryMetrics,
   buildSummaryInputsFromArtifacts,
+  buildSummaryInputsFromSessions,
   collectSessionLabelCounts,
   countWriteTurns,
 } from "./aggregation.js";
-// Scoring functions
 export {
-  buildScoreSnapshot,
   countLabel,
   createEmptySessionLabelMap,
   createEmptySeverityCounts,
   safeRate,
-  toneForScore,
 } from "./scoring.js";
-
-// Types
 export type {
-  ScoreSnapshot,
-  SessionInsightRow,
+  ComparativeSliceDraft,
+  SessionCandidate,
+  SessionContext,
+  SummaryAggregateStats,
   SummaryCoreData,
   SummaryInputs,
+  SummarySessionRecord,
 } from "./types.js";

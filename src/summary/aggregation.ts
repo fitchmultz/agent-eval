@@ -1,34 +1,92 @@
 /**
- * Purpose: Aggregation functions for summary generation.
- * Entrypoint: Used by summary-core for data aggregation.
- * Notes: Handles label counts, session contexts, top-incident selection, and shared artifact collection.
+ * Purpose: Aggregation helpers for v3 summary generation.
+ * Entrypoint: Used by evaluator/report flows to build the canonical per-session summary substrate.
+ * Notes: Processed-session aggregation is canonical; raw-turn aggregation remains a non-canonical convenience path.
  */
 
-import { getConfig } from "../config/index.js";
-import {
-  buildTopIncidentSummary,
-  insertTopIncident,
-} from "../incident-selection.js";
-import { isLowSignalPreview, isUnsafePreview } from "../sanitization.js";
 import type {
   IncidentRecord,
   LabelName,
   MetricsRecord,
   RawTurnRecord,
-  SummaryArtifact,
 } from "../schema.js";
+import type { ProcessedSession } from "../session-processor.js";
 import {
   createEmptySessionLabelMap,
   createEmptySeverityCounts,
 } from "./scoring.js";
 import { collectSessionContexts } from "./session-display.js";
-import type { SummaryInputs } from "./types.js";
+import type {
+  SessionTemplateInfo,
+  SummaryAggregateStats,
+  SummaryInputs,
+  SummarySessionRecord,
+  SurfaceAttribution,
+} from "./types.js";
+
+const DEFAULT_ATTRIBUTION: SurfaceAttribution = {
+  primary: "unknown",
+  confidence: "low",
+  reasons: ["Transcript-visible evidence was insufficient."],
+};
+
+const DEFAULT_TEMPLATE: SessionTemplateInfo = {
+  artifactScore: 0,
+  textSharePct: 0,
+  hasTemplateContent: false,
+  flags: [],
+  dominantFamilyId: null,
+  dominantFamilyLabel: null,
+};
+
+function extractTurns(
+  sessions: ReadonlyArray<{ turns: readonly RawTurnRecord[] }>,
+): RawTurnRecord[] {
+  return sessions.flatMap((session) => session.turns);
+}
+
+function aggregateSummaryStats(
+  rawTurns: readonly RawTurnRecord[],
+): SummaryAggregateStats {
+  return rawTurns.reduce<SummaryAggregateStats>(
+    (stats, turn) => {
+      stats.totalUserMessages += turn.userMessageCount;
+      stats.totalAssistantMessages += turn.assistantMessageCount;
+      stats.totalToolCalls += turn.toolCalls.length;
+      stats.totalWriteToolCalls += turn.toolCalls.filter(
+        (tool) => tool.writeLike,
+      ).length;
+      stats.totalVerificationToolCalls += turn.toolCalls.filter(
+        (tool) => tool.verificationLike,
+      ).length;
+      return stats;
+    },
+    {
+      totalUserMessages: 0,
+      totalAssistantMessages: 0,
+      totalToolCalls: 0,
+      totalWriteToolCalls: 0,
+      totalVerificationToolCalls: 0,
+    },
+  );
+}
+
+function toLabelMap(
+  labelCounts: Record<string, number | undefined>,
+): Record<LabelName, number> {
+  const counts = createEmptySessionLabelMap();
+
+  for (const [label, count] of Object.entries(labelCounts)) {
+    if (typeof count === "number") {
+      counts[label as LabelName] = count;
+    }
+  }
+
+  return counts;
+}
 
 /**
  * Collects label counts per session from raw turn records.
- *
- * @param rawTurns - All parsed and labeled turns
- * @returns Map from session ID to label counts for that session
  */
 export function collectSessionLabelCounts(
   rawTurns: readonly RawTurnRecord[],
@@ -49,9 +107,6 @@ export function collectSessionLabelCounts(
 
 /**
  * Counts turns that include write-like tool calls.
- *
- * @param rawTurns - All parsed turns
- * @returns Number of turns containing at least one write tool call
  */
 export function countWriteTurns(rawTurns: readonly RawTurnRecord[]): number {
   return rawTurns.filter((turn) =>
@@ -59,50 +114,53 @@ export function countWriteTurns(rawTurns: readonly RawTurnRecord[]): number {
   ).length;
 }
 
-function buildTopIncidents(
-  incidents: readonly IncidentRecord[],
-  rawTurns: readonly RawTurnRecord[],
-): SummaryArtifact["topIncidents"] {
+/**
+ * Builds canonical summary inputs from processed sessions.
+ */
+export function buildSummaryInputsFromSessions(
+  sessions: readonly ProcessedSession[],
+): SummaryInputs {
+  const rawTurns = extractTurns(sessions);
   const sessionContexts = collectSessionContexts(rawTurns);
-  let topIncidents: SummaryArtifact["topIncidents"] = [];
+  const severityCounts = createEmptySeverityCounts();
 
-  for (const incident of incidents) {
-    const summary = buildTopIncidentSummary(
-      incident,
-      rawTurns,
-      sessionContexts.get(incident.sessionId),
-    );
-    if (
-      !summary.evidencePreview ||
-      isLowSignalPreview(summary.evidencePreview) ||
-      isUnsafePreview(summary.evidencePreview)
-    ) {
-      continue;
+  const summarySessions: SummarySessionRecord[] = sessions.map((session) => {
+    const rawLabels = toLabelMap(session.analysis?.rawLabelCounts ?? {});
+    const labels = toLabelMap(session.analysis?.deTemplatedLabelCounts ?? {});
+
+    for (const incident of session.incidents) {
+      severityCounts[incident.severity] += 1;
     }
-    topIncidents = insertTopIncident(
-      topIncidents,
-      summary,
-      getConfig().previews.maxTopIncidents,
-    );
-  }
 
-  return topIncidents;
+    return {
+      sessionId: session.sessionId,
+      metrics: session.metrics,
+      labels,
+      rawLabels,
+      context: sessionContexts.get(session.sessionId) ?? null,
+      attribution: session.analysis?.attribution ?? DEFAULT_ATTRIBUTION,
+      template: session.analysis?.template ?? DEFAULT_TEMPLATE,
+    };
+  });
+
+  return {
+    sessions: summarySessions,
+    severityCounts,
+    aggregateStats: aggregateSummaryStats(rawTurns),
+  };
 }
 
 /**
- * Builds summary inputs from raw turn and incident data.
- *
- * Collects session label counts, session contexts, severity counts, and top incidents
- * for use in summary generation.
- *
- * @param rawTurns - All parsed and labeled turns
- * @param incidents - Clustered incidents
- * @returns SummaryInputs ready for buildSummaryArtifact()
+ * Builds summary inputs from raw turns and incidents for convenience wrappers.
+ * This path is intentionally non-canonical and should not replace processed-session aggregation.
  */
 export function buildSummaryInputsFromArtifacts(
+  metrics: MetricsRecord,
   rawTurns: readonly RawTurnRecord[],
   incidents: readonly IncidentRecord[],
 ): SummaryInputs {
+  const sessionLabelCounts = collectSessionLabelCounts(rawTurns);
+  const sessionContexts = collectSessionContexts(rawTurns);
   const severityCounts = createEmptySeverityCounts();
 
   for (const incident of incidents) {
@@ -110,30 +168,20 @@ export function buildSummaryInputsFromArtifacts(
   }
 
   return {
-    sessionLabelCounts: collectSessionLabelCounts(rawTurns),
-    sessionContexts: collectSessionContexts(rawTurns),
-    topIncidents: buildTopIncidents(incidents, rawTurns),
+    sessions: metrics.sessions.map((session) => ({
+      sessionId: session.sessionId,
+      metrics: session,
+      labels:
+        sessionLabelCounts.get(session.sessionId) ??
+        createEmptySessionLabelMap(),
+      rawLabels:
+        sessionLabelCounts.get(session.sessionId) ??
+        createEmptySessionLabelMap(),
+      context: sessionContexts.get(session.sessionId) ?? null,
+      attribution: DEFAULT_ATTRIBUTION,
+      template: DEFAULT_TEMPLATE,
+    })),
     severityCounts,
-    writeTurnCount: countWriteTurns(rawTurns),
-  };
-}
-
-/**
- * Aggregates delivery metrics from session data.
- */
-export function aggregateDeliveryMetrics(
-  sessionsWithWrites: MetricsRecord["sessions"],
-  endedVerifiedWriteSessions: MetricsRecord["sessions"],
-): SummaryArtifact["delivery"] {
-  return {
-    sessionsWithWrites: sessionsWithWrites.length,
-    sessionsEndingVerified: endedVerifiedWriteSessions.length,
-    writeSessionVerificationRate:
-      sessionsWithWrites.length > 0
-        ? Math.round(
-            (endedVerifiedWriteSessions.length / sessionsWithWrites.length) *
-              100,
-          )
-        : 0,
+    aggregateStats: aggregateSummaryStats(rawTurns),
   };
 }

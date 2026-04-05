@@ -65,7 +65,9 @@ function hasScopeAcknowledgement(text: string): boolean {
 
 function hasPlanSignal(text: string): boolean {
   return (
-    /\bplan\b/i.test(text) || /\n1\.\s|\n2\.\s|first|next|then/i.test(text)
+    /\bplan\b/i.test(text) ||
+    /\n1\.\s|\n2\.\s|first|next|then/i.test(text) ||
+    /\b(i('| a)?ll|i will)\b.*\b(before|after)\b/i.test(text)
   );
 }
 

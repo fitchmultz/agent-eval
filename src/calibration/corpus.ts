@@ -6,6 +6,7 @@
  * Invariants/Assumptions: All fixtures live under `src/calibration/fixtures` and remain deterministic.
  */
 
+import { fileURLToPath } from "node:url";
 import corpusJson from "./corpus.json" with { type: "json" };
 import {
   type CalibrationCase,
@@ -21,7 +22,8 @@ export function loadCalibrationCorpus(): ResolvedCalibrationCase[] {
   const corpus = calibrationCorpusSchema.parse(corpusJson) as CalibrationCorpus;
   return corpus.map((testCase) => ({
     ...testCase,
-    fixturePath: new URL(`./fixtures/${testCase.fixture}`, import.meta.url)
-      .pathname,
+    fixturePath: fileURLToPath(
+      new URL(`./fixtures/${testCase.fixture}`, import.meta.url),
+    ),
   }));
 }

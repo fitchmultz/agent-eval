@@ -1,236 +1,494 @@
 /**
- * Purpose: Builds optional deterministic presentation-oriented decorations on top of the canonical summary core.
- * Entrypoint: `buildSummaryDecorations()` is composed into the final summary artifact by the insights facade.
- * Notes: This module keeps badges, brag cards, score cards, and opportunities out of the core summary math.
+ * Purpose: Builds surfaced session wording and deterministic learning-pattern summaries for the v3 report model.
+ * Entrypoint: Used by `summary-core.ts` after review and exemplar selection.
+ * Notes: Keeps wording and pattern explanation logic separate from ranking and metric aggregation.
  */
 
-import { buildScoreSnapshot } from "./comparative-slices.js";
-import { BADGES, OPPORTUNITIES } from "./constants/index.js";
-import type { MetricsRecord, SummaryArtifact } from "./schema.js";
-import {
-  filterEndedVerifiedWriteSessions,
-  filterQuietSessions,
-  filterWriteSessions,
-} from "./session-filters.js";
-import { countLabel, safeRate, toneForScore } from "./summary/index.js";
+import type {
+  LearningPattern,
+  SummaryArtifact,
+  SurfacedSession,
+} from "./schema.js";
+import type {
+  SessionCandidate,
+  SummarySessionRecord,
+} from "./summary/types.js";
 
-/**
- * Presentation-oriented decorations added to the summary core.
- *
- * These are non-essential, UI-friendly extras that enhance the report
- * but are not part of the deterministic core metrics.
- */
-export interface SummaryDecorations {
-  /** Score cards for verification, flow, and workflow proxy scores */
-  scoreCards: SummaryArtifact["scoreCards"];
-  /** Highlight cards for operator-facing achievements */
-  highlightCards: SummaryArtifact["highlightCards"];
-  /** Deterministic recognitions earned by the corpus */
-  recognitions: SummaryArtifact["recognitions"];
-  /** Deterministic improvement opportunities identified */
-  opportunities: SummaryArtifact["opportunities"];
+const RULE_LABELS: Record<string, string> = {
+  scope_confirmed_before_major_write: "Scope confirmed before major write",
+  cwd_or_repo_echoed_before_write: "Repo or cwd confirmed before write",
+  short_plan_before_large_change: "Short plan before large change",
+  verification_after_code_changes: "Verification after code changes",
+  no_unverified_ending: "No unverified ending",
+};
+
+type PatternBucket = keyof SummaryArtifact["learningPatterns"];
+
+type SessionSignal = ReturnType<typeof buildSessionSignals>;
+
+interface LearningPatternDefinition {
+  id: string;
+  label: string;
+  explanation: string;
+  bucket: PatternBucket;
+  matches: (signal: SessionSignal) => boolean;
 }
 
-function buildScoreCards(
-  metrics: MetricsRecord,
-): SummaryArtifact["scoreCards"] {
-  const snapshot = buildScoreSnapshot(metrics);
-
-  return [
-    {
-      title: "Verification Proxy Score",
-      score: snapshot.verificationProxyScore,
-      detail:
-        snapshot.verificationProxyScore === null
-          ? "No write sessions were observed in this slice."
-          : "How often write sessions ended with a passing verification signal.",
-      tone:
-        snapshot.verificationProxyScore === null
-          ? "neutral"
-          : toneForScore(snapshot.verificationProxyScore),
-    },
-    {
-      title: "Flow Proxy Score",
-      score: snapshot.flowProxyScore,
-      detail:
-        snapshot.flowProxyScore === null
-          ? "No sessions were observed in this slice, so flow is not scoreable yet."
-          : "Higher is calmer. This penalizes interrupts, context reinjection, and explicit drift complaints.",
-      tone:
-        snapshot.flowProxyScore === null
-          ? "neutral"
-          : toneForScore(snapshot.flowProxyScore),
-    },
-    {
-      title: "Workflow Proxy Score",
-      score: snapshot.workflowProxyScore,
-      detail:
-        snapshot.workflowProxyScore === null
-          ? "No write-related compliance rules were exercised in this slice."
-          : "Average pass rate across scope, cwd/repo echo, short planning, and post-write verification rules.",
-      tone:
-        snapshot.workflowProxyScore === null
-          ? "neutral"
-          : toneForScore(snapshot.workflowProxyScore),
-    },
-  ];
+interface LearningPatternInputs {
+  exemplarSessionIds?: ReadonlySet<string>;
+  reviewSessionIds?: ReadonlySet<string>;
 }
 
-function buildHighlightCards(
-  metrics: MetricsRecord,
-): SummaryArtifact["highlightCards"] {
-  const endedVerifiedWriteSessions = filterEndedVerifiedWriteSessions(
-    metrics.sessions,
-  );
-  const quietSessions = filterQuietSessions(metrics.sessions);
-
-  return [
-    {
-      title: "Ended-Verified Deliveries",
-      value: `${endedVerifiedWriteSessions.length}`,
-      detail:
-        "Sessions that ended with both code changes and a passing verification signal.",
-      tone: endedVerifiedWriteSessions.length > 0 ? "good" : "neutral",
-    },
-    {
-      title: "Low-Incident Sessions",
-      value: `${quietSessions.length}`,
-      detail:
-        quietSessions.length > 0
-          ? `${safeRate(quietSessions.length, metrics.sessionCount)}% of sessions finished without a labeled incident.`
-          : "No fully incident-free sessions were detected in this slice.",
-      tone: quietSessions.length > 0 ? "good" : "neutral",
-    },
-    {
-      title: "Corpus Coverage",
-      value: `${metrics.sessionCount}`,
-      detail: "Sessions included in this deterministic corpus slice.",
-      tone: metrics.sessionCount >= 1000 ? "good" : "neutral",
-    },
-  ];
+function pluralize(count: number, singular: string, plural?: string): string {
+  return `${count} ${count === 1 ? singular : (plural ?? `${singular}s`)}`;
 }
 
-function buildRecognitions(
-  metrics: MetricsRecord,
-  topSessions: SummaryArtifact["topSessions"],
-): SummaryArtifact["recognitions"] {
-  if (metrics.sessionCount === 0) {
-    return [];
+function buildTrustFlags(candidate: SessionCandidate): string[] {
+  const flags: string[] = [];
+
+  if (candidate.record.metrics.parseWarningCount > 0) {
+    flags.push("Parse warnings were present, so this session may be partial.");
   }
 
-  const recognitions: string[] = [];
-  const sessionsWithWrites = filterWriteSessions(metrics.sessions);
-  const endedVerifiedWriteSessions = filterEndedVerifiedWriteSessions(
-    metrics.sessions,
-  );
-  const verificationRate = safeRate(
-    endedVerifiedWriteSessions.length,
-    sessionsWithWrites.length,
-  );
-  const interruptionRate = safeRate(
-    countLabel(metrics.labelCounts, "interrupt"),
-    metrics.turnCount,
-  );
-  const driftSignals = countLabel(metrics.labelCounts, "context_drift");
-
-  if (metrics.sessionCount >= BADGES.MIN_SESSIONS_FOR_BATTLE_TESTED) {
-    recognitions.push("Battle-Tested Corpus");
-  }
-  if (verificationRate >= BADGES.MIN_VERIFICATION_RATE) {
-    recognitions.push("Strong Terminal Verification Proxy");
-  }
-  if (interruptionRate <= BADGES.MAX_INTERRUPTION_RATE) {
-    recognitions.push("Low-Interruption Corpus");
-  }
-  if (driftSignals === 0) {
-    recognitions.push("Zero Drift Complaints");
-  }
-  if (
-    topSessions.some(
-      (session) => session.archetype === "high_friction_verified_delivery",
-    )
-  ) {
-    recognitions.push("High-Friction Recovery Evidence");
+  if (candidate.titleSource === "metadata") {
+    flags.push(
+      "No strong human problem statement was available, so the session title falls back to metadata.",
+    );
   }
 
-  return recognitions;
+  if (candidate.titleSource === "assistant") {
+    flags.push(
+      "Session title fell back to assistant text because no stronger user preview was available.",
+    );
+  }
+
+  if (candidate.evidenceIssues.includes("missing_evidence")) {
+    flags.push(
+      "No strong evidence preview was available in summary-only output.",
+    );
+  }
+
+  if (candidate.evidenceIssues.includes("missing_source_refs")) {
+    flags.push("No source references were captured for this session.");
+  }
+
+  if (candidate.evidenceIssues.includes("code_like_title")) {
+    flags.push(
+      "Session title fell back to code-like text; inspect the source refs for full context.",
+    );
+  }
+
+  if (candidate.evidenceIssues.includes("low_signal_evidence")) {
+    flags.push(
+      "Evidence previews include lower-signal text, so inspect source refs before acting on them.",
+    );
+  }
+
+  if (candidate.evidenceIssues.includes("truncated_evidence")) {
+    flags.push("Evidence previews were truncated for compact reporting.");
+  }
+
+  return flags;
 }
 
-function buildOpportunities(
-  metrics: MetricsRecord,
-  topSessions: SummaryArtifact["topSessions"],
-): SummaryArtifact["opportunities"] {
-  const opportunities: SummaryArtifact["opportunities"] = [];
-  const verificationDemand = safeRate(
-    countLabel(metrics.labelCounts, "verification_request"),
-    metrics.turnCount,
-  );
-  const reinjectionDemand = safeRate(
-    countLabel(metrics.labelCounts, "context_reinjection"),
-    metrics.turnCount,
-  );
-  const driftSignals = countLabel(metrics.labelCounts, "context_drift");
+function buildPassedRules(candidate: SessionCandidate): string[] {
+  return candidate.record.metrics.complianceRules
+    .filter((rule) => rule.status === "pass")
+    .map((rule) => RULE_LABELS[rule.rule] ?? rule.rule);
+}
 
-  if (verificationDemand >= OPPORTUNITIES.MIN_VERIFICATION_DEMAND) {
-    opportunities.push({
-      title: "Reduce verification prompting burden",
-      rationale: `Verification requests appear at ${verificationDemand} per 100 turns. The corpus is signaling that post-change verification should be more automatic and more visible.`,
-    });
+function buildReviewWhyIncluded(candidate: SessionCandidate): string[] {
+  const reasons: string[] = [];
+
+  if (candidate.writeCount > 0 && !candidate.endedVerified) {
+    reasons.push(
+      "Ended without a passing post-write verification after code changes.",
+    );
   }
 
-  if (reinjectionDemand >= OPPORTUNITIES.MIN_REINJECTION_DEMAND) {
-    opportunities.push({
-      title: "Improve context retention",
-      rationale: `Context reinjection appears at ${reinjectionDemand} per 100 turns, suggesting sessions need stronger progress anchors or state carry-forward between steps.`,
-    });
+  if (candidate.failedRules.includes("Verification after code changes")) {
+    reasons.push("Failed the verification-after-code-changes rule.");
   }
 
-  if (driftSignals > 0) {
-    opportunities.push({
-      title: "Guard against scope drift",
-      rationale: `${driftSignals} explicit drift signal${driftSignals === 1 ? "" : "s"} appeared in this corpus. Tighten scope reminders before major writes and keep user intent visible during long runs.`,
-    });
+  if (candidate.failedRules.includes("No unverified ending")) {
+    reasons.push("Failed the no-unverified-ending rule.");
+  }
+
+  if (candidate.incidentCount > 0) {
+    reasons.push(
+      `${pluralize(candidate.incidentCount, "labeled incident")} remained after de-templating.`,
+    );
+  }
+
+  if (candidate.frictionScore > 0) {
+    reasons.push(
+      `${candidate.frictionScore} friction points were recorded from transcript-visible review signals.`,
+    );
+  }
+
+  if (candidate.record.attribution.primary !== "unknown") {
+    reasons.push(
+      `Likely cause: ${candidate.record.attribution.primary.replaceAll("_", " ")}.`,
+    );
+  }
+
+  return reasons
+    .slice(0, 4)
+    .concat(
+      reasons.length === 0
+        ? [
+            "Selected for review based on the strongest remaining transcript-visible risk signals.",
+          ]
+        : [],
+    );
+}
+
+function buildExemplarWhyIncluded(candidate: SessionCandidate): string[] {
+  const reasons: string[] = [];
+  const templateShare = candidate.record.template.textSharePct ?? 0;
+
+  if (candidate.writeCount > 0 && candidate.endedVerified) {
+    reasons.push(
+      "Ended with a passing post-write verification signal after code changes.",
+    );
+  }
+
+  if (candidate.verificationPassedCount > 0) {
+    reasons.push(
+      candidate.verificationPassedCount === 1
+        ? "1 passing verification check was captured in the transcript."
+        : `${candidate.verificationPassedCount} passing verification checks were captured in the transcript.`,
+    );
+  }
+
+  if (candidate.failedRules.length === 0) {
+    reasons.push("No failed compliance rules were recorded.");
+  }
+
+  if (candidate.incidentCount === 0) {
+    reasons.push("No incidents survived de-templating for this session.");
   }
 
   if (
-    topSessions.some((session) => session.archetype === "unverified_delivery")
+    templateShare < 20 &&
+    !candidate.record.template.flags.includes("template_heavy")
   ) {
-    const unverifiedCount = topSessions.filter(
-      (session) => session.archetype === "unverified_delivery",
-    ).length;
-    opportunities.push({
-      title: "Block unverified deliveries",
-      rationale: `${unverifiedCount} ranked review session${unverifiedCount === 1 ? "" : "s"} ended with code changes but without a passing post-write verification signal. Keep treating this as a triage priority, not just a score movement.`,
-    });
+    reasons.push(
+      "Template artifact pressure stayed low enough for direct learning use.",
+    );
   }
 
-  return opportunities.slice(0, OPPORTUNITIES.MAX_SUGGESTIONS);
+  return reasons
+    .slice(0, 4)
+    .concat(
+      reasons.length === 0
+        ? [
+            "Selected as a clean, inspectable exemplar from the selected corpus.",
+          ]
+        : [],
+    );
 }
 
-/**
- * Builds optional presentation decorations on top of the summary core.
- *
- * Creates UI-friendly elements including:
- * - Score cards (verification, flow, workflow proxy scores with tones)
- * - Highlight cards (verified deliveries, quiet runs, corpus coverage)
- * - Recognitions (earned based on corpus characteristics)
- * - Improvement opportunities (deterministic suggestions)
- *
- * These decorations are kept separate from core metrics to maintain
- * a clear distinction between deterministic data and presentation layer.
- *
- * @param metrics - Aggregated metrics from the evaluation
- * @param topSessions - Ranked session insight rows
- * @returns SummaryDecorations containing all presentation elements
- */
-export function buildSummaryDecorations(
-  metrics: MetricsRecord,
-  topSessions: SummaryArtifact["topSessions"],
-): SummaryDecorations {
+function buildReviewReasonTags(candidate: SessionCandidate): string[] {
+  const tags = [
+    candidate.record.attribution.primary,
+    ...candidate.failedRules,
+    ...candidate.dominantLabels,
+  ].filter((value) => value.length > 0);
+
+  return [...new Set(tags)].slice(0, 4);
+}
+
+function buildExemplarReasonTags(candidate: SessionCandidate): string[] {
+  const tags = [
+    candidate.archetypeLabel,
+    ...buildPassedRules(candidate),
+    candidate.record.attribution.primary === "unknown"
+      ? "transcript_visible_success"
+      : candidate.record.attribution.primary,
+  ].filter((value) => value.length > 0);
+
+  return [...new Set(tags)].slice(0, 4);
+}
+
+export function buildSurfacedSession(
+  kind: "review" | "exemplar",
+  candidate: SessionCandidate,
+): SurfacedSession {
   return {
-    scoreCards: buildScoreCards(metrics),
-    highlightCards: buildHighlightCards(metrics),
-    recognitions: buildRecognitions(metrics, topSessions),
-    opportunities: buildOpportunities(metrics, topSessions),
+    sessionId: candidate.record.sessionId,
+    shortId: candidate.shortId,
+    title: candidate.title,
+    timestampLabel: candidate.timestampLabel || null,
+    projectLabel: candidate.projectLabel || null,
+    provider: candidate.record.metrics.provider,
+    harness: candidate.record.metrics.harness,
+    metrics: {
+      turnCount: candidate.record.metrics.turnCount,
+      writeCount: candidate.writeCount,
+      incidentCount: candidate.incidentCount,
+      complianceScore: candidate.complianceScore,
+      endedVerified: candidate.endedVerified,
+    },
+    attribution: candidate.record.attribution,
+    reasonTags:
+      kind === "review"
+        ? buildReviewReasonTags(candidate)
+        : buildExemplarReasonTags(candidate),
+    whyIncluded:
+      kind === "review"
+        ? buildReviewWhyIncluded(candidate)
+        : buildExemplarWhyIncluded(candidate),
+    evidencePreviews: candidate.record.context?.evidencePreviews ?? [],
+    sourceRefs: candidate.record.context?.sourceRefs ?? [],
+    provenance: {
+      titleSource: candidate.titleSource,
+      titleConfidence: candidate.titleConfidence,
+      evidenceSource: candidate.evidenceSource,
+      evidenceConfidence: candidate.evidenceConfidence,
+      issues: candidate.evidenceIssues,
+      trustFlags: buildTrustFlags(candidate),
+    },
   };
+}
+
+function hasRuleStatus(
+  record: SummarySessionRecord,
+  ruleName: string,
+  status: "pass" | "fail",
+): boolean {
+  return record.metrics.complianceRules.some(
+    (rule) => rule.rule === ruleName && rule.status === status,
+  );
+}
+
+function buildSessionSignals(record: SummarySessionRecord) {
+  return {
+    sessionId: record.sessionId,
+    attribution: record.attribution.primary,
+    endedVerifiedAfterWrite:
+      record.metrics.writeCount > 0 && record.metrics.endedVerified,
+    verificationPassedAfterWrite:
+      record.metrics.writeCount > 0 &&
+      record.metrics.verificationPassedCount > 0,
+    scopeConfirmedBeforeMajorWrite: hasRuleStatus(
+      record,
+      "scope_confirmed_before_major_write",
+      "pass",
+    ),
+    cwdOrRepoEchoedBeforeWrite: hasRuleStatus(
+      record,
+      "cwd_or_repo_echoed_before_write",
+      "pass",
+    ),
+    shortPlanBeforeLargeChange: hasRuleStatus(
+      record,
+      "short_plan_before_large_change",
+      "pass",
+    ),
+    endedUnverifiedAfterWrite:
+      record.metrics.writeCount > 0 && !record.metrics.endedVerified,
+    contextReinjection: (record.labels.context_reinjection ?? 0) > 0,
+    interrupt: (record.labels.interrupt ?? 0) > 0,
+    contextDrift: (record.labels.context_drift ?? 0) > 0,
+    stalledOrGuessing: (record.labels.stalled_or_guessing ?? 0) > 0,
+    regressionOrBuildBreakage:
+      (record.labels.regression_report ?? 0) > 0 ||
+      (record.labels.test_build_lint_failure_complaint ?? 0) > 0,
+    templateHeavy:
+      record.template.flags.includes("template_heavy") ||
+      (record.template.textSharePct ?? 0) >= 40,
+    strongUserTaskTitle:
+      record.context?.leadPreviewSource === "user" &&
+      record.context?.leadPreviewConfidence === "strong",
+    strongEvidence:
+      (record.context?.evidencePreviews.length ?? 0) > 0 &&
+      record.context?.evidenceConfidence !== "weak",
+  };
+}
+
+const LEARNING_PATTERN_DEFINITIONS: LearningPatternDefinition[] = [
+  {
+    id: "verify_after_write_before_close",
+    label: "Verify after write before close",
+    explanation:
+      "Successful delivery sessions usually captured a passing verification after the main write work rather than stopping at the code change.",
+    bucket: "whatToCopy",
+    matches: (signal) =>
+      signal.endedVerifiedAfterWrite && signal.verificationPassedAfterWrite,
+  },
+  {
+    id: "confirm_scope_before_major_write",
+    label: "Confirm scope before major write",
+    explanation:
+      "Successful sessions often included an explicit scope confirmation before the main implementation turn.",
+    bucket: "whatToCopy",
+    matches: (signal) => signal.scopeConfirmedBeforeMajorWrite,
+  },
+  {
+    id: "echo_repo_or_cwd_before_write",
+    label: "Echo repo or cwd before write",
+    explanation:
+      "Successful sessions commonly anchored work to the correct repo or cwd before editing or running project-specific commands.",
+    bucket: "whatToCopy",
+    matches: (signal) => signal.cwdOrRepoEchoedBeforeWrite,
+  },
+  {
+    id: "plan_before_large_change",
+    label: "Plan briefly before larger changes",
+    explanation:
+      "A short plan before broader edits correlated with cleaner delivery and easier verification.",
+    bucket: "whatToCopy",
+    matches: (signal) => signal.shortPlanBeforeLargeChange,
+  },
+  {
+    id: "ended_unverified_after_write",
+    label: "Write work ended unverified",
+    explanation:
+      "A repeated failure pattern was ending after edits without a visible passing verification signal.",
+    bucket: "whatToAvoid",
+    matches: (signal) => signal.endedUnverifiedAfterWrite,
+  },
+  {
+    id: "scope_reinjection_or_interrupt_churn",
+    label: "Scope reinjection or interrupt churn",
+    explanation:
+      "Repeated user redirects or scope restatements often coincided with lower-confidence execution and more review pressure.",
+    bucket: "whatToAvoid",
+    matches: (signal) => signal.contextReinjection || signal.interrupt,
+  },
+  {
+    id: "agent_drift_or_guessing",
+    label: "Agent drift or guessing",
+    explanation:
+      "Context drift and guessing behavior remained one of the clearest recurring negative execution patterns.",
+    bucket: "whatToAvoid",
+    matches: (signal) => signal.contextDrift || signal.stalledOrGuessing,
+  },
+  {
+    id: "regression_or_build_breakage",
+    label: "Regression or build breakage",
+    explanation:
+      "Regression and build-breakage complaints stayed a high-value signal for sessions that still need inspection.",
+    bucket: "whatToAvoid",
+    matches: (signal) => signal.regressionOrBuildBreakage,
+  },
+  {
+    id: "user_interrupts_or_redirects",
+    label: "User interrupts or redirects",
+    explanation:
+      "User-side interrupts or redirects frequently explained why otherwise healthy work had to be restarted or reframed.",
+    bucket: "userScopePatterns",
+    matches: (signal) =>
+      signal.attribution === "user_scope" && signal.interrupt,
+  },
+  {
+    id: "user_restates_constraints",
+    label: "User restates constraints",
+    explanation:
+      "Repeated constraint restatement is a reliable user-scope signal after de-templating.",
+    bucket: "userScopePatterns",
+    matches: (signal) =>
+      signal.attribution === "user_scope" && signal.contextReinjection,
+  },
+  {
+    id: "agent_context_drift",
+    label: "Agent loses context",
+    explanation:
+      "Agent-behavior attributions were often tied to visible context drift in the transcript.",
+    bucket: "agentBehaviorPatterns",
+    matches: (signal) =>
+      signal.attribution === "agent_behavior" && signal.contextDrift,
+  },
+  {
+    id: "agent_breakage_after_write",
+    label: "Agent introduces breakage after write",
+    explanation:
+      "Agent-behavior sessions often combined write activity with unverified endings or explicit regression complaints.",
+    bucket: "agentBehaviorPatterns",
+    matches: (signal) =>
+      signal.attribution === "agent_behavior" &&
+      (signal.endedUnverifiedAfterWrite || signal.regressionOrBuildBreakage),
+  },
+  {
+    id: "multi_cause_sessions",
+    label: "Multiple causes stay in play",
+    explanation:
+      "Some sessions still showed both user-scope and agent-behavior evidence, so mixed attribution remained the most honest summary.",
+    bucket: "mixedPatterns",
+    matches: (signal) => signal.attribution === "mixed",
+  },
+  {
+    id: "insufficient_transcript_visible_evidence",
+    label: "Transcript-visible evidence stays inconclusive",
+    explanation:
+      "Unknown attribution remains appropriate when the surviving public-safe transcript surface cannot support a stronger causal claim.",
+    bucket: "unknownPatterns",
+    matches: (signal) => signal.attribution === "unknown",
+  },
+];
+
+function buildPattern(
+  definition: LearningPatternDefinition,
+  records: readonly SummarySessionRecord[],
+  inputs: LearningPatternInputs,
+): LearningPattern | null {
+  const scopedRecords =
+    definition.bucket === "whatToCopy" && inputs.exemplarSessionIds
+      ? records.filter((record) =>
+          inputs.exemplarSessionIds?.has(record.sessionId),
+        )
+      : definition.bucket === "whatToAvoid" && inputs.reviewSessionIds
+        ? records.filter((record) =>
+            inputs.reviewSessionIds?.has(record.sessionId),
+          )
+        : records;
+
+  const matching = scopedRecords.filter((record) =>
+    definition.matches(buildSessionSignals(record)),
+  );
+  if (matching.length === 0) {
+    return null;
+  }
+
+  return {
+    id: definition.id,
+    label: definition.label,
+    explanation: definition.explanation,
+    sessionCount: matching.length,
+    sourceSessionIds: matching.map((record) => record.sessionId).slice(0, 3),
+  };
+}
+
+export function buildLearningPatterns(
+  records: readonly SummarySessionRecord[],
+  inputs: LearningPatternInputs = {},
+): SummaryArtifact["learningPatterns"] {
+  const empty: SummaryArtifact["learningPatterns"] = {
+    whatToCopy: [],
+    whatToAvoid: [],
+    userScopePatterns: [],
+    agentBehaviorPatterns: [],
+    mixedPatterns: [],
+    unknownPatterns: [],
+  };
+
+  for (const definition of LEARNING_PATTERN_DEFINITIONS) {
+    const pattern = buildPattern(definition, records, inputs);
+    if (!pattern) {
+      continue;
+    }
+
+    empty[definition.bucket].push(pattern);
+  }
+
+  for (const bucket of Object.keys(empty) as PatternBucket[]) {
+    empty[bucket].sort(
+      (left, right) =>
+        (right.sessionCount ?? 0) - (left.sessionCount ?? 0) ||
+        left.id.localeCompare(right.id),
+    );
+  }
+
+  return empty;
 }

@@ -1,25 +1,20 @@
 /**
- * Purpose: Generates SVG bar charts for summary visualization.
- * Entrypoint: `renderBarChart()` is used by the presentation layer.
- * Notes: Charts are rendered as static SVG strings for portability.
+ * Purpose: Generates static SVG charts for the v3 dashboard surface.
+ * Entrypoint: Used by the presentation layer to emit portable chart artifacts and inline HTML chart content.
+ * Notes: Charts are deterministic, no-JS, and intentionally simple.
  */
 import { CHARTS } from "./constants/index.js";
-import type { Severity, SummaryArtifact } from "./schema.js";
+import type {
+  DistributionEntry,
+  MetricsRecord,
+  SummaryArtifact,
+} from "./schema.js";
 
 interface BarDatum {
   label: string;
   value: number;
   tone: string;
 }
-
-const severityTones: Record<Severity, string> = {
-  info: "#5B8DEF",
-  low: "#2E9E6F",
-  medium: "#F4A259",
-  high: "#D64545",
-};
-
-const labelChartPalette = ["#0F766E", "#1D8A7A", "#329F8A", "#49B39A"] as const;
 
 function escapeHtml(value: string): string {
   return value
@@ -30,11 +25,11 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function createEmptyChart(title: string, message: string): string {
+function createEmptyChart(title: string, message: string, key: string): string {
   const width = CHARTS.WIDTH;
   const height = 140;
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" class="report-chart" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet" role="img" aria-label="${escapeHtml(title)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" class="report-chart" data-chart="${escapeHtml(key)}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet" role="img" aria-label="${escapeHtml(title)}">`,
     `<rect width="${width}" height="${height}" fill="#FFFDF8" />`,
     `<text x="12" y="30" font-size="22" font-weight="700" fill="#10263B">${escapeHtml(title)}</text>`,
     `<text x="12" y="82" font-size="15" fill="#5B6F82">${escapeHtml(message)}</text>`,
@@ -42,22 +37,18 @@ function createEmptyChart(title: string, message: string): string {
   ].join("");
 }
 
-/**
- * Renders a horizontal bar chart as an SVG string.
- *
- * @param title - The chart title displayed at the top
- * @param data - Array of bar data with labels, values, and colors
- * @returns SVG string
- */
-export function renderBarChart(
+function renderHorizontalBarChart(
   title: string,
+  key: string,
   data: readonly BarDatum[],
 ): string {
-  const nonZeroData = data.filter((entry) => entry.value > 0);
-  const visibleData = nonZeroData.length > 0 ? nonZeroData : data;
-
+  const visibleData = data.filter((entry) => entry.value > 0);
   if (visibleData.length === 0) {
-    return createEmptyChart(title, "No values were available for this slice.");
+    return createEmptyChart(
+      title,
+      "No values were available for this chart.",
+      key,
+    );
   }
 
   const width = CHARTS.WIDTH;
@@ -82,7 +73,7 @@ export function renderBarChart(
     .join("");
 
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" class="report-chart" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet" role="img" aria-label="${escapeHtml(title)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" class="report-chart" data-chart="${escapeHtml(key)}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet" role="img" aria-label="${escapeHtml(title)}">`,
     `<rect width="${width}" height="${height}" fill="#FFFDF8" />`,
     `<text x="12" y="30" font-size="22" font-weight="700" fill="#10263B">${escapeHtml(title)}</text>`,
     `<line x1="${leftPadding}" y1="44" x2="${leftPadding}" y2="${height - 12}" stroke="#D8E0E8" stroke-width="1" />`,
@@ -91,74 +82,154 @@ export function renderBarChart(
   ].join("");
 }
 
-/**
- * Renders a bar chart of label counts.
- *
- * @param summary - The summary artifact containing label data
- * @returns SVG string
- */
-export function renderLabelChart(summary: SummaryArtifact): string {
-  if (summary.labels.length === 0) {
+function renderVerticalBarChart(
+  title: string,
+  key: string,
+  data: readonly { label: string; value: number }[],
+): string {
+  const visibleData = data.filter((entry) => entry.value > 0);
+  if (visibleData.length === 0) {
     return createEmptyChart(
-      "Label Counts",
-      "No labels were detected in this slice.",
+      title,
+      "No time-bucket values were available for this chart.",
+      key,
     );
   }
 
-  return renderBarChart(
-    "Label Counts",
-    summary.labels.map((entry, index) => ({
+  const width = CHARTS.WIDTH;
+  const height = 260;
+  const top = 48;
+  const bottom = 44;
+  const left = 18;
+  const right = 18;
+  const chartWidth = width - left - right;
+  const chartHeight = height - top - bottom;
+  const maxValue = Math.max(1, ...visibleData.map((entry) => entry.value));
+  const slotWidth = chartWidth / visibleData.length;
+  const barWidth = Math.max(10, Math.min(42, slotWidth - 8));
+
+  const rows = visibleData
+    .map((entry, index) => {
+      const barHeight = Math.round((entry.value / maxValue) * chartHeight);
+      const x = left + index * slotWidth + (slotWidth - barWidth) / 2;
+      const y = top + chartHeight - barHeight;
+      const shortLabel =
+        entry.label.length > 10 ? entry.label.slice(5) : entry.label;
+      return [
+        `<rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="6" fill="#335C81" />`,
+        `<text x="${x + barWidth / 2}" y="${height - 14}" font-size="11" text-anchor="middle" fill="#5B6F82">${escapeHtml(shortLabel)}</text>`,
+        `<text x="${x + barWidth / 2}" y="${Math.max(62, y - 6)}" font-size="11" text-anchor="middle" fill="#17324D">${entry.value}</text>`,
+      ].join("");
+    })
+    .join("");
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" class="report-chart" data-chart="${escapeHtml(key)}" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet" role="img" aria-label="${escapeHtml(title)}">`,
+    `<rect width="${width}" height="${height}" fill="#FFFDF8" />`,
+    `<text x="12" y="30" font-size="22" font-weight="700" fill="#10263B">${escapeHtml(title)}</text>`,
+    `<line x1="${left}" y1="${top + chartHeight}" x2="${width - right}" y2="${top + chartHeight}" stroke="#D8E0E8" stroke-width="1" />`,
+    rows,
+    "</svg>",
+  ].join("");
+}
+
+function sortDistribution(
+  entries: readonly DistributionEntry[],
+): DistributionEntry[] {
+  return [...entries].sort(
+    (left, right) =>
+      right.count - left.count || left.label.localeCompare(right.label),
+  );
+}
+
+function fixedAttributionOrder(summary: SummaryArtifact): DistributionEntry[] {
+  const byKey = new Map(
+    summary.usageDashboard.distributions.attribution.map((entry) => [
+      entry.key,
+      entry,
+    ]),
+  );
+  return [
+    "user_scope",
+    "agent_behavior",
+    "template_artifact",
+    "mixed",
+    "unknown",
+  ]
+    .map((key) => byKey.get(key))
+    .filter((entry): entry is DistributionEntry => Boolean(entry));
+}
+
+export function renderSessionsOverTimeChart(metrics: MetricsRecord): string {
+  return renderVerticalBarChart(
+    "Sessions Over Time",
+    "sessions-over-time",
+    metrics.temporalBuckets.values.map((entry) => ({
+      label: entry.label,
+      value: entry.sessionCount,
+    })),
+  );
+}
+
+export function renderProviderShareChart(summary: SummaryArtifact): string {
+  return renderHorizontalBarChart(
+    "Provider Share",
+    "provider-share",
+    sortDistribution(summary.usageDashboard.distributions.providers).map(
+      (entry) => ({
+        label: entry.label,
+        value: entry.count,
+        tone: "#0F766E",
+      }),
+    ),
+  );
+}
+
+export function renderHarnessShareChart(summary: SummaryArtifact): string {
+  return renderHorizontalBarChart(
+    "Harness Share",
+    "harness-share",
+    sortDistribution(summary.usageDashboard.distributions.harnesses).map(
+      (entry) => ({
+        label: entry.label,
+        value: entry.count,
+        tone: "#335C81",
+      }),
+    ),
+  );
+}
+
+export function renderToolFamilyShareChart(summary: SummaryArtifact): string {
+  return renderHorizontalBarChart(
+    "Tool Family Share",
+    "tool-family-share",
+    sortDistribution(summary.usageDashboard.distributions.toolFamilies).map(
+      (entry) => ({
+        label: entry.label,
+        value: entry.count,
+        tone: "#4F7CAC",
+      }),
+    ),
+  );
+}
+
+export function renderAttributionMixChart(summary: SummaryArtifact): string {
+  return renderHorizontalBarChart(
+    "Attribution Mix",
+    "attribution-mix",
+    fixedAttributionOrder(summary).map((entry) => ({
       label: entry.label,
       value: entry.count,
-      tone: labelChartPalette[index % labelChartPalette.length] ?? "#0F766E",
-    })),
-  );
-}
-
-/**
- * Renders a bar chart of compliance pass counts.
- *
- * @param summary - The summary artifact containing compliance data
- * @returns SVG string
- */
-export function renderComplianceChart(summary: SummaryArtifact): string {
-  if (!summary.compliance.some((entry) => entry.passCount > 0)) {
-    return createEmptyChart(
-      "Compliance Pass Counts",
-      "No passing compliance checks were recorded in this slice.",
-    );
-  }
-
-  return renderBarChart(
-    "Compliance Pass Counts",
-    summary.compliance.map((entry) => ({
-      label: entry.rule,
-      value: entry.passCount,
-      tone: "#335C81",
-    })),
-  );
-}
-
-/**
- * Renders a bar chart of incident severity distribution.
- *
- * @param summary - The summary artifact containing severity data
- * @returns SVG string
- */
-export function renderSeverityChart(summary: SummaryArtifact): string {
-  if (!summary.severities.some((entry) => entry.count > 0)) {
-    return createEmptyChart(
-      "Incident Severity",
-      "No incidents were recorded in this slice.",
-    );
-  }
-
-  return renderBarChart(
-    "Incident Severity",
-    summary.severities.map((entry) => ({
-      label: entry.severity,
-      value: entry.count,
-      tone: severityTones[entry.severity],
+      tone:
+        entry.key === "agent_behavior"
+          ? "#D64545"
+          : entry.key === "user_scope"
+            ? "#F4A259"
+            : entry.key === "template_artifact"
+              ? "#8A5CF6"
+              : entry.key === "mixed"
+                ? "#335C81"
+                : "#7A8796",
     })),
   );
 }

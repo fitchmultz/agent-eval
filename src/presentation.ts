@@ -1,6 +1,6 @@
 /**
  * Purpose: Build presentation-ready HTML and SVG artifacts from canonical evaluation data.
- * Responsibilities: Render the polished HTML report and deterministic charts from metrics plus a pre-built summary.
+ * Responsibilities: Render the polished HTML report and deterministic dashboard charts from metrics plus a pre-built summary.
  * Scope: Shared presentation layer for all supported transcript sources.
  * Usage: Call `buildPresentationArtifacts(metrics, summary)` after summary generation.
  * Invariants/Assumptions: Presentation is derived entirely from canonical metrics and summary data; it does not recompute evaluator logic.
@@ -10,9 +10,11 @@ import { renderFaviconIco, renderFaviconSvg } from "./html-report/favicon.js";
 import { renderHtmlReport } from "./html-report/index.js";
 import type { MetricsRecord, SummaryArtifact } from "./schema.js";
 import {
-  renderComplianceChart,
-  renderLabelChart,
-  renderSeverityChart,
+  renderAttributionMixChart,
+  renderHarnessShareChart,
+  renderProviderShareChart,
+  renderSessionsOverTimeChart,
+  renderToolFamilyShareChart,
 } from "./svg-charts.js";
 
 /**
@@ -25,12 +27,16 @@ export interface PresentationArtifacts {
   faviconIco: Uint8Array;
   /** Static favicon asset for the report bundle */
   faviconSvg: string;
-  /** SVG bar chart of label counts */
-  labelChartSvg: string;
-  /** SVG bar chart of compliance pass counts */
-  complianceChartSvg: string;
-  /** SVG bar chart of incident severity distribution */
-  severityChartSvg: string;
+  /** SVG chart of sessions over time */
+  sessionsOverTimeChartSvg: string;
+  /** SVG chart of provider share */
+  providerShareChartSvg: string;
+  /** SVG chart of harness share */
+  harnessShareChartSvg: string;
+  /** SVG chart of tool-family share */
+  toolFamilyShareChartSvg: string;
+  /** SVG chart of attribution mix */
+  attributionMixChartSvg: string;
 }
 
 /**
@@ -40,22 +46,28 @@ export function buildPresentationArtifacts(
   metrics: MetricsRecord,
   summary: SummaryArtifact,
 ): PresentationArtifacts {
-  const labelChartSvg = renderLabelChart(summary);
-  const complianceChartSvg = renderComplianceChart(summary);
-  const severityChartSvg = renderSeverityChart(summary);
+  const sessionsOverTimeChartSvg = renderSessionsOverTimeChart(metrics);
+  const providerShareChartSvg = renderProviderShareChart(summary);
+  const harnessShareChartSvg = renderHarnessShareChart(summary);
+  const toolFamilyShareChartSvg = renderToolFamilyShareChart(summary);
+  const attributionMixChartSvg = renderAttributionMixChart(summary);
   const faviconIco = renderFaviconIco();
   const faviconSvg = renderFaviconSvg();
 
   return {
     reportHtml: renderHtmlReport(summary, metrics, {
-      labelChartSvg,
-      complianceChartSvg,
-      severityChartSvg,
+      sessionsOverTimeChartSvg,
+      providerShareChartSvg,
+      harnessShareChartSvg,
+      toolFamilyShareChartSvg,
+      attributionMixChartSvg,
     }),
     faviconIco,
     faviconSvg,
-    labelChartSvg,
-    complianceChartSvg,
-    severityChartSvg,
+    sessionsOverTimeChartSvg,
+    providerShareChartSvg,
+    harnessShareChartSvg,
+    toolFamilyShareChartSvg,
+    attributionMixChartSvg,
   };
 }

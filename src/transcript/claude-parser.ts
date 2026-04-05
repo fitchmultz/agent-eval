@@ -41,7 +41,15 @@ interface ClaudeEventRecord {
 interface ClaudeParseState {
   sessionId: string;
   startedAt?: string;
+  endedAt?: string;
   cwd?: string;
+  harness: string;
+  modelProvider?: string;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  compactionCount?: number;
   turns: ParsedTurn[];
   currentTurn: ParsedTurn;
   nextTurnIndex: number;
@@ -58,6 +66,7 @@ function createInitialState(path: string): ClaudeParseState {
       ?.replace(/\.jsonl$/, "") ?? "unknown";
   return {
     sessionId: filename,
+    harness: "claude",
     turns: [],
     currentTurn: createTurn(0),
     nextTurnIndex: 0,
@@ -234,7 +243,6 @@ function parseClaudeMessageParts(
     }
 
     if (itemType === "thinking" && role === "assistant") {
-      appendMessageText(parts.assistantMessages, getValue(record, "thinking"));
       continue;
     }
 
@@ -455,6 +463,9 @@ export async function parseClaudeTranscriptFile(
       if (!state.startedAt && record.timestamp) {
         state.startedAt = record.timestamp;
       }
+      if (record.timestamp) {
+        state.endedAt = record.timestamp;
+      }
       if (!state.cwd && record.cwd) {
         state.cwd = record.cwd;
       }
@@ -491,8 +502,30 @@ export async function parseClaudeTranscriptFile(
   if (state.startedAt) {
     parsedSession.startedAt = state.startedAt;
   }
+  if (state.endedAt) {
+    parsedSession.endedAt = state.endedAt;
+  }
   if (state.cwd) {
     parsedSession.cwd = state.cwd;
+  }
+  parsedSession.harness = state.harness;
+  if (state.modelProvider) {
+    parsedSession.modelProvider = state.modelProvider;
+  }
+  if (state.model) {
+    parsedSession.model = state.model;
+  }
+  if (typeof state.inputTokens === "number") {
+    parsedSession.inputTokens = state.inputTokens;
+  }
+  if (typeof state.outputTokens === "number") {
+    parsedSession.outputTokens = state.outputTokens;
+  }
+  if (typeof state.totalTokens === "number") {
+    parsedSession.totalTokens = state.totalTokens;
+  }
+  if (typeof state.compactionCount === "number") {
+    parsedSession.compactionCount = state.compactionCount;
   }
 
   return parsedSession;

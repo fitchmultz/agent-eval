@@ -21,46 +21,56 @@ function formatSessionCount(count: number): string {
 export function describeCorpusScope(
   metrics: MetricsRecord,
 ): CorpusScopeDisclosure {
-  const corpusScope = metrics.corpusScope ?? {
-    selection: "all_discovered",
-    discoveredSessionCount: metrics.sessionCount,
-    appliedSessionLimit: null,
-  };
+  const { corpusScope } = metrics;
+  const { appliedFilters } = metrics;
   const { sessionCount } = metrics;
-  const { appliedSessionLimit, discoveredSessionCount, selection } =
-    corpusScope;
   const isWindowed =
-    selection === "most_recent_window" && discoveredSessionCount > sessionCount;
+    corpusScope.selection === "most_recent_window" ||
+    corpusScope.selection === "date_filtered_window";
 
-  if (appliedSessionLimit === null || selection === "all_discovered") {
+  const detailSuffixParts: string[] = [];
+  if (appliedFilters.startDate || appliedFilters.endDate) {
+    detailSuffixParts.push(
+      `Date window: ${appliedFilters.startDate ?? "-∞"} → ${appliedFilters.endDate ?? "+∞"}.`,
+    );
+  }
+  if (appliedFilters.undatedExcludedCount > 0) {
+    detailSuffixParts.push(
+      `${appliedFilters.undatedExcludedCount} undated sessions were excluded while date filtering was active.`,
+    );
+  }
+  const detailSuffix =
+    detailSuffixParts.length > 0 ? ` ${detailSuffixParts.join(" ")}` : "";
+
+  if (!isWindowed && corpusScope.selection === "all_discovered") {
     return {
       pill: `scope all ${formatSessionCount(sessionCount)}`,
       headline: `Corpus scope: all ${formatSessionCount(sessionCount)}`,
       detail:
         "This report includes every discovered session in the selected source home for this run.",
       comparability:
-        "Metrics are directly comparable only to reports built from the same source home and discovery moment.",
+        "Metrics are directly comparable only to reports built from the same source home, discovery moment, and date filter settings.",
       isWindowed: false,
     };
   }
 
-  if (isWindowed) {
+  if (corpusScope.selection === "date_filtered") {
     return {
-      pill: `scope recent ${sessionCount}/${discoveredSessionCount}`,
-      headline: `Corpus scope: most recent ${formatSessionCount(sessionCount)} of ${formatSessionCount(discoveredSessionCount)}`,
-      detail: `This run applied session limit ${appliedSessionLimit}, so the report covers only the most recent discovered sessions instead of the full discovered corpus.`,
+      pill: `scope filtered ${sessionCount}/${appliedFilters.discoveredSessionCount}`,
+      headline: `Corpus scope: filtered ${formatSessionCount(sessionCount)} of ${formatSessionCount(appliedFilters.discoveredSessionCount)}`,
+      detail: `This run applied a date filter and retained ${formatSessionCount(appliedFilters.eligibleSessionCount)} before any session limit.${detailSuffix}`,
       comparability:
-        "Metrics are not directly comparable to reports built with a different session limit or corpus window.",
-      isWindowed: true,
+        "Metrics are not directly comparable to reports built with a different date window, bucket size, or source-home discovery moment.",
+      isWindowed: false,
     };
   }
 
   return {
-    pill: `scope all ${formatSessionCount(sessionCount)}`,
-    headline: `Corpus scope: all ${formatSessionCount(sessionCount)}`,
-    detail: `This run used session limit ${appliedSessionLimit}, but only ${formatSessionCount(discoveredSessionCount)} were discovered, so the report still covers the full discovered corpus.`,
+    pill: `scope recent ${sessionCount}/${appliedFilters.eligibleSessionCount}`,
+    headline: `Corpus scope: most recent ${formatSessionCount(sessionCount)} of ${formatSessionCount(appliedFilters.eligibleSessionCount)}`,
+    detail: `This run applied session limit ${appliedFilters.sessionLimit ?? corpusScope.appliedSessionLimit}, so the report covers only the most recent eligible sessions after filtering.${detailSuffix}`,
     comparability:
-      "Metrics remain comparable to other full-corpus reports from the same source home and discovery moment.",
-    isWindowed: false,
+      "Metrics are not directly comparable to reports built with a different session limit, date window, bucket size, or discovery moment.",
+    isWindowed: true,
   };
 }

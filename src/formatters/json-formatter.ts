@@ -51,6 +51,8 @@ interface BenchmarkOutput {
   endedVerifiedAccuracy: number;
   incidentPrecision: number;
   parseWarningAccuracy: number;
+  attributionAccuracy: number;
+  surfacedAccuracy: number;
 }
 
 /**
@@ -119,6 +121,8 @@ export function formatBenchmarkOutput(
   endedVerifiedAccuracy: number,
   incidentPrecision: number,
   parseWarningAccuracy: number,
+  attributionAccuracy: number,
+  surfacedAccuracy: number,
 ): string {
   const output: BenchmarkOutput = {
     engineVersion: ENGINE_VERSION,
@@ -128,6 +132,8 @@ export function formatBenchmarkOutput(
     endedVerifiedAccuracy,
     incidentPrecision,
     parseWarningAccuracy,
+    attributionAccuracy,
+    surfacedAccuracy,
   };
   return JSON.stringify(output, null, 2);
 }

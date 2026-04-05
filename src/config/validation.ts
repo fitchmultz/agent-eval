@@ -67,10 +67,12 @@ const previewsSchema = z.object({
     "Maximum evidence previews per incident",
   ),
   maxTopIncidents: positiveInt.describe("Maximum top incidents in summaries"),
-  maxVictoryLaps: positiveInt.describe(
-    "Maximum victory lap sessions to highlight",
+  maxExemplarSessions: positiveInt.describe(
+    "Maximum exemplar sessions to include in summaries",
   ),
-  maxTopSessions: positiveInt.describe("Maximum top sessions in summaries"),
+  maxReviewQueueSessions: positiveInt.describe(
+    "Maximum review-queue sessions to include in summaries",
+  ),
 });
 
 /** Scoring configuration schema */
@@ -84,17 +86,12 @@ const scoringSchema = z.object({
     .describe("Friction score threshold"),
 });
 
-const reportingSchema = z.object({
-  skin: z.enum(["operator", "showcase"]).describe("Report output skin"),
-});
-
 /** Complete configuration schema */
 const configSchema = z.object({
   concurrency: concurrencySchema,
   clustering: clusteringSchema,
   previews: previewsSchema,
   scoring: scoringSchema,
-  reporting: reportingSchema,
 });
 
 /**

@@ -1,791 +1,471 @@
 /**
- * Purpose: Tests for session ranking and victory lap selection.
+ * Purpose: Verifies exemplar and review selection stay independent, deterministic, and de-templated in Phase 3.
  * Entrypoint: Executed by Vitest via `pnpm test`.
- * Notes: Verifies session ranking by friction and victory lap selection.
+ * Notes: Focuses on the new independent selectors rather than the old triage-only ranking path.
  */
 import { describe, expect, it } from "vitest";
-import type { LabelName, MetricsRecord } from "../src/schema.js";
-import {
-  buildEndedVerifiedDeliverySpotlights,
-  buildTopSessions,
-} from "../src/session-ranking.js";
-import { createEmptySessionLabelMap } from "../src/summary/index.js";
-import type { SessionContext } from "../src/summary/types.js";
 
-function createSession(
+import { selectExemplars, selectReviewQueue } from "../src/session-ranking.js";
+import { createEmptySessionLabelMap } from "../src/summary/index.js";
+import type { SummarySessionRecord } from "../src/summary/types.js";
+import { createV3Metrics } from "./support/v3-fixtures.js";
+
+function createRecord(
   sessionId: string,
-  overrides: Partial<MetricsRecord["sessions"][number]> = {},
-): MetricsRecord["sessions"][number] {
+  overrides: {
+    metrics?: Partial<SummarySessionRecord["metrics"]>;
+    labels?: Partial<SummarySessionRecord["labels"]>;
+    rawLabels?: Partial<SummarySessionRecord["rawLabels"]>;
+    context?: Partial<NonNullable<SummarySessionRecord["context"]>>;
+    attribution?: Partial<SummarySessionRecord["attribution"]>;
+    template?: Partial<SummarySessionRecord["template"]>;
+  } = {},
+): SummarySessionRecord {
+  const baseMetrics = createV3Metrics().sessions[0];
+  if (!baseMetrics) {
+    throw new Error("Expected fixture metrics to include a base session.");
+  }
+
   return {
     sessionId,
-    provider: overrides.provider ?? "codex",
-    turnCount: 10,
-    labeledTurnCount: 2,
-    incidentCount: 1,
-    parseWarningCount: 0,
-    writeCount: 3,
-    verificationCount: 2,
-    verificationPassedCount: 1,
-    verificationFailedCount: 1,
-    postWriteVerificationAttempted: true,
-    postWriteVerificationPassed: true,
-    endedVerified: true,
-    complianceScore: 80,
-    complianceRules: [],
-    ...overrides,
+    metrics: {
+      ...baseMetrics,
+      sessionId,
+      provider: "codex",
+      harness: "codex",
+      startedAt: "2026-04-03T20:00:00.000Z",
+      endedAt: "2026-04-03T20:05:00.000Z",
+      incidentCount: 0,
+      labeledTurnCount: 0,
+      writeCount: 1,
+      verificationCount: 1,
+      verificationPassedCount: 1,
+      verificationFailedCount: 0,
+      endedVerified: true,
+      complianceScore: 100,
+      complianceRules: [
+        {
+          rule: "verification_after_code_changes",
+          status: "pass",
+          rationale: "ok",
+        },
+      ],
+      ...overrides.metrics,
+    },
+    labels: {
+      ...createEmptySessionLabelMap(),
+      ...overrides.labels,
+    },
+    rawLabels: {
+      ...createEmptySessionLabelMap(),
+      ...overrides.rawLabels,
+    },
+    context: {
+      sessionId,
+      startedAt: "2026-04-03T20:00:00.000Z",
+      cwd: "/Users/example/Projects/AI/agent-eval",
+      leadPreview: `Session ${sessionId} task`,
+      leadPreviewSource: "user",
+      leadPreviewConfidence: "strong",
+      evidencePreviews: [`Evidence for ${sessionId}`],
+      evidenceSource: "assistant",
+      evidenceConfidence: "strong",
+      evidenceIssues: [],
+      sourceRefs: [
+        {
+          provider: "codex",
+          kind: "session_jsonl",
+          path: `~/.codex/sessions/${sessionId}.jsonl`,
+          line: 1,
+        },
+      ],
+      ...overrides.context,
+    },
+    attribution: {
+      primary: "unknown",
+      confidence: "low",
+      reasons: ["Transcript-visible evidence was insufficient."],
+      ...overrides.attribution,
+    },
+    template: {
+      artifactScore: 0,
+      textSharePct: 0,
+      hasTemplateContent: false,
+      flags: [],
+      dominantFamilyId: null,
+      dominantFamilyLabel: null,
+      ...overrides.template,
+    },
   };
 }
 
-function createPassingRules(): MetricsRecord["sessions"][number]["complianceRules"] {
-  return [
-    {
-      rule: "scope_confirmed_before_major_write",
-      status: "pass",
-      rationale: "ok",
-    },
-    {
-      rule: "cwd_or_repo_echoed_before_write",
-      status: "pass",
-      rationale: "ok",
-    },
-    { rule: "short_plan_before_large_change", status: "pass", rationale: "ok" },
-    {
-      rule: "verification_after_code_changes",
-      status: "pass",
-      rationale: "ok",
-    },
-    { rule: "no_unverified_ending", status: "pass", rationale: "ok" },
-  ];
-}
-
-describe("buildTopSessions", () => {
-  it("returns empty array when no sessions", () => {
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: 0,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: 0,
-        appliedSessionLimit: null,
+describe("Phase 3 session selection", () => {
+  it("selects exemplars independently from the review queue", () => {
+    const exemplar = createRecord("clean-verified", {
+      context: {
+        sessionId: "clean-verified",
+        startedAt: "2026-04-03T20:05:00.000Z",
+        cwd: "/Users/example/Projects/AI/agent-eval",
+        leadPreview: "Ship the CLI cleanup and verify the package build",
+        leadPreviewSource: "user",
+        leadPreviewConfidence: "strong",
+        evidencePreviews: [
+          "I cleaned up the CLI surface, ran the verification command, and the package build now passes.",
+        ],
+        evidenceSource: "assistant",
+        evidenceConfidence: "strong",
+        evidenceIssues: [],
+        sourceRefs: [],
       },
-      turnCount: 0,
-      incidentCount: 0,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions: [],
-      inventory: [],
-    };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-
-    const result = buildTopSessions(metrics, sessionLabelCounts);
-    expect(result).toEqual([]);
-  });
-
-  it("filters out sessions with no meaningful review signal", () => {
-    const sessions = [
-      createSession("quiet-analysis", {
-        incidentCount: 0,
-        labeledTurnCount: 0,
-        writeCount: 0,
-        verificationCount: 0,
-        verificationPassedCount: 0,
-        verificationFailedCount: 0,
-        postWriteVerificationAttempted: false,
-        postWriteVerificationPassed: false,
-        complianceScore: 100,
-        complianceRules: createPassingRules(),
-      }),
-      createSession("needs-review", {
+    });
+    const review = createRecord("needs-review", {
+      metrics: {
         incidentCount: 1,
-        writeCount: 0,
-        complianceScore: 80,
-      }),
-    ];
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: sessions.length,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: sessions.length,
-        appliedSessionLimit: null,
+        endedVerified: false,
+        complianceScore: 60,
+        verificationPassedCount: 0,
+        verificationFailedCount: 1,
+        complianceRules: [
+          {
+            rule: "verification_after_code_changes",
+            status: "fail",
+            rationale: "missing verification",
+          },
+        ],
       },
-      turnCount: 20,
-      incidentCount: 1,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions,
-      inventory: [],
-    };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-    for (const session of sessions) {
-      sessionLabelCounts.set(session.sessionId, createEmptySessionLabelMap());
-    }
+      labels: {
+        regression_report: 1,
+      },
+      attribution: {
+        primary: "agent_behavior",
+        confidence: "medium",
+        reasons: ["Write work ended without passing verification."],
+      },
+      context: {
+        sessionId: "needs-review",
+        startedAt: "2026-04-03T20:00:00.000Z",
+        cwd: "/Users/example/Projects/AI/agent-eval",
+        leadPreview: "Fix login regression and verify the build",
+        leadPreviewSource: "user",
+        leadPreviewConfidence: "strong",
+        evidencePreviews: [
+          "Please fix login and verify the patch before you finish.",
+        ],
+        evidenceSource: "user",
+        evidenceConfidence: "strong",
+        evidenceIssues: [],
+        sourceRefs: [],
+      },
+    });
 
-    const result = buildTopSessions(metrics, sessionLabelCounts);
-    expect(result.map((session) => session.sessionId)).toEqual([
+    const exemplars = selectExemplars([review, exemplar]);
+    const reviewQueue = selectReviewQueue([review, exemplar], {
+      excludeSessionIds: new Set(
+        exemplars.map((candidate) => candidate.record.sessionId),
+      ),
+    });
+
+    expect(exemplars.map((candidate) => candidate.record.sessionId)).toContain(
+      "clean-verified",
+    );
+    expect(reviewQueue.map((candidate) => candidate.record.sessionId)).toEqual([
       "needs-review",
     ]);
   });
 
-  it("prioritizes active delivery risk ahead of higher-friction analysis-only sessions", () => {
-    const sessions = [
-      createSession("analysis-only", {
-        writeCount: 0,
+  it("keeps review selection free of template-only rows", () => {
+    const templateOnly = createRecord("template-only", {
+      attribution: {
+        primary: "template_artifact",
+        confidence: "high",
+        reasons: ["High template text share was detected."],
+      },
+      template: {
+        artifactScore: 75,
+        textSharePct: 70,
+        flags: ["template_heavy"],
+        dominantFamilyId: "family-a",
+        dominantFamilyLabel: "instruction_scaffold",
+      },
+      context: {
+        sessionId: "template-only",
+        startedAt: "2026-04-03T20:00:00.000Z",
+        cwd: "/Users/example/Projects/AI/agent-eval",
+        leadPreview: "Boilerplate session",
+        leadPreviewSource: "assistant",
+        leadPreviewConfidence: "medium",
+        evidencePreviews: [],
+        evidenceSource: "none",
+        evidenceConfidence: "weak",
+        evidenceIssues: ["missing_evidence"],
+        sourceRefs: [],
+      },
+    });
+    const realRisk = createRecord("real-risk", {
+      metrics: {
+        incidentCount: 1,
         endedVerified: false,
-        complianceScore: 20,
-        incidentCount: 5,
+        complianceScore: 60,
+        verificationPassedCount: 0,
+        verificationFailedCount: 1,
+        complianceRules: [
+          {
+            rule: "verification_after_code_changes",
+            status: "fail",
+            rationale: "missing verification",
+          },
+        ],
+      },
+      labels: {
+        context_drift: 1,
+      },
+    });
+
+    const reviewQueue = selectReviewQueue([templateOnly, realRisk]);
+    expect(reviewQueue.map((candidate) => candidate.record.sessionId)).toEqual([
+      "real-risk",
+    ]);
+  });
+
+  it("limits repeated project labels early in the review queue", () => {
+    const sameProjectA = createRecord("same-project-a", {
+      metrics: {
+        incidentCount: 1,
+        endedVerified: false,
+        complianceScore: 60,
+      },
+      labels: { regression_report: 1 },
+      context: {
+        cwd: "/Users/example/Projects/AI/repeated-project",
+      },
+    });
+    const sameProjectB = createRecord("same-project-b", {
+      metrics: {
+        incidentCount: 1,
+        endedVerified: false,
+        complianceScore: 59,
+      },
+      labels: { regression_report: 1 },
+      context: {
+        cwd: "/Users/example/Projects/AI/repeated-project",
+      },
+    });
+    const sameProjectC = createRecord("same-project-c", {
+      metrics: {
+        incidentCount: 1,
+        endedVerified: false,
+        complianceScore: 58,
+      },
+      labels: { regression_report: 1 },
+      context: {
+        cwd: "/Users/example/Projects/AI/repeated-project",
+      },
+    });
+    const distinctProject = createRecord("distinct-project", {
+      metrics: {
+        incidentCount: 1,
+        endedVerified: false,
+        complianceScore: 57,
+      },
+      labels: { regression_report: 1 },
+      context: {
+        cwd: "/Users/example/Projects/AI/another-project",
+      },
+    });
+
+    const reviewQueue = selectReviewQueue([
+      sameProjectA,
+      sameProjectB,
+      sameProjectC,
+      distinctProject,
+    ]);
+
+    expect(
+      reviewQueue.slice(0, 3).map((candidate) => candidate.record.sessionId),
+    ).toContain("distinct-project");
+  });
+
+  it("keeps metadata-only clean analysis sessions out of exemplars", () => {
+    const metadataOnly = createRecord("metadata-only", {
+      metrics: {
+        writeCount: 0,
         verificationCount: 0,
         verificationPassedCount: 0,
         verificationFailedCount: 0,
-        postWriteVerificationAttempted: false,
-        postWriteVerificationPassed: false,
-        complianceRules: [],
-      }),
-      createSession("unverified-delivery", {
-        writeCount: 2,
-        endedVerified: false,
-        complianceScore: 60,
         incidentCount: 0,
-        verificationPassedCount: 0,
-        verificationFailedCount: 1,
-        complianceRules: [
-          {
-            rule: "verification_after_code_changes",
-            status: "fail",
-            rationale: "missing verification",
-          },
-          {
-            rule: "no_unverified_ending",
-            status: "fail",
-            rationale: "ended unverified",
-          },
+        complianceScore: 100,
+      },
+      context: {
+        evidencePreviews: [
+          "Follow the context prompt instructions and always include AGENTS.md and .codex/AGENTS.md in the final file selection.",
         ],
-      }),
-    ];
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: sessions.length,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: sessions.length,
-        appliedSessionLimit: null,
+        evidenceSource: "assistant",
+        evidenceConfidence: "strong",
+        evidenceIssues: ["truncated_evidence", "low_signal_evidence"],
       },
-      turnCount: 20,
-      incidentCount: 5,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions,
-      inventory: [],
-    };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-    sessionLabelCounts.set("analysis-only", {
-      ...createEmptySessionLabelMap(),
-      regression_report: 3,
-      stalled_or_guessing: 2,
     });
-    sessionLabelCounts.set("unverified-delivery", createEmptySessionLabelMap());
 
-    const result = buildTopSessions(metrics, sessionLabelCounts);
-    expect(result[0]?.sessionId).toBe("unverified-delivery");
-    expect(result[1]?.sessionId).toBe("analysis-only");
+    const exemplars = selectExemplars([metadataOnly]);
+    expect(exemplars).toEqual([]);
   });
 
-  it("ranks sessions by friction score descending", () => {
-    const sessions = [
-      createSession("low-friction", { complianceScore: 100, incidentCount: 0 }),
-      createSession("high-friction", { complianceScore: 50, incidentCount: 5 }),
-    ];
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: sessions.length,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: sessions.length,
-        appliedSessionLimit: null,
-      },
-      turnCount: 20,
-      incidentCount: 5,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions,
-      inventory: [],
+  it("keeps weak metadata-fallback write sessions out of exemplars", () => {
+    const weakMetadataWrite = createRecord("weak-metadata-write");
+    weakMetadataWrite.context = {
+      sessionId: "weak-metadata-write",
+      startedAt: "2026-04-03T20:00:00.000Z",
+      cwd: "/Users/example/Projects/AI/agent-eval",
+      evidencePreviews: ["Use these exact commands."],
+      evidenceSource: "user",
+      evidenceConfidence: "medium",
+      evidenceIssues: [],
+      sourceRefs: [],
     };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-    for (const session of sessions) {
-      sessionLabelCounts.set(session.sessionId, createEmptySessionLabelMap());
-    }
 
-    const result = buildTopSessions(metrics, sessionLabelCounts);
-    expect(result).toHaveLength(2);
-    expect(result[0]?.sessionId).toBe("high-friction");
-    expect(result[1]?.sessionId).toBe("low-friction");
-    expect(result[0]?.frictionScore ?? 0).toBeGreaterThan(
-      result[1]?.frictionScore ?? 0,
-    );
+    const exemplars = selectExemplars([weakMetadataWrite]);
+    expect(exemplars).toEqual([]);
   });
 
-  it("includes archetype and archetypeLabel in results", () => {
-    const sessions = [
-      createSession("verified", {
-        writeCount: 5,
-        verificationPassedCount: 3,
+  it("keeps low-signal ended-verified metadata rows out of review", () => {
+    const weakMetadataReview = createRecord("weak-metadata-review", {
+      metrics: {
+        incidentCount: 0,
         endedVerified: true,
-        complianceScore: 100,
-        complianceRules: createPassingRules(),
-      }),
-    ];
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: 1,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: 1,
-        appliedSessionLimit: null,
+        complianceScore: 90,
       },
-      turnCount: 10,
-      incidentCount: 0,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions,
-      inventory: [],
+      labels: { context_reinjection: 1 },
+    });
+    weakMetadataReview.context = {
+      sessionId: "weak-metadata-review",
+      startedAt: "2026-04-03T20:00:00.000Z",
+      cwd: "/Users/example/Projects/AI/agent-eval",
+      evidencePreviews: ["copy the previous logs first as normal. then run 3"],
+      evidenceSource: "user",
+      evidenceConfidence: "medium",
+      evidenceIssues: [],
+      sourceRefs: [],
     };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-    sessionLabelCounts.set("verified", createEmptySessionLabelMap());
 
-    const result = buildTopSessions(metrics, sessionLabelCounts);
-    expect(result[0]?.archetype).toBe("verified_delivery");
-    expect(result[0]?.archetypeLabel).toBe("Ended-Verified Delivery");
+    const reviewQueue = selectReviewQueue([weakMetadataReview]);
+    expect(reviewQueue).toEqual([]);
   });
 
-  it("adds trust flags when queue titles fall back to assistant text or truncated previews", () => {
-    const sessions = [
-      createSession("assistant-fallback", {
-        writeCount: 1,
+  it("defers repeated weak metadata rows that share the same evidence", () => {
+    const repeatedA = createRecord("repeat-a", {
+      metrics: {
+        incidentCount: 1,
         endedVerified: false,
-        verificationPassedCount: 0,
-        verificationFailedCount: 1,
-        complianceRules: [
-          {
-            rule: "verification_after_code_changes",
-            status: "fail",
-            rationale: "missing verification",
-          },
-        ],
-      }),
-    ];
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: 1,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: 1,
-        appliedSessionLimit: null,
+        complianceScore: 60,
       },
-      turnCount: 10,
-      incidentCount: 0,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions,
-      inventory: [],
-    };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-    sessionLabelCounts.set("assistant-fallback", createEmptySessionLabelMap());
-    const sessionContexts: Map<string, SessionContext> = new Map([
-      [
-        "assistant-fallback",
-        {
-          sessionId: "assistant-fallback",
-          leadPreview: "I checked the callback path and will verify the patch.",
-          leadPreviewSource: "assistant",
-          leadPreviewConfidence: "medium",
-          leadPreviewIsCodeLike: false,
-          evidencePreviews: [
-            "I checked the callback path and will verify the patch...",
-          ],
-          evidenceSource: "assistant",
-          evidenceConfidence: "medium",
-          evidenceIssues: ["truncated_evidence"],
-          sourceRefs: [
-            {
-              provider: "codex",
-              kind: "session_jsonl",
-              path: "/tmp/session.jsonl",
-            },
-          ],
-        },
+      labels: { verification_request: 1 },
+    });
+    repeatedA.context = {
+      sessionId: "repeat-a",
+      startedAt: "2026-04-03T20:00:00.000Z",
+      cwd: "/Users/example/Projects/AI/agent-eval",
+      evidencePreviews: [
+        "Return a concise markdown report with one section per form: either 'MATCH' or a bullet list of exact field corrections using dotted paths and corrected normalized values.",
       ],
-    ]);
-
-    const result = buildTopSessions(
-      metrics,
-      sessionLabelCounts,
-      sessionContexts,
-    );
-    expect(result[0]?.trustFlags).toContain(
-      "Queue title fell back to assistant text because no stronger user preview was available.",
-    );
-    expect(result[0]?.trustFlags).toContain(
-      "Evidence previews were truncated for compact reporting.",
-    );
-  });
-
-  it("flags metadata fallback when no strong lead preview is available", () => {
-    const sessions = [
-      createSession("metadata-fallback", {
-        writeCount: 1,
+      evidenceSource: "assistant",
+      evidenceConfidence: "weak",
+      evidenceIssues: ["low_signal_evidence"],
+      sourceRefs: [],
+    };
+    const repeatedB = createRecord("repeat-b", {
+      metrics: {
+        incidentCount: 1,
         endedVerified: false,
-        verificationPassedCount: 0,
-        verificationFailedCount: 1,
-        complianceRules: [
-          {
-            rule: "verification_after_code_changes",
-            status: "fail",
-            rationale: "missing verification",
-          },
-        ],
-      }),
-    ];
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: 1,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: 1,
-        appliedSessionLimit: null,
+        complianceScore: 59,
       },
-      turnCount: 10,
-      incidentCount: 0,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions,
-      inventory: [],
-    };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-    sessionLabelCounts.set("metadata-fallback", createEmptySessionLabelMap());
-    const sessionContexts: Map<string, SessionContext> = new Map([
-      [
-        "metadata-fallback",
-        {
-          sessionId: "metadata-fallback",
-          evidencePreviews: [
-            "**Default assumption: Codex is already very smart.** Only add context Codex doesn't already have...",
-          ],
-          evidenceSource: "user",
-          evidenceConfidence: "weak",
-          evidenceIssues: [
-            "metadata_fallback_title",
-            "low_signal_evidence",
-            "truncated_evidence",
-          ],
-          sourceRefs: [
-            {
-              provider: "codex",
-              kind: "session_jsonl",
-              path: "/tmp/session.jsonl",
-            },
-          ],
-        },
+      labels: { verification_request: 1 },
+    });
+    repeatedB.context = {
+      sessionId: "repeat-b",
+      startedAt: "2026-04-03T20:00:00.000Z",
+      cwd: "/Users/example/Projects/AI/agent-eval",
+      evidencePreviews: [
+        "Return a concise markdown report with one section per form: either 'MATCH' or a bullet list of exact field corrections using dotted paths and corrected normalized values.",
       ],
-    ]);
-
-    const result = buildTopSessions(
-      metrics,
-      sessionLabelCounts,
-      sessionContexts,
-    );
-    expect(result[0]?.sessionDisplayLabel).toContain("fallback");
-    expect(result[0]?.trustFlags).toContain(
-      "No strong human problem statement was available, so the queue title falls back to metadata.",
-    );
-  });
-
-  it("includes dominant labels in results", () => {
-    const sessions = [createSession("with-labels", { complianceScore: 100 })];
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: 1,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: 1,
-        appliedSessionLimit: null,
-      },
-      turnCount: 10,
-      incidentCount: 0,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions,
-      inventory: [],
+      evidenceSource: "assistant",
+      evidenceConfidence: "weak",
+      evidenceIssues: ["low_signal_evidence"],
+      sourceRefs: [],
     };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-    sessionLabelCounts.set("with-labels", {
-      ...createEmptySessionLabelMap(),
-      context_drift: 3,
-      interrupt: 1,
+    const realUserRow = createRecord("real-user-row", {
+      metrics: {
+        incidentCount: 1,
+        endedVerified: false,
+        complianceScore: 58,
+      },
+      labels: { regression_report: 1 },
+      context: {
+        leadPreview: "The export path is still broken after the rename.",
+        leadPreviewSource: "user",
+        leadPreviewConfidence: "strong",
+        evidencePreviews: ["The export path is still broken after the rename."],
+        evidenceSource: "user",
+        evidenceConfidence: "strong",
+        evidenceIssues: [],
+      },
     });
 
-    const result = buildTopSessions(metrics, sessionLabelCounts);
-    expect(result[0]?.dominantLabels).toContain("context_drift");
-    expect(result[0]?.dominantLabels).not.toContain("interrupt");
+    const reviewQueue = selectReviewQueue([repeatedA, repeatedB, realUserRow]);
+    expect(
+      reviewQueue.slice(0, 2).map((candidate) => candidate.record.sessionId),
+    ).toContain("real-user-row");
+    expect(reviewQueue[0]?.record.sessionId).not.toBe("repeat-b");
   });
 
-  it("breaks ties by incident count descending", () => {
-    const sessions = [
-      createSession("fewer-incidents", {
-        complianceScore: 80,
-        incidentCount: 1,
-      }),
-      createSession("more-incidents", {
-        complianceScore: 80,
-        incidentCount: 3,
-      }),
-    ];
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: 2,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: 2,
-        appliedSessionLimit: null,
+  it("applies the template diversity guard to exemplars", () => {
+    const sameFamilyA = createRecord("same-family-a", {
+      template: {
+        artifactScore: 10,
+        textSharePct: 10,
+        flags: [],
+        dominantFamilyId: "family-a",
+        dominantFamilyLabel: "instruction_scaffold",
       },
-      turnCount: 20,
-      incidentCount: 4,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions,
-      inventory: [],
-    };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-    for (const session of sessions) {
-      sessionLabelCounts.set(session.sessionId, createEmptySessionLabelMap());
-    }
-
-    const result = buildTopSessions(metrics, sessionLabelCounts);
-    // Same friction score, so sorted by incident count
-    expect(result[0]?.sessionId).toBe("more-incidents");
-    expect(result[1]?.sessionId).toBe("fewer-incidents");
-  });
-
-  it("prefers stronger title confidence over metadata fallback on ties", () => {
-    const sessions = [
-      createSession("metadata-title", { complianceScore: 100 }),
-      createSession("user-title", { complianceScore: 100 }),
-    ];
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: 2,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: 2,
-        appliedSessionLimit: null,
+    });
+    const sameFamilyB = createRecord("same-family-b", {
+      template: {
+        artifactScore: 10,
+        textSharePct: 10,
+        flags: [],
+        dominantFamilyId: "family-a",
+        dominantFamilyLabel: "instruction_scaffold",
       },
-      turnCount: 20,
-      incidentCount: 0,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions,
-      inventory: [],
-    };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-    sessionLabelCounts.set("metadata-title", createEmptySessionLabelMap());
-    sessionLabelCounts.set("user-title", createEmptySessionLabelMap());
-    const sessionContexts: Map<string, SessionContext> = new Map([
-      [
-        "metadata-title",
-        {
-          sessionId: "metadata-title",
-          evidencePreviews: ["Stabilize them. - Add or update tests."],
-          evidenceSource: "user",
-          evidenceConfidence: "weak",
-          evidenceIssues: ["metadata_fallback_title", "low_signal_evidence"],
-          sourceRefs: [
-            {
-              provider: "codex",
-              kind: "session_jsonl",
-              path: "/tmp/metadata.jsonl",
-            },
-          ],
-        },
-      ],
-      [
-        "user-title",
-        {
-          sessionId: "user-title",
-          leadPreview:
-            "Please fix the failing export path and rerun verification.",
-          leadPreviewSource: "user",
-          leadPreviewConfidence: "strong",
-          leadPreviewIsCodeLike: false,
-          evidencePreviews: [
-            "Please fix the failing export path and rerun verification.",
-          ],
-          evidenceSource: "user",
-          evidenceConfidence: "strong",
-          evidenceIssues: [],
-          sourceRefs: [
-            {
-              provider: "codex",
-              kind: "session_jsonl",
-              path: "/tmp/user.jsonl",
-            },
-          ],
-        },
-      ],
-    ]);
-
-    const result = buildTopSessions(
-      metrics,
-      sessionLabelCounts,
-      sessionContexts,
-    );
-    expect(result[0]?.sessionId).toBe("user-title");
-  });
-
-  it("breaks ties by session ID alphabetically", () => {
-    const sessions = [
-      createSession("session-b", { complianceScore: 100 }),
-      createSession("session-a", { complianceScore: 100 }),
-    ];
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: 2,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: 2,
-        appliedSessionLimit: null,
+    });
+    const sameFamilyC = createRecord("same-family-c", {
+      template: {
+        artifactScore: 10,
+        textSharePct: 10,
+        flags: [],
+        dominantFamilyId: "family-a",
+        dominantFamilyLabel: "instruction_scaffold",
       },
-      turnCount: 20,
-      incidentCount: 0,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions,
-      inventory: [],
-    };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-    for (const session of sessions) {
-      sessionLabelCounts.set(session.sessionId, createEmptySessionLabelMap());
-    }
-
-    const result = buildTopSessions(metrics, sessionLabelCounts);
-    // Same friction and incident count, so sorted by sessionId
-    expect(result[0]?.sessionId).toBe("session-a");
-    expect(result[1]?.sessionId).toBe("session-b");
-  });
-
-  it("deduplicates repeated session IDs after ranking", () => {
-    const sessions = [
-      createSession("repeat-session", {
-        complianceScore: 40,
-        incidentCount: 4,
-      }),
-      createSession("repeat-session", {
-        complianceScore: 60,
-        incidentCount: 2,
-      }),
-      createSession("unique-session", {
-        complianceScore: 70,
-        incidentCount: 1,
-      }),
-    ];
-    const metrics: MetricsRecord = {
-      engineVersion: "0.1.0",
-      schemaVersion: "2",
-      generatedAt: "2026-03-06T00:00:00.000Z",
-      sessionCount: sessions.length,
-      corpusScope: {
-        selection: "all_discovered",
-        discoveredSessionCount: sessions.length,
-        appliedSessionLimit: null,
-      },
-      turnCount: 30,
-      incidentCount: 7,
-      parseWarningCount: 0,
-      labelCounts: {},
-      complianceSummary: [],
-      sessions,
-      inventory: [],
-    };
-    const sessionLabelCounts = new Map<string, Record<LabelName, number>>();
-    sessionLabelCounts.set("repeat-session", createEmptySessionLabelMap());
-    sessionLabelCounts.set("unique-session", createEmptySessionLabelMap());
-
-    const result = buildTopSessions(metrics, sessionLabelCounts);
-
-    expect(result.map((session) => session.sessionId)).toEqual([
-      "repeat-session",
-      "unique-session",
-    ]);
-  });
-});
-
-function createSpotlightSession(
-  sessionId: string,
-  overrides: Partial<ReturnType<typeof buildTopSessions>[number]> = {},
-): ReturnType<typeof buildTopSessions>[number] {
-  return {
-    sessionId,
-    sessionShortId: sessionId,
-    sessionDisplayLabel: sessionId,
-    sessionTimestampLabel: "2026-03-06 00:00Z",
-    sessionProjectLabel: "agent-eval",
-    archetype: "verified_delivery" as const,
-    archetypeLabel: "Ended-Verified Delivery",
-    frictionScore: 1,
-    complianceScore: 100,
-    incidentCount: 0,
-    labeledTurnCount: 2,
-    writeCount: 5,
-    verificationPassedCount: 3,
-    endedVerified: true,
-    dominantLabels: [],
-    whySelected: ["Test reason."],
-    failedRules: [],
-    evidencePreviews: [],
-    titleSource: "user",
-    titleConfidence: "strong",
-    evidenceSource: "none",
-    evidenceConfidence: "weak",
-    evidenceIssues: ["missing_evidence", "missing_source_refs"],
-    sourceRefs: [],
-    trustFlags: [],
-    note: "test",
-    ...overrides,
-  };
-}
-
-describe("buildEndedVerifiedDeliverySpotlights", () => {
-  it("returns empty array when no verified delivery sessions", () => {
-    const topSessions = [
-      createSpotlightSession("unverified", {
-        archetype: "unverified_delivery",
-        archetypeLabel: "Unverified Delivery",
-        frictionScore: 5,
-        complianceScore: 60,
-        incidentCount: 2,
-        labeledTurnCount: 3,
-        verificationPassedCount: 0,
-        endedVerified: false,
-      }),
-    ];
-
-    const result = buildEndedVerifiedDeliverySpotlights(topSessions);
-    expect(result).toEqual([]);
-  });
-
-  it("filters to only verified_delivery archetype", () => {
-    const topSessions = [
-      createSpotlightSession("verified-1", {
-        frictionScore: 2,
-        complianceScore: 100,
-        incidentCount: 0,
-        verificationPassedCount: 3,
-      }),
-      createSpotlightSession("unverified", {
-        archetype: "unverified_delivery",
-        archetypeLabel: "Unverified Delivery",
-        frictionScore: 5,
-        complianceScore: 60,
-        incidentCount: 2,
-        labeledTurnCount: 3,
-        verificationPassedCount: 0,
-        endedVerified: false,
-      }),
-      createSpotlightSession("verified-2", {
-        frictionScore: 1,
+    });
+    const distinctFamily = createRecord("distinct-family", {
+      metrics: {
         complianceScore: 95,
-        incidentCount: 1,
-        writeCount: 3,
-        verificationPassedCount: 2,
-      }),
-    ];
+      },
+      template: {
+        artifactScore: 10,
+        textSharePct: 5,
+        flags: [],
+        dominantFamilyId: "family-b",
+        dominantFamilyLabel: "repo_workflow_scaffold",
+      },
+    });
 
-    const result = buildEndedVerifiedDeliverySpotlights(topSessions);
-    expect(result).toHaveLength(2);
-    expect(result.every((s) => s.archetype === "verified_delivery")).toBe(true);
-  });
-
-  it("sorts by compliance score descending", () => {
-    const topSessions = [
-      createSpotlightSession("lower-compliance", { complianceScore: 90 }),
-      createSpotlightSession("higher-compliance", { complianceScore: 100 }),
-    ];
-
-    const result = buildEndedVerifiedDeliverySpotlights(topSessions);
-    expect(result[0]?.sessionId).toBe("higher-compliance");
-    expect(result[1]?.sessionId).toBe("lower-compliance");
-  });
-
-  it("limits to maximum 6 sessions", () => {
-    const topSessions = Array.from({ length: 10 }, (_, i) =>
-      createSpotlightSession(`verified-${i}`, {
-        complianceScore: 100 - i,
-      }),
-    );
-
-    const result = buildEndedVerifiedDeliverySpotlights(topSessions);
-    expect(result).toHaveLength(6);
-  });
-
-  it("deduplicates repeated verified delivery session IDs", () => {
-    const topSessions = [
-      createSpotlightSession("repeat-session", {
-        frictionScore: 2,
-        complianceScore: 100,
-        note: "better entry",
-      }),
-      createSpotlightSession("repeat-session", {
-        frictionScore: 4,
-        complianceScore: 95,
-        incidentCount: 1,
-        verificationPassedCount: 2,
-        note: "duplicate entry",
-      }),
-      createSpotlightSession("unique-session", {
-        frictionScore: 3,
-        complianceScore: 90,
-        verificationPassedCount: 2,
-        note: "unique entry",
-      }),
-    ];
-
-    const result = buildEndedVerifiedDeliverySpotlights(topSessions);
-
-    expect(result.map((session) => session.sessionId)).toEqual([
-      "repeat-session",
-      "unique-session",
+    const exemplars = selectExemplars([
+      sameFamilyA,
+      sameFamilyB,
+      sameFamilyC,
+      distinctFamily,
     ]);
-    expect(result[0]?.note).toBe("better entry");
+
+    expect(
+      exemplars.slice(0, 3).map((candidate) => candidate.record.sessionId),
+    ).toContain("distinct-family");
   });
 });

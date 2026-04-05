@@ -15,6 +15,12 @@ import type {
   SourceRef,
 } from "./types.js";
 
+function asNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
 /**
  * Creates a new empty turn with the given index.
  */
@@ -100,16 +106,62 @@ export function handleSessionMetaEvent(
   event: JsonlEventRecord,
   context: ParserContext,
 ): void {
-  context.sessionId = asString(getValue(payload, "id")) ?? context.sessionId;
+  if (!context.sessionMetaSeen) {
+    context.sessionId = asString(getValue(payload, "id")) ?? context.sessionId;
+    context.sessionMetaSeen = true;
+  }
+  context.sessionHarness ??= "codex";
 
   const startedAt = asString(getValue(payload, "timestamp")) ?? event.timestamp;
   if (startedAt) {
-    context.sessionStartedAt = startedAt;
+    context.sessionStartedAt ??= startedAt;
   }
 
   const cwd = asString(getValue(payload, "cwd"));
   if (cwd) {
-    context.sessionCwd = cwd;
+    context.sessionCwd ??= cwd;
+  }
+
+  const modelProvider =
+    asString(getValue(payload, "modelProvider")) ??
+    asString(getValue(payload, "model_provider"));
+  if (modelProvider) {
+    context.sessionModelProvider ??= modelProvider;
+  }
+
+  const model =
+    asString(getValue(payload, "model")) ??
+    asString(getValue(payload, "modelId"));
+  if (model) {
+    context.sessionModel ??= model;
+  }
+
+  const inputTokens =
+    asNumber(getValue(payload, "inputTokens")) ??
+    asNumber(getValue(payload, "input_tokens"));
+  if (typeof inputTokens === "number") {
+    context.sessionInputTokens ??= inputTokens;
+  }
+
+  const outputTokens =
+    asNumber(getValue(payload, "outputTokens")) ??
+    asNumber(getValue(payload, "output_tokens"));
+  if (typeof outputTokens === "number") {
+    context.sessionOutputTokens ??= outputTokens;
+  }
+
+  const totalTokens =
+    asNumber(getValue(payload, "totalTokens")) ??
+    asNumber(getValue(payload, "total_tokens"));
+  if (typeof totalTokens === "number") {
+    context.sessionTotalTokens ??= totalTokens;
+  }
+
+  const compactionCount =
+    asNumber(getValue(payload, "compactionCount")) ??
+    asNumber(getValue(payload, "compaction_count"));
+  if (typeof compactionCount === "number") {
+    context.sessionCompactionCount ??= compactionCount;
   }
 
   const source = asRecord(getValue(payload, "source"));
@@ -121,7 +173,7 @@ export function handleSessionMetaEvent(
     ? asString(getValue(threadSpawn, "parent_thread_id"))
     : undefined;
   if (parentId) {
-    context.parentSessionId = parentId;
+    context.parentSessionId ??= parentId;
   }
 }
 
@@ -178,8 +230,32 @@ export function buildParsedSession(
   if (context.sessionStartedAt) {
     parsedSession.startedAt = context.sessionStartedAt;
   }
+  if (context.sessionEndedAt) {
+    parsedSession.endedAt = context.sessionEndedAt;
+  }
   if (context.sessionCwd) {
     parsedSession.cwd = context.sessionCwd;
+  }
+  if (context.sessionHarness) {
+    parsedSession.harness = context.sessionHarness;
+  }
+  if (context.sessionModelProvider) {
+    parsedSession.modelProvider = context.sessionModelProvider;
+  }
+  if (context.sessionModel) {
+    parsedSession.model = context.sessionModel;
+  }
+  if (typeof context.sessionInputTokens === "number") {
+    parsedSession.inputTokens = context.sessionInputTokens;
+  }
+  if (typeof context.sessionOutputTokens === "number") {
+    parsedSession.outputTokens = context.sessionOutputTokens;
+  }
+  if (typeof context.sessionTotalTokens === "number") {
+    parsedSession.totalTokens = context.sessionTotalTokens;
+  }
+  if (typeof context.sessionCompactionCount === "number") {
+    parsedSession.compactionCount = context.sessionCompactionCount;
   }
 
   return parsedSession;

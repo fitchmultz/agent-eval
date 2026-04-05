@@ -30,6 +30,26 @@ function createLabelRecord(label: LabelName) {
   };
 }
 
+function createEmptyAnalysis() {
+  return {
+    rawLabelCounts: {},
+    deTemplatedLabelCounts: {},
+    template: {
+      artifactScore: 0,
+      textSharePct: 0,
+      hasTemplateContent: false,
+      flags: [],
+      dominantFamilyId: null,
+      dominantFamilyLabel: null,
+    },
+    attribution: {
+      primary: "unknown" as const,
+      confidence: "low" as const,
+      reasons: ["test"],
+    },
+  };
+}
+
 describe("aggregateMetrics", () => {
   const createMockSession = (
     id: string,
@@ -39,7 +59,7 @@ describe("aggregateMetrics", () => {
     turns: [
       {
         engineVersion: "1.0.0",
-        schemaVersion: "2",
+        schemaVersion: "3",
         sessionId: id,
         turnIndex: 0,
         userMessageCount: 1,
@@ -64,7 +84,7 @@ describe("aggregateMetrics", () => {
         ? [
             {
               engineVersion: "1.0.0",
-              schemaVersion: "2",
+              schemaVersion: "3",
               incidentId: `${id}:incident:0`,
               sessionId: id,
               turnIds: ["turn-1"],
@@ -88,10 +108,29 @@ describe("aggregateMetrics", () => {
     metrics: {
       sessionId: id,
       provider: "codex",
+      harness: "codex",
+      modelProvider: null,
+      model: null,
+      startedAt: "2026-04-03T20:00:00.000Z",
+      endedAt: "2026-04-03T20:01:00.000Z",
+      durationMs: 60000,
       turnCount: 1,
       labeledTurnCount: labelCount > 0 ? 1 : 0,
       incidentCount: labelCount > 0 ? 1 : 0,
       parseWarningCount: 0,
+      userMessageCount: 1,
+      assistantMessageCount: 1,
+      toolCallCount: 0,
+      writeToolCallCount: 0,
+      verificationToolCallCount: 0,
+      mcpToolCallCount: 0,
+      topTools: [],
+      toolFamilies: [],
+      mcpServers: [],
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      compactionCount: null,
       writeCount: 0,
       verificationCount: 0,
       verificationPassedCount: 0,
@@ -185,6 +224,77 @@ describe("aggregateMetrics", () => {
     expect(new Date(metrics.generatedAt).getTime()).not.toBeNaN();
   });
 
+  it("keeps template substrate rows semantically aligned to deduped label aggregates", () => {
+    const metrics = aggregateMetrics([createMockSession("session-1")], [], {
+      templateLabelSummaries: [
+        {
+          familyId: "label:instruction_scaffold",
+          label: "instruction_scaffold",
+          affectedSessionCount: 1,
+          estimatedTextSharePct: 12.5,
+        },
+      ],
+    });
+
+    expect(metrics.templateSubstrate.topFamilies).toEqual([
+      {
+        familyId: "label:instruction_scaffold",
+        label: "instruction_scaffold",
+        affectedSessionCount: 1,
+        estimatedTextSharePct: 12.5,
+      },
+    ]);
+  });
+
+  it("counts affected template sessions from exact presence rather than rounded share", () => {
+    const sessions: ProcessedSession[] = [
+      {
+        ...createMockSession("session-1"),
+        analysis: {
+          ...createEmptyAnalysis(),
+          template: {
+            artifactScore: 1,
+            textSharePct: 0,
+            hasTemplateContent: true,
+            flags: ["instruction_scaffold"],
+            dominantFamilyId: "family-a",
+            dominantFamilyLabel: "instruction_scaffold",
+          },
+        },
+      },
+      {
+        ...createMockSession("session-2"),
+        analysis: {
+          ...createEmptyAnalysis(),
+          template: {
+            artifactScore: 1,
+            textSharePct: 0,
+            hasTemplateContent: true,
+            flags: ["instruction_scaffold"],
+            dominantFamilyId: "family-a",
+            dominantFamilyLabel: "instruction_scaffold",
+          },
+        },
+      },
+    ];
+
+    const metrics = aggregateMetrics(sessions, [], {
+      templateLabelSummaries: [
+        {
+          familyId: "label:instruction_scaffold",
+          label: "instruction_scaffold",
+          affectedSessionCount: 2,
+          estimatedTextSharePct: 0,
+        },
+      ],
+    });
+
+    expect(metrics.templateSubstrate.affectedSessionCount).toBe(2);
+    expect(metrics.templateSubstrate.topFamilies[0]?.affectedSessionCount).toBe(
+      2,
+    );
+  });
+
   it("should handle empty sessions array", () => {
     const metrics = aggregateMetrics([], []);
 
@@ -203,7 +313,7 @@ describe("countLabel", () => {
     sessionId: "test",
     turns: Array.from({ length: count }, (_, i) => ({
       engineVersion: "1.0.0",
-      schemaVersion: "2",
+      schemaVersion: "3",
       sessionId: "test",
       turnIndex: i,
       userMessageCount: 1,
@@ -225,10 +335,29 @@ describe("countLabel", () => {
     metrics: {
       sessionId: "test",
       provider: "codex",
+      harness: "codex",
+      modelProvider: null,
+      model: null,
+      startedAt: "2026-04-03T20:00:00.000Z",
+      endedAt: "2026-04-03T20:05:00.000Z",
+      durationMs: 300000,
       turnCount: count,
       labeledTurnCount: count,
       incidentCount: 0,
       parseWarningCount: 0,
+      userMessageCount: count,
+      assistantMessageCount: count,
+      toolCallCount: 0,
+      writeToolCallCount: 0,
+      verificationToolCallCount: 0,
+      mcpToolCallCount: 0,
+      topTools: [],
+      toolFamilies: [],
+      mcpServers: [],
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      compactionCount: null,
       writeCount: 0,
       verificationCount: 0,
       verificationPassedCount: 0,
@@ -264,7 +393,7 @@ describe("countWriteTurns", () => {
     sessionId: "test",
     turns: Array.from({ length: writeTurnCount }, (_, i) => ({
       engineVersion: "1.0.0",
-      schemaVersion: "2",
+      schemaVersion: "3",
       sessionId: "test",
       turnIndex: i,
       userMessageCount: 1,
@@ -294,10 +423,29 @@ describe("countWriteTurns", () => {
     metrics: {
       sessionId: "test",
       provider: "codex",
+      harness: "codex",
+      modelProvider: null,
+      model: null,
+      startedAt: "2026-04-03T20:00:00.000Z",
+      endedAt: "2026-04-03T20:05:00.000Z",
+      durationMs: 300000,
       turnCount: writeTurnCount,
       labeledTurnCount: 0,
       incidentCount: 0,
       parseWarningCount: 0,
+      userMessageCount: writeTurnCount,
+      assistantMessageCount: writeTurnCount,
+      toolCallCount: writeTurnCount,
+      writeToolCallCount: writeTurnCount,
+      verificationToolCallCount: 0,
+      mcpToolCallCount: 0,
+      topTools: [],
+      toolFamilies: [],
+      mcpServers: [],
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      compactionCount: null,
       writeCount: writeTurnCount,
       verificationCount: 0,
       verificationPassedCount: 0,
@@ -326,7 +474,7 @@ describe("countWriteTurns", () => {
         turns: [
           {
             engineVersion: "1.0.0",
-            schemaVersion: "2",
+            schemaVersion: "3",
             sessionId: "test",
             turnIndex: 0,
             userMessageCount: 1,
@@ -357,10 +505,29 @@ describe("countWriteTurns", () => {
         metrics: {
           sessionId: "test",
           provider: "codex",
+          harness: "codex",
+          modelProvider: null,
+          model: null,
+          startedAt: "2026-04-03T20:00:00.000Z",
+          endedAt: "2026-04-03T20:01:00.000Z",
+          durationMs: 60000,
           turnCount: 1,
           labeledTurnCount: 0,
           incidentCount: 0,
           parseWarningCount: 0,
+          userMessageCount: 1,
+          assistantMessageCount: 1,
+          toolCallCount: 1,
+          writeToolCallCount: 0,
+          verificationToolCallCount: 0,
+          mcpToolCallCount: 0,
+          topTools: [],
+          toolFamilies: [],
+          mcpServers: [],
+          inputTokens: null,
+          outputTokens: null,
+          totalTokens: null,
+          compactionCount: null,
           writeCount: 0,
           verificationCount: 0,
           verificationPassedCount: 0,

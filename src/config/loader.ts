@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ConfigFileParseError, normalizeError } from "../errors.js";
-import { ENV_VARS, getEnvNumber, getEnvString } from "./env.js";
+import { ENV_VARS, getEnvNumber } from "./env.js";
 import type { EvaluatorConfig } from "./index.js";
 
 /** Supported configuration file names in order of precedence */
@@ -53,7 +53,7 @@ export async function loadConfigFile(
 
 /**
  * Loads configuration from environment variables.
- * All env vars are prefixed with CODEX_EVAL_.
+ * All env vars are prefixed with AGENT_EVAL_.
  * @returns Partial configuration from environment variables
  */
 export function loadEnvConfig(): DeepPartial<EvaluatorConfig> {
@@ -83,16 +83,19 @@ export function loadEnvConfig(): DeepPartial<EvaluatorConfig> {
   const maxMessageItems = getEnvNumber(ENV_VARS.MAX_MESSAGE_ITEMS, 0);
   const maxIncidentEvidence = getEnvNumber(ENV_VARS.MAX_INCIDENT_EVIDENCE, 0);
   const maxTopIncidents = getEnvNumber(ENV_VARS.MAX_TOP_INCIDENTS, 0);
-  const maxVictoryLaps = getEnvNumber(ENV_VARS.MAX_VICTORY_LAPS, 0);
-  const maxTopSessions = getEnvNumber(ENV_VARS.MAX_TOP_SESSIONS, 0);
+  const maxExemplarSessions = getEnvNumber(ENV_VARS.MAX_EXEMPLAR_SESSIONS, 0);
+  const maxReviewQueueSessions = getEnvNumber(
+    ENV_VARS.MAX_REVIEW_QUEUE_SESSIONS,
+    0,
+  );
 
   if (
     maxMessageLength > 0 ||
     maxMessageItems > 0 ||
     maxIncidentEvidence > 0 ||
     maxTopIncidents > 0 ||
-    maxVictoryLaps > 0 ||
-    maxTopSessions > 0
+    maxExemplarSessions > 0 ||
+    maxReviewQueueSessions > 0
   ) {
     config.previews = {};
     if (maxMessageLength > 0) {
@@ -107,11 +110,11 @@ export function loadEnvConfig(): DeepPartial<EvaluatorConfig> {
     if (maxTopIncidents > 0) {
       config.previews.maxTopIncidents = maxTopIncidents;
     }
-    if (maxVictoryLaps > 0) {
-      config.previews.maxVictoryLaps = maxVictoryLaps;
+    if (maxExemplarSessions > 0) {
+      config.previews.maxExemplarSessions = maxExemplarSessions;
     }
-    if (maxTopSessions > 0) {
-      config.previews.maxTopSessions = maxTopSessions;
+    if (maxReviewQueueSessions > 0) {
+      config.previews.maxReviewQueueSessions = maxReviewQueueSessions;
     }
   }
 
@@ -119,11 +122,6 @@ export function loadEnvConfig(): DeepPartial<EvaluatorConfig> {
   const frictionThreshold = getEnvNumber(ENV_VARS.FRICTION_THRESHOLD, 0);
   if (frictionThreshold > 0) {
     config.scoring = { frictionThreshold };
-  }
-
-  const reportSkin = getEnvString(ENV_VARS.REPORT_SKIN);
-  if (reportSkin === "operator" || reportSkin === "showcase") {
-    config.reporting = { skin: reportSkin };
   }
 
   return config;
@@ -177,13 +175,6 @@ export function mergeConfigs(
           ...merged.scoring?.incidentLabelWeights,
           ...current.scoring?.incidentLabelWeights,
         },
-      };
-    }
-
-    if (merged.reporting || current.reporting) {
-      result.reporting = {
-        ...merged.reporting,
-        ...current.reporting,
       };
     }
 

@@ -36,7 +36,7 @@ function createLabel(
 function createMockTurn(overrides: Partial<RawTurnRecord> = {}): RawTurnRecord {
   return {
     engineVersion: "0.1.0",
-    schemaVersion: "2",
+    schemaVersion: "3",
     sessionId: "session-1",
     turnId: "turn-1",
     turnIndex: 0,
@@ -64,7 +64,7 @@ describe("clusterIncidents", () => {
       [
         {
           engineVersion: "0.1.0",
-          schemaVersion: "2",
+          schemaVersion: "3",
           sessionId: "session-1",
           turnId: "turn-1",
           turnIndex: 0,
@@ -95,7 +95,7 @@ describe("clusterIncidents", () => {
         },
         {
           engineVersion: "0.1.0",
-          schemaVersion: "2",
+          schemaVersion: "3",
           sessionId: "session-1",
           turnId: "turn-2",
           turnIndex: 1,
@@ -123,7 +123,7 @@ describe("clusterIncidents", () => {
       ],
       { maxTurnGap: 2 },
       "0.1.0",
-      "2",
+      "3",
     );
 
     expect(incidents).toHaveLength(1);
@@ -155,7 +155,7 @@ describe("clusterIncidents", () => {
       ],
       { maxTurnGap: 2 },
       "0.1.0",
-      "2",
+      "3",
     );
 
     expect(incidents[0]?.evidencePreviews[0]).toBe(
@@ -194,7 +194,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
       ],
       { maxTurnGap: 2 },
       "0.1.0",
-      "2",
+      "3",
     );
 
     expect(incidents[0]?.evidencePreviews[0]).toBe(
@@ -229,7 +229,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
       ],
       { maxTurnGap: 2 },
       "0.1.0",
-      "2",
+      "3",
     );
 
     expect(incidents[0]?.evidencePreviews[0]).toBe(
@@ -239,7 +239,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
 
   describe("edge cases", () => {
     it("handles empty turns array", () => {
-      const incidents = clusterIncidents([], { maxTurnGap: 2 }, "0.1.0", "2");
+      const incidents = clusterIncidents([], { maxTurnGap: 2 }, "0.1.0", "3");
 
       expect(incidents).toHaveLength(0);
     });
@@ -257,7 +257,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
         ],
         { maxTurnGap: 2 },
         "0.1.0",
-        "2",
+        "3",
       );
 
       expect(incidents).toHaveLength(1);
@@ -284,7 +284,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
         ],
         { maxTurnGap: 2 },
         "0.1.0",
-        "2",
+        "3",
       );
 
       expect(incidents).toHaveLength(2);
@@ -308,7 +308,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
         ],
         { maxTurnGap: 2 },
         "0.1.0",
-        "2",
+        "3",
       );
 
       expect(incidents).toHaveLength(1);
@@ -331,7 +331,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
         ],
         { maxTurnGap: 2 },
         "0.1.0",
-        "2",
+        "3",
       );
 
       expect(incidents).toHaveLength(2);
@@ -361,7 +361,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
         ],
         { maxTurnGap: 2 },
         "0.1.0",
-        "2",
+        "3",
       );
 
       expect(incidents).toHaveLength(2);
@@ -394,7 +394,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
         ],
         { maxTurnGap: 2 },
         "0.1.0",
-        "2",
+        "3",
       );
 
       expect(incidents).toHaveLength(1);
@@ -425,7 +425,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
         ],
         { maxTurnGap: 2 },
         "0.1.0",
-        "2",
+        "3",
       );
 
       // Should create two separate incidents because unlabeled turn breaks cluster
@@ -458,7 +458,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
         ],
         { maxTurnGap: 2 },
         "0.1.0",
-        "2",
+        "3",
       );
 
       expect(incidents).toHaveLength(1);
@@ -502,7 +502,7 @@ Top Incidents still shows orchestration wrappers instead of the actual user prob
         ],
         { maxTurnGap: 2 },
         "0.1.0",
-        "2",
+        "3",
       );
 
       expect(incidents).toHaveLength(1);

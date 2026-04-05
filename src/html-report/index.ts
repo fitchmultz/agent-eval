@@ -5,25 +5,27 @@
  */
 
 export {
-  renderExecutiveSummaryCards,
-  renderIncidentCards,
+  renderAppliedFilters,
+  renderAttributionSummary,
+  renderCausePatterns,
+  renderDashboardDistributions,
   renderInventoryList,
-  renderMetricGlossary,
-  renderOperatorMetrics,
-  renderOpportunityList,
-  renderSessionCards,
+  renderMetadata,
+  renderOverviewHighlights,
+  renderPrimaryMetricCards,
+  renderSecondaryMetricCards,
+  renderSummaryNotes,
+  renderSurfaceSection,
+  renderTemplateSubstrate,
 } from "./cards.js";
 export { renderHtmlReport } from "./render.js";
+export { renderStyles } from "./styles.js";
 export {
-  renderComparativeSliceTable,
+  renderComparativeSliceGroups,
   renderComplianceTable,
 } from "./tables.js";
 export {
   createEmptyState,
   createMetricCard,
-  createMetricGrid,
-  createScoreCard,
-  createSection,
   escapeHtml,
-  renderStyles,
 } from "./templates.js";

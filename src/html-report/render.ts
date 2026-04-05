@@ -1,92 +1,64 @@
 /**
- * Purpose: Main render orchestrator for source-neutral HTML reports.
- * Responsibilities: Assemble the complete static HTML triage report document for supported transcript sources.
+ * Purpose: Main render orchestrator for source-neutral v3 HTML reports.
+ * Responsibilities: Assemble the complete static HTML evaluation report document for supported transcript sources.
  * Scope: Used by the presentation layer after deterministic metrics and summary generation.
- * Usage: `renderHtmlReport(summary, metrics, charts)`.
+ * Usage: `renderHtmlReport(model, charts)`.
  * Invariants/Assumptions: The HTML report remains static, portable, and dependency-free.
  */
 
-import { describeCorpusScope } from "../report-scope.js";
+import { buildReportPresentationModel } from "../presentation-model.js";
 import type { MetricsRecord, SummaryArtifact } from "../schema.js";
-import { deriveSessionShortId } from "../summary/session-display.js";
 import {
-  renderExecutiveSummaryCards,
-  renderIncidentCards,
+  renderAppliedFilters,
+  renderAttributionSummary,
+  renderCausePatterns,
+  renderDashboardDistributions,
   renderInventoryList,
-  renderMetricGlossary,
-  renderOperatorMetrics,
-  renderOpportunityList,
-  renderSessionCards,
+  renderMetadata,
+  renderOverviewHighlights,
+  renderPrimaryMetricCards,
+  renderSecondaryMetricCards,
+  renderSummaryNotes,
+  renderSurfaceSection,
+  renderTemplateSubstrate,
 } from "./cards.js";
+import { renderStyles } from "./styles.js";
 import {
-  renderComparativeSliceTable,
+  renderComparativeSliceGroups,
   renderComplianceTable,
 } from "./tables.js";
-import { escapeHtml, renderStyles } from "./templates.js";
+import { escapeHtml } from "./templates.js";
 
 export interface HtmlReportCharts {
-  labelChartSvg: string;
-  complianceChartSvg: string;
-  severityChartSvg: string;
+  sessionsOverTimeChartSvg: string;
+  providerShareChartSvg: string;
+  harnessShareChartSvg: string;
+  toolFamilyShareChartSvg: string;
+  attributionMixChartSvg: string;
 }
 
-function renderMethodologyList(metrics: MetricsRecord): string {
-  const items = [
-    "This report is a deterministic transcript analytics summary with heuristic policy proxies, not a rigorous correctness evaluator.",
-    "Labels represent transcript-visible heuristics and should be read as operator-friction signals, not ground-truth task outcomes.",
-    "Compliance scores are event-order proxies based on observed transcript behavior and do not prove repository correctness.",
-    "Static HTML is intentional: this report favors shareable, portable triage output over client-side interaction.",
-  ];
-
-  if (metrics.parseWarningCount > 0) {
-    items.push(
-      `Parse warnings: ${metrics.parseWarningCount}. Some malformed transcript lines were skipped, so affected sessions may be partial.`,
-    );
-  }
-
-  return `<ul class="opportunity-list">${items
-    .map((item) => `<li><span>${escapeHtml(item)}</span></li>`)
+function renderMethodologyList(
+  model: ReturnType<typeof buildReportPresentationModel>,
+): string {
+  return `<ul class="stack-list">${model.methodology
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
     .join("")}</ul>`;
 }
 
-function renderNoDataPanel(summary: SummaryArtifact): string {
-  if (summary.sessions > 0) {
-    return "";
-  }
-
-  return `<section><div class="panel empty-hero">
-    <h2>No Data Yet</h2>
-    <p>The selected source home has the expected transcript layout, but no session JSONL files were discovered yet.</p>
-    <p>This is a valid first-run or freshly bootstrapped state, so the report renders a deterministic empty corpus instead of treating it as a runtime failure. The transcript home is reachable, but required transcript input stays missing until canonical session JSONL files appear.</p>
-  </div></section>`;
-}
-
-function renderHeaderContext(
-  summary: SummaryArtifact,
-  metrics: MetricsRecord,
+function renderHeaderNotes(
+  model: ReturnType<typeof buildReportPresentationModel>,
 ): string {
-  const providers = [
-    ...new Set(metrics.inventory.map((record) => record.provider)),
-  ];
-  return `${providers.join(", ")} corpus · ${summary.sessions} sessions · ${metrics.corpusScope.selection === "most_recent_window" ? "recent-window" : "full corpus"} · generated ${summary.generatedAt}`;
+  return `${renderSummaryNotes(model.coverageNotes)}${renderSummaryNotes(model.sampleNotes)}`;
 }
 
-function renderSectionNavigation(summary: SummaryArtifact): string {
+function renderSectionNavigation(): string {
   const links: Array<[string, string]> = [
-    ["#executive-summary", "Executive Summary"],
-    ["#operator-metrics", "Action Metrics"],
-    ["#sessions-to-review", "Sessions To Review"],
-    ["#compliance-breakdown", "Compliance"],
+    ["#overview", "Overview"],
+    ["#what-worked", "What Worked"],
+    ["#needs-review", "Needs Review"],
+    ["#why-this-happened", "Why This Happened"],
     ["#comparative-slices", "Comparative Slices"],
-    ["#recurring-patterns", "Patterns And Incidents"],
   ];
-  const firstSession = summary.topSessions[0];
-  if (firstSession) {
-    links.push([
-      `#session-${deriveSessionShortId(firstSession.sessionId)}`,
-      "Jump to first ranked session",
-    ]);
-  }
 
   return `<nav class="section-nav" aria-label="Report sections"><ul>${links
     .map(
@@ -96,54 +68,55 @@ function renderSectionNavigation(summary: SummaryArtifact): string {
     .join("")}</ul></nav>`;
 }
 
-function renderReportMetadata(
-  summary: SummaryArtifact,
-  metrics: MetricsRecord,
-): string {
-  const providers = [
-    ...new Set(metrics.inventory.map((record) => record.provider)),
-  ];
-  return `<details class="panel report-metadata"><summary>Report metadata</summary>
-    <ul class="opportunity-list">
-      <li><strong>Engine</strong><span>${escapeHtml(summary.engineVersion)}</span></li>
-      <li><strong>Schema</strong><span>${escapeHtml(summary.schemaVersion)}</span></li>
-      <li><strong>Providers</strong><span>${escapeHtml(providers.join(", "))}</span></li>
-      <li><strong>Parse warnings</strong><span>${metrics.parseWarningCount}</span></li>
-    </ul>
-  </details>`;
+function renderOverviewCharts(charts: HtmlReportCharts): string {
+  return `<div class="chart-grid">
+    ${charts.sessionsOverTimeChartSvg}
+    ${charts.providerShareChartSvg}
+    ${charts.harnessShareChartSvg}
+    ${charts.toolFamilyShareChartSvg}
+    ${charts.attributionMixChartSvg}
+  </div>`;
 }
 
-/**
- * Generates a complete HTML report from summary artifacts.
- */
+function renderNoDataPanel(
+  model: ReturnType<typeof buildReportPresentationModel>,
+): string {
+  if (!model.isEmptyCorpus) {
+    return "";
+  }
+
+  return `<section><div class="panel empty-hero">
+    <h2>No Data Yet</h2>
+    <p>The selected source home has the expected transcript layout, but no session JSONL files were discovered yet.</p>
+    <p>This is a valid first-run or freshly bootstrapped state, so the report renders a deterministic empty corpus instead of treating it as a runtime failure.</p>
+  </div></section>`;
+}
+
 export function renderHtmlReport(
   summary: SummaryArtifact,
   metrics: MetricsRecord,
-  _charts: HtmlReportCharts,
+  charts: HtmlReportCharts,
 ): string {
+  const model = buildReportPresentationModel(metrics, summary);
   const styles = renderStyles();
-  const scope = describeCorpusScope(metrics);
-  const title = "Transcript Analytics Report";
-  const isEmptyCorpus = summary.sessions === 0;
-  const bodyClassName = isEmptyCorpus ? ' class="empty-report"' : "";
-  const contentSections = isEmptyCorpus
+
+  const contentSections = model.isEmptyCorpus
     ? [
-        renderNoDataPanel(summary),
-        `<section><h2>Operator Action Metrics</h2><div class="metric-grid">${renderOperatorMetrics(summary)}</div></section>`,
-        `<section><h2>Inventory</h2>${renderInventoryList(metrics)}</section>`,
-        `<section><h2>Methodology And Limitations</h2><div class="panel">${renderMethodologyList(metrics)}</div></section>`,
+        renderNoDataPanel(model),
+        `<section id="overview"><h2>Overview Dashboard</h2><div class="metric-grid">${renderPrimaryMetricCards(model)}</div><div class="metric-grid secondary-metric-grid">${renderSecondaryMetricCards(model)}</div></section>`,
+        `<details class="panel lower-section" id="inventory"><summary>Inventory</summary>${renderInventoryList(model)}</details>`,
+        `<details class="panel lower-section" id="methodology-and-limitations"><summary>Methodology And Limitations</summary>${renderMethodologyList(model)}</details>`,
       ]
     : [
-        `<section id="executive-summary"><h2>Executive Summary</h2><div class="metric-grid executive-grid">${renderExecutiveSummaryCards(summary)}</div></section>`,
-        `<section id="operator-metrics"><h2>Operator Action Metrics</h2><div class="metric-grid">${renderOperatorMetrics(summary)}</div></section>`,
-        `<section id="sessions-to-review"><h2>Sessions To Review First</h2><div class="sessions-grid">${renderSessionCards(summary)}</div></section>`,
-        `<section id="compliance-breakdown"><h2>Compliance Breakdown</h2><div class="panel">${renderComplianceTable(summary)}</div></section>`,
-        `<section id="comparative-slices"><h2>Comparative Slices</h2><div class="panel">${renderComparativeSliceTable(summary)}</div>${renderMetricGlossary(summary)}</section>`,
-        `<section id="recurring-patterns"><h2>Recurring Patterns And Incidents</h2><div class="incident-grid">${renderIncidentCards(summary)}</div></section>`,
-        `<section id="deterministic-opportunities"><h2>Deterministic Opportunities</h2><ul class="opportunity-list">${renderOpportunityList(summary)}</ul></section>`,
-        `<section id="methodology-and-limitations"><h2>Methodology And Limitations</h2><div class="panel">${renderMethodologyList(metrics)}</div></section>`,
-        `<section id="inventory"><h2>Inventory</h2>${renderInventoryList(metrics)}</section>`,
-        renderReportMetadata(summary, metrics),
+        `<section id="overview"><h2>Overview Dashboard</h2><div class="metric-grid">${renderPrimaryMetricCards(model)}</div><div class="metric-grid secondary-metric-grid">${renderSecondaryMetricCards(model)}</div><div class="panel overview-highlights">${renderOverviewHighlights(model)}</div>${renderOverviewCharts(charts)}<div class="detail-grid">${renderDashboardDistributions(model)}</div>${renderSummaryNotes(model.overviewNotes)}</section>`,
+        `<section id="what-worked"><h2>What Worked</h2>${renderSurfaceSection(model.worked)}</section>`,
+        `<section id="needs-review"><h2>Needs Review</h2>${renderSurfaceSection(model.review)}</section>`,
+        `<section id="why-this-happened"><h2>Why This Happened</h2><div class="detail-grid">${renderAttributionSummary(model)}${renderTemplateSubstrate(model)}</div><div class="detail-grid cause-grid">${renderCausePatterns(model)}</div></section>`,
+        `<section id="comparative-slices"><h2>Comparative Slices</h2>${renderComparativeSliceGroups(model)}</section>`,
+        `<details class="panel lower-section" id="diagnostics"><summary>Diagnostics</summary>${renderComplianceTable(model)}</details>`,
+        `<details class="panel lower-section" id="methodology-and-limitations"><summary>Methodology And Limitations</summary>${renderMethodologyList(model)}</details>`,
+        `<details class="panel lower-section" id="inventory"><summary>Inventory</summary>${renderInventoryList(model)}</details>`,
+        `<details class="panel lower-section report-metadata"><summary>Report metadata</summary>${renderMetadata(model)}</details>`,
       ];
 
   return [
@@ -152,29 +125,29 @@ export function renderHtmlReport(
     "<head>",
     '<meta charset="utf-8" />',
     '<meta name="viewport" content="width=device-width, initial-scale=1" />',
-    `<title>${escapeHtml(title)}</title>`,
+    `<title>${escapeHtml(model.title)}</title>`,
     '<link rel="icon" href="./favicon.svg" type="image/svg+xml" />',
     '<link rel="icon" href="./favicon.ico" sizes="any" type="image/x-icon" />',
     `<style>${styles}</style>`,
     "</head>",
-    `<body${bodyClassName}>`,
+    `<body${model.isEmptyCorpus ? ' class="empty-report"' : ""}>`,
     "<main>",
     "<header>",
-    `<h1>${escapeHtml(title)}</h1>`,
-    `<p class="lede">${escapeHtml(
-      "A deterministic, transcript-first session triage report for reviewing operator burden, verification habits, and transcript-visible workflow behavior.",
-    )}</p>`,
-    `<p class="context-line">${escapeHtml(renderHeaderContext(summary, metrics))}</p>`,
-    `<div class="scope-banner${scope.isWindowed ? " scope-banner-windowed" : ""}">
-      <p class="scope-banner-title">${escapeHtml(scope.headline)}</p>
-      <p>${escapeHtml(scope.detail)}</p>
-      <p>${escapeHtml(scope.comparability)}</p>
+    `<h1>${escapeHtml(model.title)}</h1>`,
+    `<p class="lede">${escapeHtml(model.lede)}</p>`,
+    `<p class="context-line">${escapeHtml(model.corpusContext)}</p>`,
+    `<div class="scope-banner${model.scope.isWindowed ? " scope-banner-windowed" : ""}">
+      <p class="scope-banner-title">${escapeHtml(model.scope.headline)}</p>
+      <p>${escapeHtml(model.scope.detail)}</p>
+      <p>${escapeHtml(model.scope.comparability)}</p>
     </div>`,
-    isEmptyCorpus ? "" : renderSectionNavigation(summary),
+    renderAppliedFilters(model),
+    renderHeaderNotes(model),
+    model.isEmptyCorpus ? "" : renderSectionNavigation(),
     "</header>",
     ...contentSections,
     `<p class="footer-note">${escapeHtml(
-      "Incident evidence is redacted and truncated for compact reporting. Preview sanitization reduces common sensitive data exposure but is not a guarantee of full anonymization.",
+      "Session previews in summary and session-facts artifacts are redacted and truncated for compact reporting. Public-safe output reduces common sensitive data exposure but is not a guarantee of full anonymization.",
     )}</p>`,
     "</main>",
     "</body>",

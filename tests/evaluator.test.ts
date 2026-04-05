@@ -1,6 +1,6 @@
 /**
- * Purpose: Verify the canonical evaluation pipeline orchestrates discovery, parsing, clustering, and artifact generation consistently.
- * Responsibilities: Cover session selection, incident-count recalculation, and full-vs-summary output policy behavior.
+ * Purpose: Verify the canonical evaluation pipeline orchestrates discovery, parsing, metrics, summary generation, and session-facts emission.
+ * Responsibilities: Cover summary/full output behavior and parse-only normalization at the evaluator boundary.
  * Scope: Main evaluator orchestration contract for supported transcript sources.
  * Usage: Executed by Vitest via `pnpm test`.
  * Invariants/Assumptions: Full and summary-only evaluations share one pipeline and differ only in retained raw artifact payloads.
@@ -13,9 +13,13 @@ import type {
   InventoryRecord,
   MetricsRecord,
   RawTurnRecord,
-  SummaryArtifact,
 } from "../src/schema.js";
 import type { ParsedSession } from "../src/transcript/types.js";
+import {
+  createSessionFacts,
+  createV3Metrics,
+  createV3Summary,
+} from "./support/v3-fixtures.js";
 
 const mockDiscoverArtifacts = vi.fn();
 const mockParseTranscriptFile = vi.fn();
@@ -27,6 +31,7 @@ const mockBuildPresentationArtifacts = vi.fn();
 const mockRenderSummaryReport = vi.fn();
 const mockGetHomeDirectory = vi.fn();
 const mockProbeSessionOrder = vi.fn();
+const mockBuildSessionFacts = vi.fn();
 
 vi.mock("../src/discovery.js", () => ({
   discoverArtifacts: mockDiscoverArtifacts,
@@ -38,6 +43,23 @@ vi.mock("../src/transcript/index.js", () => ({
 
 vi.mock("../src/session-processor.js", () => ({
   processSession: mockProcessSession,
+  createEmptyProcessedSessionAnalysis: () => ({
+    rawLabelCounts: {},
+    deTemplatedLabelCounts: {},
+    template: {
+      artifactScore: 0,
+      textSharePct: 0,
+      hasTemplateContent: false,
+      flags: [],
+      dominantFamilyId: null,
+      dominantFamilyLabel: null,
+    },
+    attribution: {
+      primary: "unknown",
+      confidence: "low",
+      reasons: ["Transcript-visible evidence was insufficient."],
+    },
+  }),
 }));
 
 vi.mock("../src/metrics-aggregation.js", () => ({
@@ -45,7 +67,7 @@ vi.mock("../src/metrics-aggregation.js", () => ({
   buildMetricsRecord: mockBuildMetricsRecord,
 }));
 
-vi.mock("../src/insights.js", () => ({
+vi.mock("../src/summary-core.js", () => ({
   buildSummaryArtifact: mockBuildSummaryArtifact,
 }));
 
@@ -57,12 +79,25 @@ vi.mock("../src/report.js", () => ({
   renderSummaryReport: mockRenderSummaryReport,
 }));
 
+vi.mock("../src/session-facts.js", () => ({
+  buildSessionFacts: mockBuildSessionFacts,
+}));
+
 vi.mock("../src/utils/environment.js", () => ({
   getValidatedHomeDirectory: mockGetHomeDirectory,
 }));
 
 vi.mock("../src/transcript/session-order.js", () => ({
   probeSessionOrder: mockProbeSessionOrder,
+  probeFallsInDateRange: () => ({ matches: true, undated: false }),
+  resolveProbeTimeValue: (probe: {
+    mtimeMs: number;
+    startedAt?: string;
+    earliestTimestamp?: string;
+  }) => {
+    const value = probe.startedAt ?? probe.earliestTimestamp;
+    return value ? Date.parse(value) : probe.mtimeMs;
+  },
 }));
 
 const { evaluateArtifacts, parseArtifacts } = await import(
@@ -85,7 +120,7 @@ function createInventory(): InventoryRecord[] {
 function createRawTurn(sessionId: string, turnIndex = 0): RawTurnRecord {
   return {
     engineVersion: "1.0.0",
-    schemaVersion: "2",
+    schemaVersion: "3",
     sessionId,
     turnId: `${sessionId}:turn:${turnIndex}`,
     turnIndex,
@@ -108,7 +143,7 @@ function createRawTurn(sessionId: string, turnIndex = 0): RawTurnRecord {
 function createIncident(sessionId: string): IncidentRecord {
   return {
     engineVersion: "1.0.0",
-    schemaVersion: "2",
+    schemaVersion: "3",
     incidentId: `${sessionId}:incident:0`,
     sessionId,
     turnIds: [`${sessionId}:turn:0`],
@@ -137,28 +172,36 @@ function createIncident(sessionId: string): IncidentRecord {
 }
 
 function createMetrics(sessionIds: string[]): MetricsRecord {
-  return {
-    engineVersion: "1.0.0",
-    schemaVersion: "2",
-    generatedAt: "2026-03-10T00:00:00.000Z",
+  return createV3Metrics({
     sessionCount: sessionIds.length,
-    corpusScope: {
-      selection: "all_discovered",
-      discoveredSessionCount: sessionIds.length,
-      appliedSessionLimit: null,
-    },
     turnCount: sessionIds.length,
     incidentCount: 0,
-    parseWarningCount: 0,
-    labelCounts: {},
-    complianceSummary: [],
     sessions: sessionIds.map((sessionId) => ({
       sessionId,
       provider: "codex" as const,
+      harness: "codex",
+      modelProvider: null,
+      model: null,
+      startedAt: "2026-04-03T20:00:00.000Z",
+      endedAt: "2026-04-03T20:01:00.000Z",
+      durationMs: 60000,
       turnCount: 1,
       labeledTurnCount: 0,
       incidentCount: 0,
       parseWarningCount: 0,
+      userMessageCount: 1,
+      assistantMessageCount: 1,
+      toolCallCount: 0,
+      writeToolCallCount: 0,
+      verificationToolCallCount: 0,
+      mcpToolCallCount: 0,
+      topTools: [],
+      toolFamilies: [],
+      mcpServers: [],
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      compactionCount: null,
       writeCount: 0,
       verificationCount: 0,
       verificationPassedCount: 0,
@@ -170,50 +213,7 @@ function createMetrics(sessionIds: string[]): MetricsRecord {
       complianceRules: [],
     })),
     inventory: createInventory(),
-  };
-}
-
-function createSummary(): SummaryArtifact {
-  return {
-    engineVersion: "1.0.0",
-    schemaVersion: "2",
-    generatedAt: "2026-03-10T00:00:00.000Z",
-    sessions: 1,
-    turns: 1,
-    incidents: 1,
-    parseWarningCount: 0,
-    labels: [],
-    severities: [],
-    compliance: [],
-    rates: {
-      incidentsPer100Turns: 100,
-      writesPer100Turns: 0,
-      verificationRequestsPer100Turns: 0,
-      interruptionsPer100Turns: 100,
-      reinjectionsPer100Turns: 0,
-      praisePer100Turns: 0,
-    },
-    delivery: {
-      sessionsWithWrites: 0,
-      sessionsEndingVerified: 0,
-      writeSessionVerificationRate: 0,
-    },
-    comparativeSlices: [],
-    topSessions: [],
-    topIncidents: [],
-    executiveSummary: {
-      problem: "No write sessions were observed.",
-      change: "No recent change summary is available.",
-      action: "Start with inventory review.",
-    },
-    operatorMetrics: [],
-    metricGlossary: [],
-    scoreCards: [],
-    highlightCards: [],
-    recognitions: [],
-    endedVerifiedDeliverySpotlights: [],
-    opportunities: [],
-  };
+  });
 }
 
 function createParsedSession(sessionId: string): ParsedSession {
@@ -221,285 +221,130 @@ function createParsedSession(sessionId: string): ParsedSession {
     sessionId,
     provider: "codex",
     path: `/path/${sessionId}.jsonl`,
-    turns: [],
+    turns: [
+      {
+        turnId: `${sessionId}:turn:0`,
+        turnIndex: 0,
+        userMessages: ["user"],
+        assistantMessages: ["assistant"],
+        toolCalls: [],
+        sourceRefs: [
+          {
+            provider: "codex",
+            kind: "session_jsonl",
+            path: `/path/${sessionId}.jsonl`,
+          },
+        ],
+      },
+    ],
+    parseWarningCount: 0,
   };
 }
 
-describe("evaluator", () => {
+describe("evaluateArtifacts", () => {
   beforeEach(() => {
-    vi.resetAllMocks();
     resetConfig();
-    mockGetHomeDirectory.mockReturnValue("/home/user");
-    mockBuildSummaryArtifact.mockReturnValue(createSummary());
-    mockBuildPresentationArtifacts.mockReturnValue({
-      reportHtml: "<html></html>",
-      faviconIco: new Uint8Array([0, 1, 2, 3]),
-      labelChartSvg: "<svg>labels</svg>",
-      complianceChartSvg: "<svg>compliance</svg>",
-      severityChartSvg: "<svg>severity</svg>",
+    mockGetHomeDirectory.mockReturnValue("/home/test");
+    mockDiscoverArtifacts.mockResolvedValue({
+      inventory: createInventory(),
+      sessionFiles: ["/path/session-a.jsonl"],
+      sessionDirectoryExists: true,
     });
-    mockRenderSummaryReport.mockReturnValue("# Report");
-    mockProbeSessionOrder.mockImplementation(async (path: string) => ({
-      path,
-      startedAt: undefined,
-      earliestTimestamp: undefined,
-      mtimeMs: Number(path.match(/(\d+)/)?.[1] ?? 0),
-    }));
-    mockBuildMetricsRecord.mockImplementation(
-      (parts, inventory, corpusScope) => ({
-        engineVersion: "1.0.0",
-        schemaVersion: "2",
-        generatedAt: "2026-03-10T00:00:00.000Z",
-        sessionCount: parts.sessionMetrics.length,
-        corpusScope: corpusScope ?? {
-          selection: "all_discovered",
-          discoveredSessionCount: parts.sessionMetrics.length,
-          appliedSessionLimit: null,
-        },
-        turnCount: parts.turnCount,
-        incidentCount: parts.incidentCount,
-        parseWarningCount: parts.parseWarningCount,
-        labelCounts: parts.labelCounts,
-        complianceSummary: [],
-        sessions: parts.sessionMetrics,
-        inventory,
-      }),
-    );
+    mockProbeSessionOrder.mockResolvedValue({
+      path: "/path/session-a.jsonl",
+      mtimeMs: 1,
+      startedAt: "2026-04-03T20:00:00.000Z",
+      earliestTimestamp: "2026-04-03T20:00:00.000Z",
+    });
+    mockParseTranscriptFile.mockResolvedValue(createParsedSession("session-a"));
+    mockProcessSession.mockResolvedValue({
+      sessionId: "session-a",
+      turns: [createRawTurn("session-a")],
+      incidents: [createIncident("session-a")],
+      metrics: createMetrics(["session-a"]).sessions[0],
+    });
+    mockAggregateMetrics.mockReturnValue(createMetrics(["session-a"]));
+    mockBuildMetricsRecord.mockReturnValue(createMetrics(["session-a"]));
+    mockBuildSummaryArtifact.mockReturnValue(createV3Summary());
+    mockBuildSessionFacts.mockReturnValue(createSessionFacts());
+    mockRenderSummaryReport.mockReturnValue("# report\n");
+    mockBuildPresentationArtifacts.mockReturnValue({
+      reportHtml: "<html>report</html>",
+      faviconIco: new Uint8Array([0]),
+      faviconSvg: "<svg />",
+      sessionsOverTimeChartSvg: "<svg />",
+      providerShareChartSvg: "<svg />",
+      harnessShareChartSvg: "<svg />",
+      toolFamilyShareChartSvg: "<svg />",
+      attributionMixChartSvg: "<svg />",
+    });
+  });
+
+  afterEach(() => {
+    resetConfig();
+    vi.clearAllMocks();
+  });
+
+  it("returns summary-only artifacts with session facts and without raw payloads", async () => {
+    const result = await evaluateArtifacts({
+      source: "codex",
+      home: "/home/test/.codex",
+      outputMode: "summary",
+    });
+
+    expect(result.summary.reviewQueue).toBeDefined();
+    expect(result.sessionFacts).toEqual(createSessionFacts());
+    expect(result.rawTurns).toBeUndefined();
+    expect(result.incidents).toBeUndefined();
+  });
+
+  it("returns full artifacts with raw payloads and session facts", async () => {
+    const result = await evaluateArtifacts({
+      source: "codex",
+      home: "/home/test/.codex",
+      outputMode: "full",
+    });
+
+    expect(result.rawTurns).toHaveLength(1);
+    expect(result.incidents).toHaveLength(1);
+    expect(result.sessionFacts).toEqual(createSessionFacts());
+  });
+});
+
+describe("parseArtifacts", () => {
+  beforeEach(() => {
+    mockDiscoverArtifacts.mockResolvedValue({
+      inventory: createInventory(),
+      sessionFiles: ["/path/session-a.jsonl"],
+      sessionDirectoryExists: true,
+    });
+    mockProbeSessionOrder.mockResolvedValue({
+      path: "/path/session-a.jsonl",
+      mtimeMs: 1,
+      startedAt: "2026-04-03T20:00:00.000Z",
+      earliestTimestamp: "2026-04-03T20:00:00.000Z",
+    });
+    mockParseTranscriptFile.mockResolvedValue(createParsedSession("session-a"));
+    mockProcessSession.mockResolvedValue({
+      sessionId: "session-a",
+      turns: [createRawTurn("session-a")],
+      incidents: [createIncident("session-a")],
+      metrics: createMetrics(["session-a"]).sessions[0],
+    });
   });
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("processes all discovered sessions when no limit is provided", async () => {
-    const sessionFiles = ["/path/1.jsonl", "/path/2.jsonl", "/path/3.jsonl"];
-    const processed = sessionFiles.map((_, index) => ({
-      sessionId: `session-${index + 1}`,
-      turns: [createRawTurn(`session-${index + 1}`)],
-      incidents: [],
-      metrics: createMetrics([`session-${index + 1}`]).sessions[0],
-    }));
-
-    mockDiscoverArtifacts.mockResolvedValue({
-      provider: "codex",
-      homePath: "/home/user/.codex",
-      sessionDirectoryExists: true,
-      sessionFiles,
-      inventory: createInventory(),
-    });
-    mockParseTranscriptFile.mockImplementation(async (path: string) =>
-      createParsedSession(
-        path.split("/").pop()?.replace(".jsonl", "") ?? "session",
-      ),
-    );
-    processed.forEach((session) => {
-      mockProcessSession.mockReturnValueOnce(session);
-    });
-    mockAggregateMetrics.mockReturnValue(
-      createMetrics(["session-1", "session-2", "session-3"]),
-    );
-    const result = await evaluateArtifacts({
-      source: "codex",
-      home: "~/.codex",
-    });
-
-    expect(mockParseTranscriptFile).toHaveBeenCalledTimes(3);
-    expect(result.rawTurns).toHaveLength(3);
-    expect(result.metrics.sessionCount).toBe(3);
-  });
-
-  it("uses the most recent discovered sessions when a session limit is set", async () => {
-    const sessionFiles = [
-      "/path/1.jsonl",
-      "/path/2.jsonl",
-      "/path/3.jsonl",
-      "/path/4.jsonl",
-    ];
-
-    mockDiscoverArtifacts.mockResolvedValue({
-      provider: "codex",
-      homePath: "/home/user/.codex",
-      sessionDirectoryExists: true,
-      sessionFiles,
-      inventory: createInventory(),
-    });
-    mockParseTranscriptFile
-      .mockResolvedValueOnce(createParsedSession("session-3"))
-      .mockResolvedValueOnce(createParsedSession("session-4"));
-    mockProcessSession
-      .mockReturnValueOnce({
-        sessionId: "session-3",
-        turns: [createRawTurn("session-3")],
-        incidents: [],
-        metrics: createMetrics(["session-3"]).sessions[0],
-      })
-      .mockReturnValueOnce({
-        sessionId: "session-4",
-        turns: [createRawTurn("session-4")],
-        incidents: [],
-        metrics: createMetrics(["session-4"]).sessions[0],
-      });
-    mockAggregateMetrics.mockReturnValue(
-      createMetrics(["session-3", "session-4"]),
-    );
-    await evaluateArtifacts({
-      source: "codex",
-      home: "~/.codex",
-      sessionLimit: 2,
-    });
-
-    expect(mockParseTranscriptFile.mock.calls).toEqual([
-      ["/path/3.jsonl", expect.objectContaining({ sourceProvider: "codex" })],
-      ["/path/4.jsonl", expect.objectContaining({ sourceProvider: "codex" })],
-    ]);
-    expect(mockAggregateMetrics).toHaveBeenCalledWith(
-      expect.any(Array),
-      expect.any(Array),
-      {
-        selection: "most_recent_window",
-        discoveredSessionCount: 4,
-        appliedSessionLimit: 2,
-      },
-    );
-  });
-
-  it("uses per-session incidents without reclustering the flattened corpus", async () => {
-    mockDiscoverArtifacts.mockResolvedValue({
-      provider: "codex",
-      homePath: "/home/user/.codex",
-      sessionDirectoryExists: true,
-      sessionFiles: ["/path/1.jsonl"],
-      inventory: createInventory(),
-    });
-    mockParseTranscriptFile.mockResolvedValue(createParsedSession("session-1"));
-    mockProcessSession.mockReturnValue({
-      sessionId: "session-1",
-      turns: [createRawTurn("session-1")],
-      incidents: [createIncident("session-1"), createIncident("session-1")],
-      metrics: createMetrics(["session-1"]).sessions[0],
-    });
-    mockAggregateMetrics.mockReturnValue({
-      ...createMetrics(["session-1"]),
-      incidentCount: 2,
-    });
-
-    const result = await evaluateArtifacts({
-      source: "codex",
-      home: "~/.codex",
-    });
-
-    expect(result.metrics.incidentCount).toBe(2);
-    expect(result.incidents).toHaveLength(2);
-    expect(mockAggregateMetrics).toHaveBeenCalledTimes(1);
-  });
-
-  it("parses artifacts without running scoring or presentation generation", async () => {
-    mockDiscoverArtifacts.mockResolvedValue({
-      provider: "codex",
-      homePath: "/home/user/.codex",
-      sessionDirectoryExists: true,
-      sessionFiles: ["/path/1.jsonl"],
-      inventory: createInventory(),
-    });
-    mockParseTranscriptFile.mockResolvedValue(createParsedSession("session-1"));
-    mockProcessSession.mockReturnValue({
-      sessionId: "session-1",
-      turns: [createRawTurn("session-1")],
-      incidents: [],
-      metrics: createMetrics(["session-1"]).sessions[0],
-    });
-
+  it("parses raw turns without generating evaluation artifacts", async () => {
     const result = await parseArtifacts({
       source: "codex",
-      home: "~/.codex",
+      home: "/home/test/.codex",
     });
 
     expect(result.sessionCount).toBe(1);
     expect(result.rawTurns).toHaveLength(1);
-    expect(mockAggregateMetrics).not.toHaveBeenCalled();
-    expect(mockBuildSummaryArtifact).not.toHaveBeenCalled();
-    expect(mockBuildPresentationArtifacts).not.toHaveBeenCalled();
-    expect(mockRenderSummaryReport).not.toHaveBeenCalled();
-  });
-
-  it("parseArtifacts uses the most recent discovered sessions when a session limit is set", async () => {
-    mockDiscoverArtifacts.mockResolvedValue({
-      provider: "codex",
-      homePath: "/home/user/.codex",
-      sessionDirectoryExists: true,
-      sessionFiles: ["/path/1.jsonl", "/path/2.jsonl", "/path/3.jsonl"],
-      inventory: createInventory(),
-    });
-    mockParseTranscriptFile
-      .mockResolvedValueOnce(createParsedSession("session-2"))
-      .mockResolvedValueOnce(createParsedSession("session-3"));
-    mockProcessSession
-      .mockReturnValueOnce({
-        sessionId: "session-2",
-        turns: [createRawTurn("session-2")],
-        incidents: [],
-        metrics: createMetrics(["session-2"]).sessions[0],
-      })
-      .mockReturnValueOnce({
-        sessionId: "session-3",
-        turns: [createRawTurn("session-3")],
-        incidents: [],
-        metrics: createMetrics(["session-3"]).sessions[0],
-      });
-
-    const result = await parseArtifacts({
-      source: "codex",
-      home: "~/.codex",
-      sessionLimit: 2,
-    });
-
-    expect(result.sessionCount).toBe(2);
-    expect(mockParseTranscriptFile.mock.calls).toEqual([
-      ["/path/2.jsonl", expect.objectContaining({ sourceProvider: "codex" })],
-      ["/path/3.jsonl", expect.objectContaining({ sourceProvider: "codex" })],
-    ]);
-  });
-
-  it("uses the same canonical pipeline in summary mode but omits raw artifacts", async () => {
-    mockDiscoverArtifacts.mockResolvedValue({
-      provider: "codex",
-      homePath: "/home/user/.codex",
-      sessionDirectoryExists: true,
-      sessionFiles: ["/path/1.jsonl"],
-      inventory: createInventory(),
-    });
-    mockParseTranscriptFile.mockResolvedValue(createParsedSession("session-1"));
-    mockProcessSession.mockReturnValue({
-      sessionId: "session-1",
-      turns: [createRawTurn("session-1")],
-      incidents: [],
-      metrics: createMetrics(["session-1"]).sessions[0],
-    });
-
-    const result = await evaluateArtifacts({
-      source: "codex",
-      home: "~/.codex",
-      outputMode: "summary",
-    });
-
-    expect(result.rawTurns).toBeUndefined();
-    expect(result.incidents).toBeUndefined();
-    expect(result.summary).toEqual(createSummary());
-    expect(result.report).toBe("# Report");
-    expect(mockAggregateMetrics).not.toHaveBeenCalled();
-    expect(mockBuildMetricsRecord).toHaveBeenCalled();
-    expect(mockBuildMetricsRecord).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.any(Array),
-      {
-        selection: "all_discovered",
-        discoveredSessionCount: 1,
-        appliedSessionLimit: null,
-      },
-    );
-    expect(mockBuildPresentationArtifacts).toHaveBeenCalledWith(
-      result.metrics,
-      result.summary,
-    );
+    expect(result.rawTurns[0]?.sessionId).toBe("session-a");
   });
 });

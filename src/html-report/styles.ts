@@ -1,7 +1,7 @@
 /**
- * Purpose: CSS generation for HTML reports.
- * Entrypoint: Used by render.ts to include styles in HTML output.
- * Notes: Reads external CSS file for maintainability.
+ * Purpose: Load bundled CSS for HTML reports.
+ * Entrypoint: Used by render.ts to inline styles in generated HTML.
+ * Notes: Fails loudly when the packaged CSS asset is missing.
  */
 
 import { readFileSync } from "node:fs";
@@ -12,15 +12,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const STYLES_PATH = join(__dirname, "..", "styles", "report.css");
 
 /**
- * Loads CSS styles from external file.
- * Falls back to inline styles if file cannot be read.
+ * Loads CSS styles from the packaged runtime asset.
+ * Throws a descriptive error when the asset is missing.
  */
 export function loadStyles(): string {
   try {
-    return readFileSync(STYLES_PATH, "utf8");
-  } catch {
-    // Fallback: return empty string - styles will be loaded from external file
-    return "";
+    const css = readFileSync(STYLES_PATH, "utf8");
+    if (css.trim().length === 0) {
+      throw new Error("Bundled report CSS is empty.");
+    }
+    return css;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Could not load bundled report CSS at ${STYLES_PATH}. Rebuild the project so dist/styles/report.css is present. ${detail}`,
+    );
   }
 }
 

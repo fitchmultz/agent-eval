@@ -1,6 +1,6 @@
 /**
- * Purpose: Verify parse and evaluation artifacts are written consistently from the canonical result shape.
- * Responsibilities: Cover parse-only emission, full bundle emission, and summary-only omission of raw data files.
+ * Purpose: Verify parse and evaluation artifacts are written consistently from the canonical v3 result shape.
+ * Responsibilities: Cover parse-only emission, full bundle emission, session-facts emission, and strict schema rejection at write time.
  * Scope: Filesystem contract for artifact serialization.
  * Usage: Executed by Vitest via `pnpm test`.
  * Invariants/Assumptions: Synthetic artifact payloads are enough because this module only writes already-computed outputs.
@@ -12,178 +12,62 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { EvaluationArtifacts } from "../src/artifact-writer.js";
 import { writeArtifacts, writeParseArtifacts } from "../src/artifact-writer.js";
-import type {
-  IncidentRecord,
-  MetricsRecord,
-  RawTurnRecord,
-  SummaryArtifact,
-} from "../src/schema.js";
-
-function createRawTurns(): RawTurnRecord[] {
-  return [
-    {
-      engineVersion: "1.0.0",
-      schemaVersion: "2",
-      sessionId: "session-1",
-      turnId: "turn-1",
-      turnIndex: 0,
-      userMessageCount: 1,
-      assistantMessageCount: 1,
-      userMessagePreviews: ["test"],
-      assistantMessagePreviews: ["done"],
-      toolCalls: [],
-      labels: [],
-      sourceRefs: [
-        {
-          provider: "codex",
-          kind: "session_jsonl",
-          path: "/test.jsonl",
-          line: 1,
-        },
-      ],
-    },
-  ];
-}
-
-function createIncidents(): IncidentRecord[] {
-  return [
-    {
-      engineVersion: "1.0.0",
-      schemaVersion: "2",
-      incidentId: "session-1:incident:0",
-      sessionId: "session-1",
-      turnIds: ["turn-1"],
-      turnIndices: [0],
-      labels: [
-        {
-          label: "interrupt",
-          family: "cue",
-          severity: "medium",
-          confidence: "high",
-          rationale: "test",
-        },
-      ],
-      summary: "Test incident",
-      evidencePreviews: ["test"],
-      severity: "medium",
-      confidence: "high",
-      sourceRefs: [
-        {
-          provider: "codex",
-          kind: "session_jsonl",
-          path: "/test.jsonl",
-          line: 1,
-        },
-      ],
-    },
-  ];
-}
-
-function createMetrics(): MetricsRecord {
-  return {
-    engineVersion: "1.0.0",
-    schemaVersion: "2",
-    generatedAt: "2026-03-10T00:00:00.000Z",
-    sessionCount: 1,
-    corpusScope: {
-      selection: "all_discovered",
-      discoveredSessionCount: 1,
-      appliedSessionLimit: null,
-    },
-    turnCount: 1,
-    incidentCount: 1,
-    parseWarningCount: 0,
-    labelCounts: { interrupt: 1 },
-    complianceSummary: [],
-    sessions: [
-      {
-        sessionId: "session-1",
-        provider: "codex",
-        turnCount: 1,
-        labeledTurnCount: 1,
-        incidentCount: 1,
-        parseWarningCount: 0,
-        writeCount: 0,
-        verificationCount: 0,
-        verificationPassedCount: 0,
-        verificationFailedCount: 0,
-        postWriteVerificationAttempted: false,
-        postWriteVerificationPassed: false,
-        endedVerified: false,
-        complianceScore: 100,
-        complianceRules: [],
-      },
-    ],
-    inventory: [
-      {
-        provider: "codex",
-        kind: "session_jsonl",
-        path: "/test.jsonl",
-        discovered: true,
-        required: true,
-        optional: false,
-      },
-    ],
-  };
-}
-
-function createSummary(): SummaryArtifact {
-  return {
-    engineVersion: "1.0.0",
-    schemaVersion: "2",
-    generatedAt: "2026-03-10T00:00:00.000Z",
-    sessions: 1,
-    turns: 1,
-    incidents: 1,
-    parseWarningCount: 0,
-    labels: [{ label: "interrupt", count: 1 }],
-    severities: [{ severity: "medium", count: 1 }],
-    compliance: [],
-    rates: {
-      incidentsPer100Turns: 100,
-      writesPer100Turns: 0,
-      verificationRequestsPer100Turns: 0,
-      interruptionsPer100Turns: 100,
-      reinjectionsPer100Turns: 0,
-      praisePer100Turns: 0,
-    },
-    delivery: {
-      sessionsWithWrites: 0,
-      sessionsEndingVerified: 0,
-      writeSessionVerificationRate: 0,
-    },
-    comparativeSlices: [],
-    topSessions: [],
-    topIncidents: [],
-    executiveSummary: {
-      problem: "No write sessions were observed.",
-      change: "No recent change summary is available.",
-      action: "Start with inventory review.",
-    },
-    operatorMetrics: [],
-    metricGlossary: [],
-    scoreCards: [],
-    highlightCards: [],
-    recognitions: [],
-    endedVerifiedDeliverySpotlights: [],
-    opportunities: [],
-  };
-}
+import {
+  createIncidents,
+  createRawTurns,
+  createSessionFacts,
+  createV3Metrics,
+  createV3Summary,
+} from "./support/v3-fixtures.js";
 
 function createEvaluationArtifacts(
   overrides: Partial<EvaluationArtifacts> = {},
 ): EvaluationArtifacts {
   return {
-    metrics: createMetrics(),
-    summary: createSummary(),
+    metrics: createV3Metrics(),
+    summary: createV3Summary(),
+    sessionFacts: createSessionFacts(),
+    releaseManifest: {
+      engineVersion: "0.1.0",
+      schemaVersion: "3",
+      generatedAt: "2026-04-04T00:00:00.000Z",
+      git: {
+        commit: "abc123def456",
+        branch: "main",
+        dirty: true,
+      },
+      configFingerprint: "deadbeefcafebabe",
+      evaluation: {
+        source: "codex",
+        outputMode: "full",
+        sessionLimit: 10,
+        startDate: null,
+        endDate: null,
+        timeBucket: "week",
+        parseTimeoutMs: 30000,
+      },
+      corpusScope: createV3Metrics().corpusScope,
+      appliedFilters: createV3Metrics().appliedFilters,
+      counts: {
+        sessions: 2,
+        turns: 4,
+        incidents: 1,
+        sessionFacts: 2,
+        exemplarSessions: 1,
+        reviewQueueSessions: 1,
+      },
+      artifactFiles: ["metrics.json", "summary.json", "session-facts.jsonl"],
+    },
     report: "# Test Report\n",
     presentation: {
       reportHtml: "<html><body>report</body></html>",
       faviconIco: new Uint8Array([0, 1, 2, 3]),
       faviconSvg: "<svg>favicon</svg>",
-      labelChartSvg: "<svg>labels</svg>",
-      complianceChartSvg: "<svg>compliance</svg>",
-      severityChartSvg: "<svg>severity</svg>",
+      sessionsOverTimeChartSvg: "<svg>time</svg>",
+      providerShareChartSvg: "<svg>provider</svg>",
+      harnessShareChartSvg: "<svg>harness</svg>",
+      toolFamilyShareChartSvg: "<svg>tools</svg>",
+      attributionMixChartSvg: "<svg>attribution</svg>",
     },
     rawTurns: createRawTurns(),
     incidents: createIncidents(),
@@ -212,9 +96,7 @@ describe("artifact-writer", () => {
       tempDir,
     );
 
-    const rawTurnsPath = join(tempDir, "raw-turns.jsonl");
-    expect(existsSync(rawTurnsPath)).toBe(true);
-    expect(readFileSync(rawTurnsPath, "utf-8")).toContain(
+    expect(readFileSync(join(tempDir, "raw-turns.jsonl"), "utf-8")).toContain(
       '"sessionId":"session-1"',
     );
     expect(
@@ -224,103 +106,73 @@ describe("artifact-writer", () => {
     expect(existsSync(join(tempDir, "summary.json"))).toBe(false);
   });
 
-  it("writes the full canonical evaluation bundle", async () => {
+  it("writes the full canonical evaluation bundle including session facts", async () => {
     await writeArtifacts(createEvaluationArtifacts(), tempDir);
 
+    expect(readFileSync(join(tempDir, "metrics.json"), "utf-8")).toContain(
+      '"schemaVersion": "3"',
+    );
+    expect(readFileSync(join(tempDir, "summary.json"), "utf-8")).toContain(
+      '"reviewQueue"',
+    );
+    expect(
+      readFileSync(join(tempDir, "session-facts.jsonl"), "utf-8"),
+    ).toContain('"sessionId":"session-1"');
+    expect(
+      readFileSync(join(tempDir, "release-manifest.json"), "utf-8"),
+    ).toContain('"configFingerprint": "deadbeefcafebabe"');
     expect(readFileSync(join(tempDir, "raw-turns.jsonl"), "utf-8")).toContain(
-      '"sessionId":"session-1"',
+      '"turnId":"turn-1"',
     );
     expect(readFileSync(join(tempDir, "incidents.jsonl"), "utf-8")).toContain(
-      "Test incident",
+      '"incidentId":"incident-1"',
     );
-    expect(
-      JSON.parse(readFileSync(join(tempDir, "metrics.json"), "utf-8"))
-        .sessionCount,
-    ).toBe(1);
-    expect(
-      JSON.parse(readFileSync(join(tempDir, "summary.json"), "utf-8"))
-        .incidents,
-    ).toBe(1);
     expect(readFileSync(join(tempDir, "report.md"), "utf-8")).toContain(
       "# Test Report",
     );
     expect(readFileSync(join(tempDir, "report.html"), "utf-8")).toContain(
       "<html>",
     );
-    expect(existsSync(join(tempDir, "favicon.ico"))).toBe(true);
-    expect(readFileSync(join(tempDir, "favicon.svg"), "utf-8")).toContain(
-      "<svg>",
-    );
-    expect(readFileSync(join(tempDir, "label-counts.svg"), "utf-8")).toContain(
-      "<svg>",
-    );
-    expect(
-      readFileSync(join(tempDir, "compliance-summary.svg"), "utf-8"),
-    ).toContain("<svg>");
-    expect(
-      readFileSync(join(tempDir, "severity-breakdown.svg"), "utf-8"),
-    ).toContain("<svg>");
+    expect(existsSync(join(tempDir, "sessions-over-time.svg"))).toBe(true);
+    expect(existsSync(join(tempDir, "provider-share.svg"))).toBe(true);
+    expect(existsSync(join(tempDir, "harness-share.svg"))).toBe(true);
+    expect(existsSync(join(tempDir, "tool-family-share.svg"))).toBe(true);
+    expect(existsSync(join(tempDir, "attribution-mix.svg"))).toBe(true);
   });
 
-  it("rejects malformed summary artifacts before writing", async () => {
-    const invalid = createEvaluationArtifacts({
-      summary: {
-        ...createSummary(),
-        topSessions: [
-          {
-            sessionId: "session-1",
-            sessionShortId: "session-1",
-            sessionDisplayLabel: "Broken summary",
-            sessionTimestampLabel: "2026-03-06 19:00Z",
-            sessionProjectLabel: "agent-eval",
-            archetype: "unverified_delivery",
-            archetypeLabel: "Unverified Ending Delivery",
-            frictionScore: 8,
-            complianceScore: 80,
-            incidentCount: 1,
-            labeledTurnCount: 1,
-            writeCount: 2,
-            endedVerified: false,
-            verificationPassedCount: 0,
-            dominantLabels: ["verification_request"],
-            whySelected: ["Ended without verification."],
-            failedRules: ["Verification after code changes"],
-            evidencePreviews: ["Please verify the patch."],
-            titleSource: "user",
-            titleConfidence: "strong",
-            evidenceSource: "user",
-            evidenceConfidence: "strong",
-            sourceRefs: [
-              {
-                provider: "codex",
-                kind: "session_jsonl",
-                path: "/test.jsonl",
-              },
-            ],
-            trustFlags: [],
-            note: "Missing evidenceIssues should fail schema validation.",
-          },
-        ],
-      } as unknown as SummaryArtifact,
+  it("writes summary-only compatible bundles without raw turns or incidents", async () => {
+    const result = createEvaluationArtifacts({
+      rawTurns: undefined,
+      incidents: undefined,
     });
 
-    await expect(writeArtifacts(invalid, tempDir)).rejects.toThrow();
-  });
-
-  it("omits raw-turn and incident files in summary-only bundles", async () => {
-    await writeArtifacts(
-      createEvaluationArtifacts({
-        rawTurns: undefined,
-        incidents: undefined,
-      }),
-      tempDir,
-    );
+    await writeArtifacts(result, tempDir);
 
     expect(existsSync(join(tempDir, "raw-turns.jsonl"))).toBe(false);
     expect(existsSync(join(tempDir, "incidents.jsonl"))).toBe(false);
-    expect(existsSync(join(tempDir, "summary.json"))).toBe(true);
-    expect(readFileSync(join(tempDir, "report.md"), "utf-8")).toContain(
-      "# Test Report",
-    );
+    expect(existsSync(join(tempDir, "session-facts.jsonl"))).toBe(true);
+    expect(existsSync(join(tempDir, "release-manifest.json"))).toBe(true);
+  });
+
+  it("rejects stale v2-style summary keys at write time", async () => {
+    const result = createEvaluationArtifacts({
+      summary: {
+        ...createV3Summary(),
+        topSessions: [],
+      } as unknown as EvaluationArtifacts["summary"],
+    });
+
+    await expect(writeArtifacts(result, tempDir)).rejects.toThrow();
+  });
+
+  it("rejects invalid release-manifest payloads at write time", async () => {
+    const result = createEvaluationArtifacts({
+      releaseManifest: {
+        ...createEvaluationArtifacts().releaseManifest,
+        configFingerprint: "short",
+      } as unknown as EvaluationArtifacts["releaseManifest"],
+    });
+
+    await expect(writeArtifacts(result, tempDir)).rejects.toThrow();
   });
 });

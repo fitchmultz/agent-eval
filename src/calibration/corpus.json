@@ -11,6 +11,11 @@
       "postWriteVerificationAttempted": true,
       "postWriteVerificationPassed": true,
       "endedVerified": true
+    },
+    "expectedAttribution": "unknown",
+    "expectedSurfacedIn": {
+      "exemplar": true,
+      "reviewQueue": false
     }
   },
   {
@@ -23,6 +28,11 @@
       "postWriteVerificationAttempted": false,
       "postWriteVerificationPassed": false,
       "endedVerified": false
+    },
+    "expectedAttribution": "agent_behavior",
+    "expectedSurfacedIn": {
+      "exemplar": false,
+      "reviewQueue": true
     }
   },
   {
@@ -91,10 +101,7 @@
     "expectedIncidents": [
       {
         "turnIndices": [0, 1],
-        "labels": [
-          "regression_report",
-          "stalled_or_guessing"
-        ]
+        "labels": ["regression_report", "stalled_or_guessing"]
       }
     ],
     "expectedTerminalVerification": {
@@ -135,9 +142,7 @@
     "id": "codex-unknown-post-write",
     "provider": "codex",
     "fixture": "codex-unknown-post-write.jsonl",
-    "expectedLabelInstances": [
-      { "turnIndex": 0, "label": "verification_request" }
-    ],
+    "expectedLabelInstances": [],
     "expectedIncidents": [],
     "expectedTerminalVerification": {
       "postWriteVerificationAttempted": true,
@@ -157,24 +162,9 @@
       { "turnIndex": 4, "label": "regression_report" }
     ],
     "expectedIncidents": [
-      {
-        "turnIndices": [0],
-        "labels": [
-          "context_drift"
-        ]
-      },
-      {
-        "turnIndices": [1],
-        "labels": [
-          "stalled_or_guessing"
-        ]
-      },
-      {
-        "turnIndices": [4],
-        "labels": [
-          "regression_report"
-        ]
-      }
+      { "turnIndices": [0], "labels": ["context_drift"] },
+      { "turnIndices": [1], "labels": ["stalled_or_guessing"] },
+      { "turnIndices": [4], "labels": ["regression_report"] }
     ],
     "expectedTerminalVerification": {
       "postWriteVerificationAttempted": false,
@@ -209,6 +199,86 @@
       "postWriteVerificationAttempted": true,
       "postWriteVerificationPassed": true,
       "endedVerified": true
+    },
+    "expectedAttribution": "unknown",
+    "expectedSurfacedIn": {
+      "exemplar": true,
+      "reviewQueue": false
+    }
+  },
+  {
+    "id": "pi-ended-verified",
+    "provider": "pi",
+    "fixture": "pi-ended-verified.jsonl",
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "verification_request" }
+    ],
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": true,
+      "postWriteVerificationPassed": true,
+      "endedVerified": true
+    },
+    "expectedAttribution": "unknown",
+    "expectedSurfacedIn": {
+      "exemplar": true,
+      "reviewQueue": false
+    }
+  },
+  {
+    "id": "pi-review-unverified",
+    "provider": "pi",
+    "fixture": "pi-review-unverified.jsonl",
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "verification_request" }
+    ],
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": false,
+      "postWriteVerificationPassed": false,
+      "endedVerified": false
+    },
+    "expectedAttribution": "agent_behavior",
+    "expectedSurfacedIn": {
+      "exemplar": false,
+      "reviewQueue": true
+    }
+  },
+  {
+    "id": "codex-user-scope",
+    "provider": "codex",
+    "fixture": "codex-user-scope.jsonl",
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "interrupt" },
+      { "turnIndex": 0, "label": "context_reinjection" }
+    ],
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": false,
+      "postWriteVerificationPassed": false,
+      "endedVerified": false
+    },
+    "expectedAttribution": "user_scope"
+  },
+  {
+    "id": "claude-mixed-attribution",
+    "provider": "claude",
+    "fixture": "claude-mixed-attribution.jsonl",
+    "expectedLabelInstances": [
+      { "turnIndex": 0, "label": "interrupt" },
+      { "turnIndex": 0, "label": "context_reinjection" },
+      { "turnIndex": 0, "label": "verification_request" }
+    ],
+    "expectedIncidents": [],
+    "expectedTerminalVerification": {
+      "postWriteVerificationAttempted": false,
+      "postWriteVerificationPassed": false,
+      "endedVerified": false
+    },
+    "expectedAttribution": "mixed",
+    "expectedSurfacedIn": {
+      "exemplar": false,
+      "reviewQueue": true
     }
   }
 ]

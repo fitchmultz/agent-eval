@@ -141,14 +141,14 @@ export const incidentLabelNames = [
  * }
  * ```
  */
-export function labelTurn(turn: ParsedTurn): LabelRecord[] {
-  const text = turn.userMessages.join("\n").trim();
-  if (text.length === 0) {
+export function labelText(text: string): LabelRecord[] {
+  const normalized = text.trim();
+  if (normalized.length === 0) {
     return [];
   }
 
   return labelRules
-    .filter((rule) => rule.test(text))
+    .filter((rule) => rule.test(normalized))
     .map((rule) => ({
       label: rule.label,
       family: rule.family,
@@ -156,6 +156,10 @@ export function labelTurn(turn: ParsedTurn): LabelRecord[] {
       confidence: rule.confidence,
       rationale: rule.rationale,
     }));
+}
+
+export function labelTurn(turn: ParsedTurn): LabelRecord[] {
+  return labelText(turn.userMessages.join("\n"));
 }
 
 /**

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Deterministic transcript analytics for developer AI agents, with operator-first static reports.",
+  "description": "Deterministic, static, transcript-first agent usage evaluation with public-safe artifacts.",
   "type": "module",
   "packageManager": "pnpm@10.30.3",
   "repository": {
@@ -23,15 +23,16 @@
     "transcripts"
   ],
   "engines": {
-    "node": ">=25.8.0"
+    "node": ">=22.16.0"
   },
   "bin": {
     "agent-eval": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-runtime-assets.mjs",
     "benchmark": "tsx src/cli.ts benchmark --output-dir artifacts/benchmark",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark && pnpm build && pnpm smoke:dist",
+    "check:release": "node scripts/check-clean-worktree.mjs && node scripts/verify-release-manifests.mjs artifacts/final-qa-codex artifacts/final-qa-claude artifacts/final-qa-pi && pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark artifacts/final-qa-codex artifacts/final-qa-claude artifacts/final-qa-pi && pnpm build && pnpm smoke:dist",
     "dev": "tsx src/cli.ts",
     "format": "biome check --write .",
     "inspect": "tsx src/cli.ts inspect",
@@ -39,6 +40,8 @@
     "parse": "tsx src/cli.ts parse",
     "eval": "tsx src/cli.ts eval",
     "report": "tsx src/cli.ts report",
+    "scan:artifacts": "node scripts/public-surface-scan.mjs",
+    "smoke:dist": "node scripts/dist-smoke.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

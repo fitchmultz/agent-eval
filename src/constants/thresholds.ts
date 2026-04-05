@@ -27,10 +27,10 @@ export const PREVIEWS = {
   MAX_INCIDENT_EVIDENCE: 3,
   /** Maximum number of top incidents to include in summaries */
   MAX_TOP_INCIDENTS: 8,
-  /** Maximum number of victory lap sessions to highlight */
-  MAX_VICTORY_LAPS: 6,
-  /** Maximum number of top sessions to include in summaries */
-  MAX_TOP_SESSIONS: 8,
+  /** Maximum number of exemplar sessions to include in summaries */
+  MAX_EXEMPLAR_SESSIONS: 6,
+  /** Maximum number of review-queue sessions to include in summaries */
+  MAX_REVIEW_QUEUE_SESSIONS: 8,
 } as const;
 
 /** Incident-only label weights for session friction calculation */

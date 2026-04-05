@@ -30,8 +30,10 @@ interface PiEventRecord {
   cwd?: string;
   id?: string;
   message?: Record<string, unknown>;
+  modelId?: string;
   parentId?: string | null;
   parentSession?: string;
+  provider?: string;
   timestamp?: string;
   type?: string;
 }
@@ -45,7 +47,11 @@ interface PiIndexedEventRecord {
 interface PiParseState {
   sessionId: string;
   startedAt?: string;
+  endedAt?: string;
   cwd?: string;
+  harness: string;
+  modelProvider?: string;
+  model?: string;
   turns: ParsedTurn[];
   currentTurn: ParsedTurn;
   nextTurnIndex: number;
@@ -72,6 +78,7 @@ function createInitialState(path: string): PiParseState {
       ?.replace(/\.jsonl$/, "") ?? "unknown";
   return {
     sessionId: filename,
+    harness: "pi",
     turns: [],
     currentTurn: createTurn(0),
     nextTurnIndex: 0,
@@ -99,15 +106,19 @@ function parsePiEventLine(
     const message = asRecord(getValue(parsedUnknown, "message"));
     const rawParentId = getValue(parsedUnknown, "parentId");
     const parentId = rawParentId === null ? null : asString(rawParentId);
+    const modelId = asString(getValue(parsedUnknown, "modelId"));
     const parentSession = asString(getValue(parsedUnknown, "parentSession"));
+    const provider = asString(getValue(parsedUnknown, "provider"));
     const timestamp = asString(getValue(parsedUnknown, "timestamp"));
     const type = asString(getValue(parsedUnknown, "type"));
 
     if (cwd) eventRecord.cwd = cwd;
     if (id) eventRecord.id = id;
     if (message) eventRecord.message = message;
+    if (modelId) eventRecord.modelId = modelId;
     if (parentId !== undefined) eventRecord.parentId = parentId;
     if (parentSession) eventRecord.parentSession = parentSession;
+    if (provider) eventRecord.provider = provider;
     if (timestamp) eventRecord.timestamp = timestamp;
     if (type) eventRecord.type = type;
 
@@ -232,7 +243,6 @@ function parsePiAssistantContent(
     }
 
     if (itemType === "thinking") {
-      appendMessageText(parts.assistantMessages, getValue(record, "thinking"));
       continue;
     }
 
@@ -375,11 +385,31 @@ function appendToolResult(
   }
 }
 
+function applyPiMetadataRecord(
+  state: PiParseState,
+  record: PiEventRecord,
+): void {
+  if (record.timestamp) {
+    state.endedAt = record.timestamp;
+  }
+
+  if (record.type === "model_change") {
+    if (record.provider) {
+      state.modelProvider = record.provider;
+    }
+    if (record.modelId) {
+      state.model = record.modelId;
+    }
+  }
+}
+
 function applyPiRecord(
   state: PiParseState,
   record: PiEventRecord,
   sourceRef: SourceRef,
 ): void {
+  applyPiMetadataRecord(state, record);
+
   if (record.type !== "message" || !record.message) {
     return;
   }
@@ -540,8 +570,12 @@ export async function parsePiTranscriptFile(
     turns: state.turns,
     scoringEvents: state.scoringEvents,
     parseWarningCount,
+    harness: state.harness,
     ...(parentSessionId ? { parentSessionId } : {}),
     ...(state.startedAt ? { startedAt: state.startedAt } : {}),
+    ...(state.endedAt ? { endedAt: state.endedAt } : {}),
     ...(state.cwd ? { cwd: state.cwd } : {}),
+    ...(state.modelProvider ? { modelProvider: state.modelProvider } : {}),
+    ...(state.model ? { model: state.model } : {}),
   };
 }

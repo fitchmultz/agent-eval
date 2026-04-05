@@ -10,6 +10,7 @@ import type {
   SourceRef as SchemaSourceRef,
   SourceProvider,
 } from "../schema.js";
+import type { ToolFamily } from "../tool-normalization.js";
 
 // Re-export for convenience
 export type SourceRef = SchemaSourceRef;
@@ -36,6 +37,11 @@ export interface ParsedToolCall {
   status: "completed" | "errored" | "unknown";
   timestamp?: string | undefined;
   scoringEventIndex?: number | undefined;
+  normalizedToolName?: string | undefined;
+  toolFamily?: ToolFamily | undefined;
+  isMcp?: boolean | undefined;
+  mcpServer?: string | undefined;
+  mcpToolName?: string | undefined;
 }
 
 export interface ParsedTurn {
@@ -55,7 +61,15 @@ export interface ParsedSession {
   parentSessionId?: string;
   path: string;
   startedAt?: string;
+  endedAt?: string;
   cwd?: string;
+  harness?: string;
+  modelProvider?: string;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  compactionCount?: number;
   turns: ParsedTurn[];
   scoringEvents?: ScoringEvent[] | undefined;
   parseWarningCount?: number | undefined;
@@ -90,8 +104,17 @@ export interface ParseOptions {
 export interface ParserContext {
   sessionId: string;
   parentSessionId?: string;
+  sessionMetaSeen?: boolean;
   sessionStartedAt?: string;
+  sessionEndedAt?: string;
   sessionCwd?: string;
+  sessionHarness?: string;
+  sessionModelProvider?: string;
+  sessionModel?: string;
+  sessionInputTokens?: number;
+  sessionOutputTokens?: number;
+  sessionTotalTokens?: number;
+  sessionCompactionCount?: number;
   turns: ParsedTurn[];
   currentTurn: ParsedTurn;
   nextTurnIndex: number;

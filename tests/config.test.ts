@@ -32,8 +32,8 @@ describe("config", () => {
       expect(config.previews.maxMessageItems).toBe(2);
       expect(config.previews.maxIncidentEvidence).toBe(3);
       expect(config.previews.maxTopIncidents).toBe(8);
-      expect(config.previews.maxVictoryLaps).toBe(6);
-      expect(config.previews.maxTopSessions).toBe(8);
+      expect(config.previews.maxExemplarSessions).toBe(6);
+      expect(config.previews.maxReviewQueueSessions).toBe(8);
       expect(config.scoring.frictionThreshold).toBe(6);
     });
 

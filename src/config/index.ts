@@ -30,8 +30,10 @@ import {
 import { validateConfig } from "./validation.js";
 
 export {
+  ENV_PREFIX,
   ENV_VARS,
   getEnvNumber,
+  getEnvVarName,
 } from "./env.js";
 export {
   type DeepPartial,
@@ -68,10 +70,10 @@ export interface EvaluatorConfig {
     maxIncidentEvidence: number;
     /** Maximum number of top incidents to include in summaries */
     maxTopIncidents: number;
-    /** Maximum number of victory lap sessions to highlight */
-    maxVictoryLaps: number;
-    /** Maximum number of top sessions to include in summaries */
-    maxTopSessions: number;
+    /** Maximum number of exemplar sessions to include in summaries */
+    maxExemplarSessions: number;
+    /** Maximum number of review-queue sessions to include in summaries */
+    maxReviewQueueSessions: number;
   };
   /** Scoring and weight settings for friction calculation */
   scoring: {
@@ -79,11 +81,6 @@ export interface EvaluatorConfig {
     incidentLabelWeights: Record<(typeof incidentLabelNames)[number], number>;
     /** Threshold above which friction score is considered significant */
     frictionThreshold: number;
-  };
-  /** Report rendering preferences */
-  reporting: {
-    /** Output skin for report rendering */
-    skin: "operator" | "showcase";
   };
 }
 
@@ -104,15 +101,12 @@ const DEFAULT_CONFIG: EvaluatorConfig = {
     maxMessageItems: PREVIEWS.MAX_MESSAGE_ITEMS,
     maxIncidentEvidence: PREVIEWS.MAX_INCIDENT_EVIDENCE,
     maxTopIncidents: PREVIEWS.MAX_TOP_INCIDENTS,
-    maxVictoryLaps: PREVIEWS.MAX_VICTORY_LAPS,
-    maxTopSessions: PREVIEWS.MAX_TOP_SESSIONS,
+    maxExemplarSessions: PREVIEWS.MAX_EXEMPLAR_SESSIONS,
+    maxReviewQueueSessions: PREVIEWS.MAX_REVIEW_QUEUE_SESSIONS,
   },
   scoring: {
     incidentLabelWeights: { ...INCIDENT_FRICTION_WEIGHTS },
     frictionThreshold: SCORING.FRICTION_THRESHOLD,
-  },
-  reporting: {
-    skin: "operator",
   },
 };
 
@@ -142,7 +136,6 @@ export function setConfig(
       >;
       frictionThreshold: number;
     }>;
-    reporting: Partial<EvaluatorConfig["reporting"]>;
   }>,
 ): void {
   currentConfig = {
@@ -159,7 +152,6 @@ export function setConfig(
         ...config.scoring?.incidentLabelWeights,
       },
     },
-    reporting: { ...currentConfig.reporting, ...config.reporting },
   };
 }
 

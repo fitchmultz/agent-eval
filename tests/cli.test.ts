@@ -137,13 +137,19 @@ describe("CLI", () => {
     await expect(access(join(outputDir, "report.md"))).rejects.toBeDefined();
     await expect(access(join(outputDir, "report.html"))).rejects.toBeDefined();
     await expect(
-      access(join(outputDir, "label-counts.svg")),
+      access(join(outputDir, "sessions-over-time.svg")),
     ).rejects.toBeDefined();
     await expect(
-      access(join(outputDir, "compliance-summary.svg")),
+      access(join(outputDir, "provider-share.svg")),
     ).rejects.toBeDefined();
     await expect(
-      access(join(outputDir, "severity-breakdown.svg")),
+      access(join(outputDir, "harness-share.svg")),
+    ).rejects.toBeDefined();
+    await expect(
+      access(join(outputDir, "tool-family-share.svg")),
+    ).rejects.toBeDefined();
+    await expect(
+      access(join(outputDir, "attribution-mix.svg")),
     ).rejects.toBeDefined();
   });
 
@@ -291,10 +297,77 @@ describe("CLI", () => {
     expect(exitCode).toBe(0);
   });
 
-  it("reads CODEX_EVAL_OUTPUT_DIR for the default artifact path", () => {
-    vi.stubEnv("CODEX_EVAL_OUTPUT_DIR", "/tmp/agent-eval-from-env");
+  it("reads AGENT_EVAL_OUTPUT_DIR for the default artifact path", () => {
+    vi.stubEnv("AGENT_EVAL_OUTPUT_DIR", "/tmp/agent-eval-from-env");
 
     expect(getDefaultOutputDir()).toBe("/tmp/agent-eval-from-env");
+  });
+
+  it("returns a usage error for an invalid start date", async () => {
+    const exitCode = await main([
+      "node",
+      "cli",
+      "eval",
+      "--start-date",
+      "not-a-date",
+    ]);
+
+    expect(exitCode).toBe(2);
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Invalid --start-date value"),
+    );
+  });
+
+  it("treats an empty filtered corpus as a valid deterministic run", async () => {
+    const homeDir = await createCodexHome(testDirBase, "eval-filtered-empty");
+    const outputDir = join(homeDir, "artifacts");
+    await mkdir(outputDir, { recursive: true });
+
+    const exitCode = await main([
+      "node",
+      "cli",
+      "eval",
+      "--source",
+      "codex",
+      "--home",
+      homeDir,
+      "--output-dir",
+      outputDir,
+      "--summary-only",
+      "--start-date",
+      "2027-01-01",
+      "--end-date",
+      "2027-01-31",
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(await readFile(join(outputDir, "metrics.json"), "utf8")).toContain(
+      '"sessionCount": 0',
+    );
+  });
+
+  it("runs the benchmark command and reports surfaced-session accuracy", async () => {
+    const outputDir = join(testDirBase, "benchmark-artifacts");
+    await mkdir(outputDir, { recursive: true });
+
+    const exitCode = await main([
+      "node",
+      "cli",
+      "benchmark",
+      "--output-dir",
+      outputDir,
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"attributionAccuracy": 100'),
+    );
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"surfacedAccuracy": 100'),
+    );
+    expect(
+      await readFile(join(outputDir, "benchmark-results.json"), "utf8"),
+    ).toContain('"surfacedMetrics"');
   });
 
   it("returns a usage error for an invalid source provider", async () => {

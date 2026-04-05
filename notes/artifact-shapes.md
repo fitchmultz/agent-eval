@@ -123,7 +123,7 @@ Observed sample:
 {
   "type": "function_call",
   "name": "exec_command",
-  "arguments": "{\"cmd\":\"date\",\"workdir\":\"/Users/mitchfultz/Projects/AI/agent-eval\",\"max_output_tokens\":200}",
+  "arguments": "{\"cmd\":\"date\",\"workdir\":\"/Users/example/Projects/AI/agent-eval\",\"max_output_tokens\":200}",
   "call_id": "call_wpWClKIeM6oGVVxN39M5TzQO"
 }
 ```

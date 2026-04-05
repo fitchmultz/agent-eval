@@ -6,7 +6,7 @@ This is an early Codex-specific discovery note from the initial exploration pass
 
 ## Summary
 
-Observed local Codex artifacts under `/Users/mitchfultz/.codex` strongly suggest a two-tier design:
+Observed local Codex artifacts under `~/.codex` strongly suggest a two-tier design:
 
 1. Canonical transcript artifacts:
    - `sessions/YYYY/MM/DD/rollout-*.jsonl`
@@ -23,10 +23,10 @@ The portable methodology should treat transcript JSONL as required input and all
 
 ### `~/.codex/sessions`
 
-- Observed path pattern: `/Users/mitchfultz/.codex/sessions/YYYY/MM/DD/rollout-<iso-ish>-<thread-id>.jsonl`
+- Observed path pattern: `~/.codex/sessions/YYYY/MM/DD/rollout-<iso-ish>-<thread-id>.jsonl`
 - Observed file count by extension under `sessions`: about `7395` `.jsonl`
 - Observed example:
-  - `/Users/mitchfultz/.codex/sessions/2026/03/06/rollout-2026-03-06T11-46-56-019cc479-6779-74f3-9817-dc3f7a93e025.jsonl`
+  - `~/.codex/sessions/2026/03/06/rollout-2026-03-06T11-46-56-019cc479-6779-74f3-9817-dc3f7a93e025.jsonl`
 - Why it matters:
   - Contains ordered session events
   - Contains tool calls and tool outputs
@@ -38,7 +38,7 @@ The portable methodology should treat transcript JSONL as required input and all
 
 ### `~/.codex/state_5.sqlite`
 
-- Observed path: `/Users/mitchfultz/.codex/state_5.sqlite`
+- Observed path: `~/.codex/state_5.sqlite`
 - Observed sidecars:
   - `state_5.sqlite-shm`
   - `state_5.sqlite-wal`
@@ -66,7 +66,7 @@ The portable methodology should treat transcript JSONL as required input and all
 
 ### `~/.codex/log/codex-tui.log`
 
-- Observed path: `/Users/mitchfultz/.codex/log/codex-tui.log`
+- Observed path: `~/.codex/log/codex-tui.log`
 - Observed line count: about `3953030`
 - Why it matters:
   - Rich local operational log
@@ -81,7 +81,7 @@ The portable methodology should treat transcript JSONL as required input and all
 
 ### `~/.codex/history.jsonl`
 
-- Observed path: `/Users/mitchfultz/.codex/history.jsonl`
+- Observed path: `~/.codex/history.jsonl`
 - Observed line count: about `11572`
 - Why it matters:
   - Cheap way to inspect user prompt history
@@ -93,7 +93,7 @@ The portable methodology should treat transcript JSONL as required input and all
 
 ### `~/.codex/sqlite/codex-dev.db`
 
-- Observed path: `/Users/mitchfultz/.codex/sqlite/codex-dev.db`
+- Observed path: `~/.codex/sqlite/codex-dev.db`
 - Observed tables:
   - `automations`
   - `automation_runs`
@@ -107,7 +107,7 @@ The portable methodology should treat transcript JSONL as required input and all
 
 ### `~/.codex/shell_snapshots/*.sh`
 
-- Observed directory: `/Users/mitchfultz/.codex/shell_snapshots`
+- Observed directory: `~/.codex/shell_snapshots`
 - Observed file count: `86`
 - Observed naming pattern:
   - `<thread-id>.sh`

@@ -11,8 +11,8 @@
     "maxMessageItems": 2,
     "maxIncidentEvidence": 3,
     "maxTopIncidents": 8,
-    "maxVictoryLaps": 6,
-    "maxTopSessions": 8
+    "maxExemplarSessions": 6,
+    "maxReviewQueueSessions": 8
   },
   "scoring": {
     "frictionThreshold": 0.5

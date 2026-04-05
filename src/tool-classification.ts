@@ -1,10 +1,14 @@
 /**
- * Purpose: Provides centralized tool classification logic for write tools and verification commands.
- * Entrypoint: Use `isWriteToolName()`, `isVerificationCommand()`, and `categorizeToolCall()` for consistent categorization.
- * Notes: Centralizes tool classification to eliminate duplication between compliance scoring and evaluation.
+ * Purpose: Provides centralized tool classification logic for write tools, verification commands, and normalized tool families.
+ * Entrypoint: Use `isWriteToolName()`, `isVerificationCommand()`, `categorizeToolCall()`, and `extractCommandText()` for consistent categorization.
+ * Notes: Centralizes tool classification to eliminate duplication between compliance scoring, metrics aggregation, and session-facts generation.
  */
 
 import { extractCommandTextFromArgumentsText } from "./tool-command-text.js";
+import {
+  normalizeToolIdentity,
+  type ToolFamily,
+} from "./tool-normalization.js";
 import type { ParsedToolCall } from "./transcript/index.js";
 
 /**
@@ -60,9 +64,20 @@ export function isWriteTool(toolCall: ParsedToolCall): boolean {
   return isWriteToolName(toolCall.toolName);
 }
 
+export interface ToolCallCategorization {
+  category: "write" | "verification" | "other";
+  writeLike: boolean;
+  verificationLike: boolean;
+  normalizedToolName: string;
+  toolFamily: ToolFamily;
+  isMcp: boolean;
+  mcpServer?: string;
+  mcpToolName?: string;
+}
+
 /**
  * Categorizes a tool call based on its name and optional arguments.
- * Returns a comprehensive categorization including category and boolean flags.
+ * Returns a comprehensive categorization including category, booleans, and normalized identity.
  * @param toolName - The name of the tool
  * @param argumentsText - Optional command text from tool arguments
  * @returns Categorization result with category and boolean flags
@@ -70,19 +85,26 @@ export function isWriteTool(toolCall: ParsedToolCall): boolean {
 export function categorizeToolCall(
   toolName: string,
   argumentsText?: string,
-): {
-  category: "write" | "verification" | "other";
-  writeLike: boolean;
-  verificationLike: boolean;
-} {
+): ToolCallCategorization {
   const writeLike = isWriteToolName(toolName);
   const verificationLike = argumentsText
     ? isVerificationCommand(argumentsText)
     : false;
+  const normalized = normalizeToolIdentity(toolName);
+
   return {
     category: writeLike ? "write" : verificationLike ? "verification" : "other",
     writeLike,
     verificationLike,
+    normalizedToolName: normalized.normalizedToolName,
+    toolFamily: writeLike
+      ? "write"
+      : verificationLike
+        ? "verification"
+        : normalized.toolFamily,
+    isMcp: normalized.isMcp,
+    ...(normalized.mcpServer ? { mcpServer: normalized.mcpServer } : {}),
+    ...(normalized.mcpToolName ? { mcpToolName: normalized.mcpToolName } : {}),
   };
 }
 
@@ -105,7 +127,6 @@ export function isVerificationTool(toolCall: ParsedToolCall): boolean {
  * Extracts command text from a tool call's arguments.
  * Attempts to parse JSON arguments and extract command/cmd fields.
  * Falls back to returning the raw payload text if parsing fails.
- * Logs JSON parsing errors for debugging purposes.
  *
  * @param toolCall - The parsed tool call
  * @returns The extracted command text or undefined if not found

@@ -1,3 +1,5 @@
+.PHONY: bootstrap update format fix lint typecheck test build benchmark scan-public smoke-dist ci release-check clean
+
 bootstrap:
 	pnpm install
 
@@ -24,7 +26,16 @@ build:
 benchmark:
 	pnpm benchmark
 
-ci: lint typecheck test benchmark build
+scan-public: benchmark
+	pnpm scan:artifacts artifacts/benchmark
+
+smoke-dist: build
+	pnpm smoke:dist
+
+ci: lint typecheck test benchmark scan-public smoke-dist
+
+release-check:
+	pnpm check:release
 
 clean:
 	rm -rf dist node_modules coverage

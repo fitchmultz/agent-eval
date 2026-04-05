@@ -1,10 +1,12 @@
 /**
- * Purpose: Type definitions for summary module.
- * Entrypoint: Used by scoring and aggregation modules.
- * Notes: Shared types to avoid circular dependencies and keep operator-facing summary data explicit.
+ * Purpose: Type definitions for the v3 summary module.
+ * Entrypoint: Used by evaluator, ranking, summary builders, and presentation helpers.
+ * Notes: Keeps the canonical summary contract separate from renderer-specific concerns.
  */
 
 import type {
+  AttributionPrimary,
+  Confidence,
   EvidenceIssue,
   EvidenceSource,
   LabelName,
@@ -15,6 +17,7 @@ import type {
   SourceRef,
   SummaryArtifact,
   SummaryConfidence,
+  SurfacedSession,
 } from "../schema.js";
 
 // Re-export for convenience
@@ -35,36 +38,53 @@ export interface SessionContext {
   sourceRefs: SourceRef[];
 }
 
-export interface SummaryInputs {
-  sessionLabelCounts: Map<string, Record<LabelName, number>>;
-  sessionContexts?: Map<string, SessionContext>;
-  topIncidents: SummaryArtifact["topIncidents"];
-  severityCounts: Record<Severity, number>;
-  writeTurnCount: number;
+export interface SummaryAggregateStats {
+  totalUserMessages: number;
+  totalAssistantMessages: number;
+  totalToolCalls: number;
+  totalWriteToolCalls: number;
+  totalVerificationToolCalls: number;
 }
 
-export interface SummaryCoreData {
-  labels: Array<{ label: LabelName; count: number }>;
-  severities: Array<{ severity: Severity; count: number }>;
-  compliance: SummaryArtifact["compliance"];
-  parseWarningCount: SummaryArtifact["parseWarningCount"];
-  rates: SummaryArtifact["rates"];
-  delivery: SummaryArtifact["delivery"];
-  comparativeSlices: SummaryArtifact["comparativeSlices"];
-  topSessions: SummaryArtifact["topSessions"];
-  endedVerifiedDeliverySpotlights: SummaryArtifact["endedVerifiedDeliverySpotlights"];
-  topIncidents: SummaryArtifact["topIncidents"];
-  executiveSummary: SummaryArtifact["executiveSummary"];
-  operatorMetrics: SummaryArtifact["operatorMetrics"];
-  metricGlossary: SummaryArtifact["metricGlossary"];
+export interface SessionTemplateInfo {
+  artifactScore: number | null;
+  textSharePct: number | null;
+  hasTemplateContent: boolean;
+  flags: string[];
+  dominantFamilyId: string | null;
+  dominantFamilyLabel: string | null;
 }
 
-export interface SessionInsightRow {
+export interface SurfaceAttribution {
+  primary: AttributionPrimary;
+  confidence: Confidence;
+  reasons: string[];
+}
+
+export type SessionMetricRecord = MetricsRecord["sessions"][number];
+
+export interface SummarySessionRecord {
   sessionId: string;
-  sessionShortId: string;
-  sessionDisplayLabel: string;
-  sessionTimestampLabel: string;
-  sessionProjectLabel: string;
+  metrics: SessionMetricRecord;
+  labels: Record<LabelName, number>;
+  rawLabels: Record<LabelName, number>;
+  context: SessionContext | null;
+  attribution: SurfaceAttribution;
+  template: SessionTemplateInfo;
+}
+
+export interface SummaryInputs {
+  sessions: SummarySessionRecord[];
+  severityCounts: Record<Severity, number>;
+  aggregateStats: SummaryAggregateStats;
+}
+
+export interface SessionCandidate {
+  record: SummarySessionRecord;
+  shortId: string;
+  title: string;
+  timestampLabel: string;
+  projectLabel: string;
   archetype: SessionArchetype;
   archetypeLabel: string;
   frictionScore: number;
@@ -72,48 +92,50 @@ export interface SessionInsightRow {
   incidentCount: number;
   labeledTurnCount: number;
   writeCount: number;
-  endedVerified: boolean;
   verificationPassedCount: number;
-  dominantLabels: LabelName[];
-  whySelected: string[];
+  endedVerified: boolean;
   failedRules: string[];
-  evidencePreviews: string[];
+  dominantLabels: LabelName[];
   titleSource: SessionTitleSource;
   titleConfidence: SummaryConfidence;
   evidenceSource: EvidenceSource;
   evidenceConfidence: SummaryConfidence;
   evidenceIssues: EvidenceIssue[];
+}
+
+export interface SurfaceSessionDraft {
+  sessionId: string;
+  shortId: string;
+  title: string;
+  timestampLabel: string | null;
+  projectLabel: string | null;
+  provider: MetricsRecord["sessions"][number]["provider"] | null;
+  harness: string | null;
+  metrics: SurfacedSession["metrics"];
+  attribution: SurfaceAttribution;
+  reasonTags: string[];
+  whyIncluded: string[];
+  evidencePreviews: string[];
   sourceRefs: SourceRef[];
-  trustFlags: string[];
-  note: string;
+  provenance: SurfacedSession["provenance"];
 }
 
-export interface ScoreSnapshot {
-  verificationProxyScore: number | null;
-  flowProxyScore: number | null;
-  workflowProxyScore: number | null;
-  writeSessionVerificationRate: number | null;
-  incidentsPer100Turns: number;
+export interface SummaryCoreData {
+  overview: SummaryArtifact["overview"];
+  usageDashboard: SummaryArtifact["usageDashboard"];
+  exemplarSessions: SummaryArtifact["exemplarSessions"];
+  reviewQueue: SummaryArtifact["reviewQueue"];
+  attributionSummary: SummaryArtifact["attributionSummary"];
+  templateSubstrate: SummaryArtifact["templateSubstrate"];
+  learningPatterns: SummaryArtifact["learningPatterns"];
+  comparativeSlices: SummaryArtifact["comparativeSlices"];
 }
 
-export interface OperatorExecutiveSummary {
-  problem: string;
-  change: string;
-  action: string;
-}
-
-export interface OperatorMetricCard {
-  label: string;
-  value: string;
-  detail: string;
-  tone: "neutral" | "good" | "warn" | "danger";
-}
-
-export interface MetricGlossaryEntry {
+export interface ComparativeSliceDraft {
   key: string;
   label: string;
-  plainLanguage: string;
-  caveat: string;
+  kind: SummaryArtifact["comparativeSlices"][number]["kind"];
+  filters: SummaryArtifact["comparativeSlices"][number]["filters"];
+  metrics: SummaryArtifact["comparativeSlices"][number]["metrics"];
+  notes: SummaryArtifact["comparativeSlices"][number]["notes"];
 }
-
-export type SessionMetricRecord = MetricsRecord["sessions"][number];

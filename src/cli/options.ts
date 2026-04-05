@@ -5,7 +5,7 @@
  */
 
 import type { DeepPartial, EvaluatorConfig } from "../config/index.js";
-import { ENV_VARS } from "../config/index.js";
+import { ENV_VARS, getEnvVarName } from "../config/index.js";
 import { ValidationError } from "../errors.js";
 import {
   getDefaultSourceHome,
@@ -14,19 +14,23 @@ import {
 } from "../sources.js";
 import { getValidatedHomeDirectory } from "../utils/environment.js";
 
+export type TimeBucket = "day" | "week" | "month";
+
 export interface GlobalOptions {
   source: SourceProvider;
   home: string;
   outputDir: string;
-  reportSkin?: "operator" | "showcase";
   sessionLimit?: number;
   summaryOnly?: boolean;
   concurrency?: number;
   maxTurnGap?: number;
+  startDate?: string;
+  endDate?: string;
+  timeBucket?: TimeBucket;
 }
 
 export function getDefaultSource(): SourceProvider {
-  const envSource = process.env[`CODEX_EVAL_${ENV_VARS.SOURCE}`];
+  const envSource = process.env[getEnvVarName(ENV_VARS.SOURCE)];
 
   if (envSource && isSourceProvider(envSource)) {
     return envSource;
@@ -36,7 +40,7 @@ export function getDefaultSource(): SourceProvider {
 }
 
 export function getDefaultHome(source: SourceProvider): string {
-  const envHome = process.env[`CODEX_EVAL_${ENV_VARS.SOURCE_HOME}`];
+  const envHome = process.env[getEnvVarName(ENV_VARS.SOURCE_HOME)];
   if (envHome) {
     return envHome;
   }
@@ -55,7 +59,7 @@ export function getDefaultHome(source: SourceProvider): string {
 }
 
 export function getDefaultOutputDir(): string {
-  return process.env[`CODEX_EVAL_${ENV_VARS.OUTPUT_DIR}`] ?? "artifacts";
+  return process.env[getEnvVarName(ENV_VARS.OUTPUT_DIR)] ?? "artifacts";
 }
 
 function validatePositiveIntegerOption(
@@ -69,6 +73,47 @@ function validatePositiveIntegerOption(
   if (!Number.isInteger(value) || value <= 0) {
     throw new ValidationError(`${flag} must be a positive integer.`);
   }
+}
+
+function normalizeDateInput(
+  value: string | undefined,
+  bound: "start" | "end",
+): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return bound === "start"
+      ? `${trimmed}T00:00:00.000Z`
+      : `${trimmed}T23:59:59.999Z`;
+  }
+
+  const parsedMs = Date.parse(trimmed);
+  if (Number.isNaN(parsedMs)) {
+    throw new ValidationError(
+      `Invalid ${bound === "start" ? "--start-date" : "--end-date"} value: ${value}`,
+    );
+  }
+
+  return new Date(parsedMs).toISOString();
+}
+
+function normalizeTimeBucket(value?: string): TimeBucket {
+  if (!value) {
+    return "week";
+  }
+
+  if (value === "day" || value === "week" || value === "month") {
+    return value;
+  }
+
+  throw new ValidationError("--time-bucket must be one of: day, week, month.");
 }
 
 export function normalizeOptions(options: GlobalOptions): GlobalOptions {
@@ -90,13 +135,12 @@ export function normalizeOptions(options: GlobalOptions): GlobalOptions {
   validatePositiveIntegerOption(options.sessionLimit, "--session-limit");
   validatePositiveIntegerOption(options.concurrency, "--concurrency");
   validatePositiveIntegerOption(options.maxTurnGap, "--max-turn-gap");
-  if (
-    options.reportSkin &&
-    options.reportSkin !== "operator" &&
-    options.reportSkin !== "showcase"
-  ) {
+
+  const startDate = normalizeDateInput(options.startDate, "start");
+  const endDate = normalizeDateInput(options.endDate, "end");
+  if (startDate && endDate && Date.parse(startDate) > Date.parse(endDate)) {
     throw new ValidationError(
-      "--report-skin must be either 'operator' or 'showcase'.",
+      "--start-date must be less than or equal to --end-date.",
     );
   }
 
@@ -104,6 +148,9 @@ export function normalizeOptions(options: GlobalOptions): GlobalOptions {
     ...options,
     source,
     home,
+    ...(startDate ? { startDate } : {}),
+    ...(endDate ? { endDate } : {}),
+    timeBucket: normalizeTimeBucket(options.timeBucket),
   };
 }
 
@@ -128,12 +175,6 @@ export function buildCliOverrides(
   ) {
     overrides.clustering = {
       maxTurnGap: options.maxTurnGap,
-    };
-  }
-
-  if (options.reportSkin) {
-    overrides.reporting = {
-      skin: options.reportSkin,
     };
   }
 

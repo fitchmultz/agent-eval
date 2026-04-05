@@ -1,8 +1,8 @@
 /**
  * Purpose: Probe transcript files for stable session recency ordering without fully evaluating them.
- * Responsibilities: Extract session timestamps and filesystem metadata used to sort sessions before selection.
- * Scope: Shared by parse and evaluation entrypoints when `sessionLimit` or recent slices depend on recency.
- * Usage: Call `probeSessionOrder(path, provider)` before applying `sessionLimit`.
+ * Responsibilities: Extract session timestamps and filesystem metadata used to sort and filter sessions before selection.
+ * Scope: Shared by parse and evaluation entrypoints when `sessionLimit` or date slices depend on recency.
+ * Usage: Call `probeSessionOrder(path, provider)` before applying date filters or `sessionLimit`.
  * Invariants/Assumptions: Timestamp probing is best-effort; invalid or missing timestamps fall back to file mtime and lexical order.
  */
 
@@ -129,6 +129,54 @@ function extractRecordTimestamp(
     ...(startedAt ? { startedAt } : {}),
     ...(timestamp ? { timestamp } : {}),
   };
+}
+
+export function resolveProbeTimeValue(probe: SessionOrderProbe): number | null {
+  return (
+    toEpochMs(probe.startedAt) ??
+    toEpochMs(probe.earliestTimestamp) ??
+    (Number.isFinite(probe.mtimeMs) ? probe.mtimeMs : null)
+  );
+}
+
+export function resolveProbeTimestamp(probe: SessionOrderProbe): string | null {
+  const preferred = probe.startedAt ?? probe.earliestTimestamp;
+  if (preferred && toEpochMs(preferred) !== undefined) {
+    return preferred;
+  }
+
+  return null;
+}
+
+export function probeFallsInDateRange(
+  probe: SessionOrderProbe,
+  startDate?: string,
+  endDate?: string,
+): { matches: boolean; undated: boolean } {
+  if (!startDate && !endDate) {
+    return { matches: true, undated: false };
+  }
+
+  const resolvedTimestamp = resolveProbeTimestamp(probe);
+  if (!resolvedTimestamp) {
+    return { matches: false, undated: true };
+  }
+
+  const probeMs = Date.parse(resolvedTimestamp);
+  if (Number.isNaN(probeMs)) {
+    return { matches: false, undated: true };
+  }
+
+  const startMs = startDate ? Date.parse(startDate) : undefined;
+  const endMs = endDate ? Date.parse(endDate) : undefined;
+  if (startMs !== undefined && !Number.isNaN(startMs) && probeMs < startMs) {
+    return { matches: false, undated: false };
+  }
+  if (endMs !== undefined && !Number.isNaN(endMs) && probeMs > endMs) {
+    return { matches: false, undated: false };
+  }
+
+  return { matches: true, undated: false };
 }
 
 export async function probeSessionOrder(

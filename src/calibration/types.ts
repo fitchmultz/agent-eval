@@ -1,15 +1,15 @@
 /**
  * Purpose: Define schemas and types for the synthetic calibration corpus and benchmark results.
- * Responsibilities: Validate corpus cases, benchmark outputs, case-scoped matching metrics, and sanitization expectations.
+ * Responsibilities: Validate corpus cases, benchmark outputs, case-scoped matching metrics, surfaced-session expectations, attribution expectations, and sanitization expectations.
  * Scope: Shared by the calibration runner, report renderer, CLI command, and tests.
  * Usage: Import these types from the calibration package instead of redefining benchmark contracts.
  * Invariants/Assumptions: Calibration corpus remains synthetic, deterministic, and provider-specific without external dependencies.
  */
 
 import { z } from "zod";
-import { labelTaxonomy } from "../schema.js";
+import { attributionPrimaryValues, labelTaxonomy } from "../schema.js";
 
-const calibrationProviderSchema = z.enum(["codex", "claude"]);
+const calibrationProviderSchema = z.enum(["codex", "claude", "pi"]);
 
 export const labelInstanceSchema = z.object({
   turnIndex: z.int().nonnegative(),
@@ -44,6 +44,11 @@ export const terminalVerificationExpectationSchema = z.object({
   endedVerified: z.boolean(),
 });
 
+export const surfacedExpectationSchema = z.object({
+  exemplar: z.boolean(),
+  reviewQueue: z.boolean(),
+});
+
 export const parseWarningExpectationSchema = z.object({
   expectedCount: z.int().nonnegative(),
   actualCount: z.int().nonnegative(),
@@ -65,6 +70,8 @@ export const calibrationCaseSchema = z.object({
   expectedLabelInstances: z.array(labelInstanceSchema).default([]),
   expectedIncidents: z.array(expectedIncidentSchema).default([]),
   expectedTerminalVerification: terminalVerificationExpectationSchema,
+  expectedAttribution: z.enum(attributionPrimaryValues).optional(),
+  expectedSurfacedIn: surfacedExpectationSchema.optional(),
   expectedParseWarningCount: z.int().nonnegative().default(0),
   sanitizationChecks: z.array(sanitizationCheckSchema).default([]),
 });
@@ -72,11 +79,10 @@ export const calibrationCaseSchema = z.object({
 export const calibrationCorpusSchema = z.array(calibrationCaseSchema);
 
 export const sanitizationCheckResultSchema = z.object({
-  input: z.string(),
+  checkId: z.string(),
   passed: z.boolean(),
   mustContainMisses: z.array(z.string()),
   mustNotContainViolations: z.array(z.string()),
-  sanitized: z.string(),
 });
 
 export const calibrationCaseResultSchema = z.object({
@@ -92,6 +98,10 @@ export const calibrationCaseResultSchema = z.object({
   incidentMetrics: incidentBenchmarkRecordSchema,
   expectedTerminalVerification: terminalVerificationExpectationSchema,
   actualTerminalVerification: terminalVerificationExpectationSchema,
+  expectedAttribution: z.enum(attributionPrimaryValues).nullable(),
+  actualAttribution: z.enum(attributionPrimaryValues),
+  expectedSurfacedIn: surfacedExpectationSchema.nullable(),
+  actualSurfacedIn: surfacedExpectationSchema,
   sanitizationChecks: z.array(sanitizationCheckResultSchema),
 });
 
@@ -107,6 +117,18 @@ export const benchmarkResultsSchema = z.object({
     endedVerifiedAccuracy: z.number(),
     postWriteVerificationAttemptedAccuracy: z.number(),
     postWriteVerificationPassedAccuracy: z.number(),
+  }),
+  attributionMetrics: z.object({
+    caseCount: z.int().nonnegative(),
+    expectedCaseCount: z.int().nonnegative(),
+    matchedCaseCount: z.int().nonnegative(),
+    accuracy: z.number(),
+  }),
+  surfacedMetrics: z.object({
+    caseCount: z.int().nonnegative(),
+    expectedCaseCount: z.int().nonnegative(),
+    matchedCaseCount: z.int().nonnegative(),
+    accuracy: z.number(),
   }),
   parseWarningMetrics: z.object({
     caseCount: z.int().nonnegative(),

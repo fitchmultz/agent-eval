@@ -10,7 +10,10 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { probeSessionOrder } from "../src/transcript/session-order.js";
+import {
+  probeFallsInDateRange,
+  probeSessionOrder,
+} from "../src/transcript/session-order.js";
 
 const tempDirs: string[] = [];
 
@@ -105,5 +108,30 @@ describe("probeSessionOrder", () => {
     const probe = await probeSessionOrder(path, "codex");
     expect(probe.startedAt).toBe("not-a-date");
     expect(probe.earliestTimestamp).toBe("2026-03-10T11:00:01.000Z");
+  });
+
+  it("matches inclusive UTC date windows and excludes undated probes", () => {
+    expect(
+      probeFallsInDateRange(
+        {
+          path: "/tmp/a.jsonl",
+          startedAt: "2026-03-10T11:00:01.000Z",
+          mtimeMs: 0,
+        },
+        "2026-03-10T00:00:00.000Z",
+        "2026-03-10T23:59:59.999Z",
+      ),
+    ).toEqual({ matches: true, undated: false });
+
+    expect(
+      probeFallsInDateRange(
+        {
+          path: "/tmp/b.jsonl",
+          mtimeMs: 0,
+        },
+        "2026-03-10T00:00:00.000Z",
+        "2026-03-10T23:59:59.999Z",
+      ),
+    ).toEqual({ matches: false, undated: true });
   });
 });

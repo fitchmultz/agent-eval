@@ -23,6 +23,18 @@ export function renderBenchmarkReport(results: BenchmarkResults): string {
     `- Post-write verification attempted accuracy: ${results.terminalVerificationMetrics.postWriteVerificationAttemptedAccuracy}%`,
     `- Post-write verification passed accuracy: ${results.terminalVerificationMetrics.postWriteVerificationPassedAccuracy}%`,
     "",
+    "## Attribution Accuracy",
+    "",
+    `- Cases with attribution expectations: ${results.attributionMetrics.expectedCaseCount}`,
+    `- Matched attribution cases: ${results.attributionMetrics.matchedCaseCount}`,
+    `- Accuracy: ${results.attributionMetrics.accuracy}%`,
+    "",
+    "## Surfaced Session Accuracy",
+    "",
+    `- Cases with surfaced-session expectations: ${results.surfacedMetrics.expectedCaseCount}`,
+    `- Matched surfaced-session cases: ${results.surfacedMetrics.matchedCaseCount}`,
+    `- Accuracy: ${results.surfacedMetrics.accuracy}%`,
+    "",
     "## Parse Warning Accuracy",
     "",
     `- Expected parse warnings: ${results.parseWarningMetrics.expectedCount}`,
@@ -55,7 +67,7 @@ export function renderBenchmarkReport(results: BenchmarkResults): string {
     "",
     ...results.cases.map(
       (testCase) =>
-        `- ${testCase.id}: parse warnings expected ${testCase.parseWarnings.expectedCount} actual ${testCase.parseWarnings.actualCount}, ended verified expected ${testCase.expectedTerminalVerification.endedVerified} actual ${testCase.actualTerminalVerification.endedVerified}, incidents expected ${testCase.incidentMetrics.expectedCount} actual ${testCase.incidentMetrics.actualCount}`,
+        `- ${testCase.id}: parse warnings expected ${testCase.parseWarnings.expectedCount} actual ${testCase.parseWarnings.actualCount}, ended verified expected ${testCase.expectedTerminalVerification.endedVerified} actual ${testCase.actualTerminalVerification.endedVerified}, attribution expected ${testCase.expectedAttribution ?? "n/a"} actual ${testCase.actualAttribution}, surfaced expected ${testCase.expectedSurfacedIn ? `${testCase.expectedSurfacedIn.exemplar ? "exemplar" : "no exemplar"}/${testCase.expectedSurfacedIn.reviewQueue ? "review" : "no review"}` : "n/a"} actual ${testCase.actualSurfacedIn.exemplar ? "exemplar" : "no exemplar"}/${testCase.actualSurfacedIn.reviewQueue ? "review" : "no review"}, incidents expected ${testCase.incidentMetrics.expectedCount} actual ${testCase.incidentMetrics.actualCount}`,
     ),
     "",
   ];

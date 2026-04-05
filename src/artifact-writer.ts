@@ -14,16 +14,22 @@ import {
   writeTextFile,
 } from "./filesystem.js";
 import type { PresentationArtifacts } from "./presentation.js";
+import {
+  type ReleaseManifest,
+  releaseManifestSchema,
+} from "./release-manifest.js";
 import type {
   IncidentRecord,
   MetricsRecord,
   RawTurnRecord,
+  SessionFactRecord,
   SummaryArtifact,
 } from "./schema.js";
 import {
   incidentSchema,
   metricsSchema,
   rawTurnSchema,
+  sessionFactSchema,
   summaryArtifactSchema,
 } from "./schema.js";
 
@@ -33,6 +39,8 @@ import {
 export interface EvaluationArtifacts {
   metrics: MetricsRecord;
   summary: SummaryArtifact;
+  sessionFacts: SessionFactRecord[];
+  releaseManifest: ReleaseManifest;
   report: string;
   presentation: PresentationArtifacts;
   rawTurns?: RawTurnRecord[] | undefined;
@@ -77,6 +85,10 @@ export async function writeArtifacts(
 ): Promise<void> {
   metricsSchema.parse(result.metrics);
   summaryArtifactSchema.parse(result.summary);
+  for (const sessionFact of result.sessionFacts) {
+    sessionFactSchema.parse(sessionFact);
+  }
+  releaseManifestSchema.parse(result.releaseManifest);
 
   if (result.rawTurns) {
     for (const turn of result.rawTurns) {
@@ -106,6 +118,14 @@ export async function writeArtifacts(
     join(outputDir, "summary.json"),
     `${JSON.stringify(result.summary, null, 2)}\n`,
   );
+  await writeJsonLinesFile(
+    join(outputDir, "session-facts.jsonl"),
+    result.sessionFacts,
+  );
+  await writeTextFile(
+    join(outputDir, "release-manifest.json"),
+    `${JSON.stringify(result.releaseManifest, null, 2)}\n`,
+  );
   await writeTextFile(join(outputDir, "report.md"), result.report);
   await writeTextFile(
     join(outputDir, "report.html"),
@@ -120,15 +140,23 @@ export async function writeArtifacts(
     result.presentation.faviconSvg,
   );
   await writeTextFile(
-    join(outputDir, "label-counts.svg"),
-    result.presentation.labelChartSvg,
+    join(outputDir, "sessions-over-time.svg"),
+    result.presentation.sessionsOverTimeChartSvg,
   );
   await writeTextFile(
-    join(outputDir, "compliance-summary.svg"),
-    result.presentation.complianceChartSvg,
+    join(outputDir, "provider-share.svg"),
+    result.presentation.providerShareChartSvg,
   );
   await writeTextFile(
-    join(outputDir, "severity-breakdown.svg"),
-    result.presentation.severityChartSvg,
+    join(outputDir, "harness-share.svg"),
+    result.presentation.harnessShareChartSvg,
+  );
+  await writeTextFile(
+    join(outputDir, "tool-family-share.svg"),
+    result.presentation.toolFamilyShareChartSvg,
+  );
+  await writeTextFile(
+    join(outputDir, "attribution-mix.svg"),
+    result.presentation.attributionMixChartSvg,
   );
 }

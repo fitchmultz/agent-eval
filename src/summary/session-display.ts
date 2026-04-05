@@ -9,6 +9,7 @@
 import { basename, dirname } from "node:path";
 import {
   isLowSignalPreview,
+  isPublicOperatorPreview,
   isUnsafePreview,
   selectBestPreviews,
 } from "../sanitization.js";
@@ -31,6 +32,10 @@ interface LeadPreviewSelection {
   preview?: string;
   source?: "user" | "assistant";
   confidence?: SummaryConfidence;
+}
+
+function isSecondaryStructuredTitlePreview(preview: string): boolean {
+  return /^\d+[.)]\s+/.test(preview) || /\s\d+[.)]\s*$/.test(preview);
 }
 
 interface EvidencePreviewSelection {
@@ -62,18 +67,64 @@ export function isCodeLikePreview(preview: string): boolean {
     /^\s*[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\{?/.test(normalized) ||
     /^\s*(pub\s+)?fn\s+[A-Za-z_][\w]*\s*\(/.test(normalized);
   const looksLikeRegexLiteral = /^\s*\/.+\/[a-z]*,?\s*$/.test(normalized);
+  const containsInlineCodeResidue =
+    /"""|```/.test(normalized) || /[A-Za-z_][\w]*\([^)]*$/.test(normalized);
 
   return (
     (symbolCount >= 4 && hasCodeKeyword) ||
     (symbolCount >= 6 && /[`{};]/.test(normalized)) ||
     looksLikeSignature ||
-    looksLikeRegexLiteral
+    looksLikeRegexLiteral ||
+    containsInlineCodeResidue
   );
 }
 
 export function isTruncatedPreview(preview: string): boolean {
   const normalized = preview.trimEnd();
   return normalized.endsWith("...") || normalized.endsWith("…");
+}
+
+function splitPreviewSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9#<])/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 0);
+}
+
+function isWrapperLeadSentence(preview: string): boolean {
+  return (
+    /^when asked about:\s*/i.test(preview) ||
+    /^when listing skills,\s*output approximately as follows\b/i.test(
+      preview,
+    ) ||
+    /^user request:\s*/i.test(preview) ||
+    /^deliverables expected in this repo:\s*/i.test(preview) ||
+    /^pro\s*-\s*(?:light|standard|extended|heavy)\.?$/i.test(preview) ||
+    /^every file in this project included in the artifact upload\.?$/i.test(
+      preview,
+    )
+  );
+}
+
+function normalizeLeadPreviewForTitle(preview: string): string {
+  let normalized = preview
+    .replace(/^\s*(?:[-*•]\s+|\d+[.)]\s+)+/, "")
+    .replace(/^\s*["'“”‘’]\s*/, "")
+    .replace(/^.*?\bthat being said,\s*/i, "")
+    .replace(/^user request:\s*/i, "")
+    .replace(/^deliverables expected in this repo:\s*/i, "")
+    .trim();
+
+  normalized = normalized.split(/\s+(?=\d+[.)]\s+)/)[0]?.trim() ?? normalized;
+
+  const substantiveSentences = splitPreviewSentences(normalized).filter(
+    (sentence) => !isWrapperLeadSentence(sentence),
+  );
+  if (substantiveSentences.length > 0) {
+    normalized = substantiveSentences[0] ?? normalized;
+  }
+
+  return normalized.trim();
 }
 
 function appendUniquePreviewEntries(
@@ -93,12 +144,23 @@ function appendUniquePreviewEntries(
   }
 }
 
+function isInstructionBulletBundle(preview: string): boolean {
+  const bulletCount = preview.match(/(?:^|\s)[-*•]\s+/g)?.length ?? 0;
+  return (
+    bulletCount >= 2 &&
+    /\b(do not|prefer|let me|accept|blocked|hide behind|large explanations|tiny drills|recall over)/i.test(
+      preview,
+    )
+  );
+}
+
 function isWeakLeadPreview(preview: string): boolean {
   return (
+    isInstructionBulletBundle(preview) ||
     /^(?:sounds good|okay|ok|alright|all right)\b/i.test(preview) ||
     /^(?:so,?\s+)?i(?:['’]m| am) going to\b/i.test(preview) ||
     /^(?:so,?\s+)?let me\b/i.test(preview) ||
-    /^i(?:['’]m| am)\s+(?:checking|reading|reviewing|inspecting|looking|trying|focusing)\b/i.test(
+    /^i(?:['’]m| am)\s+(?:checking|reading|reviewing|inspecting|looking|trying|focusing|opening|walking|digging)\b/i.test(
       preview,
     ) ||
     /^there(?:['’]s| is) one more important thing to verify before\b/i.test(
@@ -106,23 +168,61 @@ function isWeakLeadPreview(preview: string): boolean {
     ) ||
     /^also,?\s+i need to consider\b/i.test(preview) ||
     /^this way,?\s+i can\b/i.test(preview) ||
+    /^small concise hint\b/i.test(preview) ||
+    /^one minor tweak\b/i.test(preview) ||
+    /^i think i need to revisit this\b/i.test(preview) ||
+    /^i either don['’]?t get it\b/i.test(preview) ||
+    /\byou are being intentionally confusing\b/i.test(preview) ||
+    /^the key point:\s*/i.test(preview) ||
+    /^my honest view\b/i.test(preview) ||
+    /^better rule going forward\b/i.test(preview) ||
     /^the helper scripts are present\b/i.test(preview) ||
+    /^the (?:first|initial) pass found\b/i.test(preview) ||
     /^stabilize them\./i.test(preview) ||
+    /^(?:\d+\.\s*)?on unexpected failure:\s/i.test(preview) ||
+    /^(?:\d+\.\s*)?establish the problem narrowly\b/i.test(preview) ||
+    /^work through each category systematically\b/i.test(preview) ||
     /^no additional runs at this time please\b/i.test(preview) ||
     /^no docs\/report\. just fix the code\b/i.test(preview) ||
-    /^why:\s/i.test(preview)
+    /^-?\s*(?:problem|impact|fix|root cause|recommendation|severity|violation):\s/i.test(
+      preview,
+    ) ||
+    /^why:\s/i.test(preview) ||
+    isWrapperLeadSentence(preview)
   );
 }
 
+function leadSentence(preview: string): string {
+  const normalized = normalizeLeadPreviewForTitle(preview);
+  return splitPreviewSentences(normalized)[0] ?? normalized;
+}
+
 function hasUserLeadSignalPreview(preview: string): boolean {
-  return /\b(please|help me|can you|could you|would you|i need|i want|i just|we need|we want|bug|issue|problem|broken|broke|failing|failure|regression|error|wrong|confusing|stuck|fix|remove|replace)\b/i.test(
-    preview,
+  const lead = leadSentence(preview);
+  return (
+    /\b(please|help me|can you|could you|would you|i need|i want|i just|we need|we want|bug|issue|problem|broken|broke|failing|failure|regression|error|wrong|confusing|stuck|fix|remove|replace|port|migrate|integrate|support|review|audit|inspect|check|investigate|scan)\b/i.test(
+      lead,
+    ) ||
+    /^(?:do|implement|build|debug|wire|make|update|add|finish|port|scan|review|audit|inspect|check|investigate|initial)\b/i.test(
+      lead,
+    )
+  );
+}
+
+function hasUserMediumLeadSignalPreview(preview: string): boolean {
+  const lead = leadSentence(preview);
+  return (
+    hasUserLeadSignalPreview(preview) ||
+    /\?$/.test(lead.trim()) ||
+    /^(?:is|are|why|what|when|where|which|who|how|should|can|could|would|did|does|do)\b/i.test(
+      lead,
+    )
   );
 }
 
 function hasAssistantLeadSignalPreview(preview: string): boolean {
   return /\b(bug|issue|problem|broken|broke|failing|failure|regression|error|wrong|confusing|stuck|fix|fixed|remove|replace|verify|verified|root cause|user-visible)\b/i.test(
-    preview,
+    leadSentence(preview),
   );
 }
 
@@ -134,7 +234,10 @@ function chooseLeadPreview(
     {
       previews: userPreviews.filter(
         (preview) =>
-          !isLowSignalPreview(preview) &&
+          isPublicOperatorPreview(preview, {
+            source: "user",
+            purpose: "title",
+          }) &&
           !isUnsafePreview(preview) &&
           !isCodeLikePreview(preview) &&
           !isWeakLeadPreview(preview) &&
@@ -144,9 +247,27 @@ function chooseLeadPreview(
       confidence: "strong",
     },
     {
+      previews: userPreviews.filter(
+        (preview) =>
+          isPublicOperatorPreview(preview, {
+            source: "user",
+            purpose: "title",
+          }) &&
+          !isUnsafePreview(preview) &&
+          !isCodeLikePreview(preview) &&
+          !isWeakLeadPreview(preview) &&
+          hasUserMediumLeadSignalPreview(preview),
+      ),
+      source: "user",
+      confidence: "medium",
+    },
+    {
       previews: assistantPreviews.filter(
         (preview) =>
-          !isLowSignalPreview(preview) &&
+          isPublicOperatorPreview(preview, {
+            source: "assistant",
+            purpose: "title",
+          }) &&
           !isUnsafePreview(preview) &&
           !isCodeLikePreview(preview) &&
           !isWeakLeadPreview(preview) &&
@@ -158,9 +279,27 @@ function chooseLeadPreview(
   ];
 
   for (const group of groups) {
-    const preview = selectBestPreviews(group.previews, 1)[0];
-    if (preview) {
-      return { preview, source: group.source, confidence: group.confidence };
+    const rankedPreviews = [...new Set(group.previews)];
+    for (const allowSecondaryStructured of [false, true]) {
+      for (const preview of rankedPreviews) {
+        if (
+          !allowSecondaryStructured &&
+          isSecondaryStructuredTitlePreview(preview)
+        ) {
+          continue;
+        }
+
+        const normalized = normalizeLeadPreviewForTitle(preview);
+        if (normalized.length === 0 || isWeakLeadPreview(normalized)) {
+          continue;
+        }
+
+        return {
+          preview: normalized,
+          source: group.source,
+          confidence: group.confidence,
+        };
+      }
     }
   }
 
@@ -176,73 +315,61 @@ function chooseEvidencePreviews(
     {
       previews: userPreviews.filter(
         (preview) =>
-          !isLowSignalPreview(preview) &&
+          isPublicOperatorPreview(preview, {
+            source: "user",
+            purpose: "evidence",
+          }) &&
           !isUnsafePreview(preview) &&
           !isCodeLikePreview(preview) &&
+          !isWeakLeadPreview(preview) &&
           hasUserLeadSignalPreview(preview),
       ),
       source: "user",
       confidence: "strong",
     },
     {
-      previews: userPreviews.filter(
-        (preview) =>
-          !isLowSignalPreview(preview) &&
-          !isUnsafePreview(preview) &&
-          !isCodeLikePreview(preview),
-      ),
-      source: "user",
-      confidence: "medium",
-    },
-    {
-      previews: userPreviews.filter(
-        (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
-      ),
-      source: "user",
-      confidence: "weak",
-    },
-    {
       previews: assistantPreviews.filter(
         (preview) =>
-          !isLowSignalPreview(preview) &&
+          isPublicOperatorPreview(preview, {
+            source: "assistant",
+            purpose: "evidence",
+          }) &&
           !isUnsafePreview(preview) &&
           !isCodeLikePreview(preview) &&
+          !isWeakLeadPreview(preview) &&
           hasAssistantLeadSignalPreview(preview),
       ),
       source: "assistant",
       confidence: "medium",
     },
     {
+      previews: userPreviews.filter(
+        (preview) =>
+          isPublicOperatorPreview(preview, {
+            source: "user",
+            purpose: "evidence",
+          }) &&
+          !isUnsafePreview(preview) &&
+          !isCodeLikePreview(preview) &&
+          !isWeakLeadPreview(preview),
+      ),
+      source: "user",
+      confidence: "medium",
+    },
+    {
       previews: assistantPreviews.filter(
         (preview) =>
-          !isLowSignalPreview(preview) &&
+          isPublicOperatorPreview(preview, {
+            source: "assistant",
+            purpose: "evidence",
+          }) &&
           !isUnsafePreview(preview) &&
-          !isCodeLikePreview(preview),
+          !isCodeLikePreview(preview) &&
+          !isWeakLeadPreview(preview),
       ),
       source: "assistant",
       confidence: "weak",
     },
-    {
-      previews: assistantPreviews.filter(
-        (preview) => !isUnsafePreview(preview) && !isCodeLikePreview(preview),
-      ),
-      source: "assistant",
-      confidence: "weak",
-    },
-    {
-      previews: userPreviews.filter((preview) => !isUnsafePreview(preview)),
-      source: "user",
-      confidence: "weak",
-    },
-    {
-      previews: assistantPreviews.filter(
-        (preview) => !isUnsafePreview(preview),
-      ),
-      source: "assistant",
-      confidence: "weak",
-    },
-    { previews: userPreviews, source: "user", confidence: "weak" },
-    { previews: assistantPreviews, source: "assistant", confidence: "weak" },
   ];
 
   let evidenceConfidence: SummaryConfidence = "weak";
@@ -347,7 +474,12 @@ function isMeaningfulProjectLabel(value: string): boolean {
     normalized === "sessions" ||
     normalized === "projects" ||
     normalized === "agent" ||
-    normalized.startsWith("-private-var-folders-")
+    normalized === ".pi" ||
+    normalized === ".codex" ||
+    normalized === ".claude" ||
+    normalized === "redacted-session-root" ||
+    normalized.startsWith("-private-var-folders-") ||
+    /^--.+--$/.test(normalized)
   ) {
     return false;
   }
@@ -363,15 +495,6 @@ function isMeaningfulProjectLabel(value: string): boolean {
   return true;
 }
 
-function derivePiProjectFromSourcePath(sourcePath: string): string | undefined {
-  const parent = basename(dirname(sourcePath.replace(/\/$/, "")));
-  const match = parent.match(/Projects-(.+?)--?$/);
-  const candidate = match?.[1]?.replace(/--+$/, "");
-  return candidate && isMeaningfulProjectLabel(candidate)
-    ? candidate
-    : undefined;
-}
-
 export function deriveSessionProjectLabel(
   cwd?: string,
   sourceRefs: readonly SourceRef[] = [],
@@ -384,13 +507,6 @@ export function deriveSessionProjectLabel(
   }
 
   const sourcePath = sourceRefs[0]?.path;
-  if (sourcePath?.includes("/.pi/agent/sessions/")) {
-    const piProject = derivePiProjectFromSourcePath(sourcePath);
-    if (piProject) {
-      return piProject;
-    }
-  }
-
   const sourceParent = sourcePath
     ? basename(dirname(sourcePath.replace(/\/$/, "")))
     : undefined;

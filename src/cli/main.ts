@@ -112,28 +112,36 @@ function buildProgram(): Command {
     .showHelpAfterError()
     .option(
       "--source <provider>",
-      "Source provider to inspect: codex, claude, or pi (env: CODEX_EVAL_SOURCE)",
+      "Source provider to inspect: codex, claude, or pi (env: AGENT_EVAL_SOURCE)",
       defaultSource,
     )
     .option(
       "--home <path>",
-      "Source home to inspect (env: CODEX_EVAL_SOURCE_HOME)",
+      "Source home to inspect (env: AGENT_EVAL_SOURCE_HOME)",
       defaultHome,
     )
     .option(
       "--output-dir <path>",
-      "Directory for generated analytics artifacts (env: CODEX_EVAL_OUTPUT_DIR)",
+      "Directory for generated analytics artifacts (env: AGENT_EVAL_OUTPUT_DIR)",
       defaultOutputDir,
     )
     .option(
-      "--report-skin <skin>",
-      "Report presentation skin: operator or showcase (env: CODEX_EVAL_REPORT_SKIN)",
-      "operator",
+      "--session-limit <count>",
+      "Limit transcript files processed during this run after date filtering",
+      (value) => Number.parseInt(value, 10),
     )
     .option(
-      "--session-limit <count>",
-      "Limit transcript files processed during this run",
-      (value) => Number.parseInt(value, 10),
+      "--start-date <date-or-iso>",
+      "Inclusive UTC start date filter (YYYY-MM-DD or ISO timestamp)",
+    )
+    .option(
+      "--end-date <date-or-iso>",
+      "Inclusive UTC end date filter (YYYY-MM-DD or ISO timestamp)",
+    )
+    .option(
+      "--time-bucket <bucket>",
+      "Temporal bucket for metrics.json time series: day, week, or month",
+      "week",
     )
     .option(
       "--summary-only",
@@ -142,12 +150,12 @@ function buildProgram(): Command {
     )
     .option(
       "--concurrency <n>",
-      "Number of concurrent sessions to process (env: CODEX_EVAL_CONCURRENCY_FULL)",
+      "Number of concurrent sessions to process (env: AGENT_EVAL_CONCURRENCY_FULL)",
       (value) => Number.parseInt(value, 10),
     )
     .option(
       "--max-turn-gap <n>",
-      "Maximum turn gap for incident clustering (env: CODEX_EVAL_MAX_TURN_GAP)",
+      "Maximum turn gap for incident clustering (env: AGENT_EVAL_MAX_TURN_GAP)",
       (value) => Number.parseInt(value, 10),
     )
     .addHelpText(
@@ -161,13 +169,12 @@ function buildProgram(): Command {
         "    - agent-eval.config.json",
         "",
         "  Environment variables:",
-        "    CODEX_EVAL_SOURCE              - Source provider (codex|claude|pi)",
-        "    CODEX_EVAL_SOURCE_HOME         - Source home directory",
-        "    CODEX_EVAL_OUTPUT_DIR          - Output directory for artifacts",
-        "    CODEX_EVAL_REPORT_SKIN         - Report skin (operator|showcase)",
-        "    CODEX_EVAL_CONCURRENCY_FULL    - Concurrency for full evaluation",
-        "    CODEX_EVAL_CONCURRENCY_SUMMARY - Concurrency for summary evaluation",
-        "    CODEX_EVAL_MAX_TURN_GAP        - Max turn gap for clustering",
+        "    AGENT_EVAL_SOURCE              - Source provider (codex|claude|pi)",
+        "    AGENT_EVAL_SOURCE_HOME         - Source home directory",
+        "    AGENT_EVAL_OUTPUT_DIR          - Output directory for artifacts",
+        "    AGENT_EVAL_CONCURRENCY_FULL    - Concurrency for full evaluation",
+        "    AGENT_EVAL_CONCURRENCY_SUMMARY - Concurrency for summary evaluation",
+        "    AGENT_EVAL_MAX_TURN_GAP        - Max turn gap for clustering",
         "",
         "Examples:",
         "  agent-eval inspect --source codex --home ~/.codex",
@@ -177,9 +184,9 @@ function buildProgram(): Command {
         "  cat artifacts/raw-turns.jsonl",
         "  agent-eval eval --source claude --home ~/.claude --output-dir artifacts",
         "  agent-eval eval --source pi --home ~/.pi --summary-only --session-limit 25",
+        "  agent-eval eval --source codex --home ~/.codex --start-date 2026-03-01 --end-date 2026-03-31 --time-bucket day",
         "  agent-eval benchmark --output-dir artifacts/benchmark",
         "  agent-eval report --source codex --home ~/.codex --output-dir artifacts",
-        "  agent-eval report --source pi --home ~/.pi --report-skin showcase",
         "",
         "Exit codes:",
         "  0 success",

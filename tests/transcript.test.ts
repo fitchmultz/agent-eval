@@ -200,6 +200,75 @@ describe("parseTranscriptFile", () => {
     expect(errors[0]?.error).toBeInstanceOf(Error);
   });
 
+  it("keeps the first codex session_meta as the owning session in forked transcripts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agent-eval-transcript-"));
+    const sessionPath = join(
+      root,
+      "rollout-2026-03-06T19-00-00-child-session.jsonl",
+    );
+
+    const content = [
+      {
+        timestamp: "2026-03-06T19:00:00.000Z",
+        type: "session_meta",
+        payload: {
+          id: "child-session",
+          timestamp: "2026-03-06T19:00:00.000Z",
+          cwd: "/workspace/child",
+          source: {
+            subagent: {
+              thread_spawn: {
+                parent_thread_id: "parent-session",
+              },
+            },
+          },
+        },
+      },
+      {
+        timestamp: "2026-03-06T19:00:01.000Z",
+        type: "session_meta",
+        payload: {
+          id: "parent-session",
+          timestamp: "2026-03-06T18:59:00.000Z",
+          cwd: "/workspace/parent",
+        },
+      },
+      {
+        timestamp: "2026-03-06T19:00:02.000Z",
+        type: "turn_context",
+        payload: {
+          turn_id: "turn-1",
+          cwd: "/workspace/child",
+        },
+      },
+      {
+        timestamp: "2026-03-06T19:00:03.000Z",
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: "Please inspect the child session only.",
+            },
+          ],
+        },
+      },
+    ]
+      .map((record) => JSON.stringify(record))
+      .join("\n");
+
+    await writeFile(sessionPath, content, "utf8");
+
+    const session = await parseTranscriptFile(sessionPath);
+
+    expect(session.sessionId).toBe("child-session");
+    expect(session.parentSessionId).toBe("parent-session");
+    expect(session.startedAt).toBe("2026-03-06T19:00:00.000Z");
+    expect(session.cwd).toBe("/workspace/child");
+  });
+
   it("handles empty files gracefully", async () => {
     const root = await mkdtemp(join(tmpdir(), "agent-eval-transcript-"));
     const sessionPath = join(root, "empty.jsonl");
@@ -453,6 +522,60 @@ describe("parseClaudeTranscriptFile", () => {
     expect(session.turns[1]?.userMessages[0]).toBe("Continue and fix the bug.");
   });
 
+  it("does not surface Claude thinking blocks as assistant-visible messages", async () => {
+    const sessionPath = await writeClaudeTranscript("thinking-hidden", [
+      {
+        sessionId: "claude-session-thinking",
+        timestamp: "2026-03-06T19:00:00.000Z",
+        cwd: "/workspace/demo",
+        uuid: "user-1",
+        message: {
+          role: "user",
+          content: [
+            { type: "text", text: "Please run the tests and report back." },
+          ],
+        },
+      },
+      {
+        sessionId: "claude-session-thinking",
+        timestamp: "2026-03-06T19:00:01.000Z",
+        cwd: "/workspace/demo",
+        uuid: "assistant-1",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: "I will run the tests now." },
+            {
+              type: "tool_use",
+              id: "tool-1",
+              name: "exec_command",
+              input: { cmd: "pnpm test" },
+            },
+          ],
+        },
+      },
+      {
+        sessionId: "claude-session-thinking",
+        timestamp: "2026-03-06T19:00:02.000Z",
+        cwd: "/workspace/demo",
+        uuid: "tool-result-1",
+        toolUseResult: { exitCode: 0, stdout: "passed" },
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "tool-1", content: "passed" },
+          ],
+        },
+      },
+    ]);
+
+    const session = await parseClaudeTranscriptFile(sessionPath);
+
+    expect(session.turns).toHaveLength(1);
+    expect(session.turns[0]?.assistantMessages).toEqual([]);
+    expect(session.turns[0]?.toolCalls[0]?.toolName).toBe("exec_command");
+  });
+
   it("does not create an extra turn for tool-result-only user records", async () => {
     const sessionPath = await writeClaudeTranscript("tool-result-only", [
       {
@@ -616,9 +739,7 @@ describe("parsePiTranscriptFile", () => {
     expect(session.turns[0]?.userMessages).toEqual([
       "Run the tests and report back.",
     ]);
-    expect(session.turns[0]?.assistantMessages).toContain(
-      "I will run the tests now.",
-    );
+    expect(session.turns[0]?.assistantMessages).toEqual([]);
     expect(session.turns[0]?.toolCalls[0]?.toolName).toBe("bash");
     expect(session.turns[0]?.toolCalls[0]?.outputText).toContain(
       "Process exited with code 0",
