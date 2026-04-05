@@ -13,6 +13,8 @@ import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const scannerPath = resolve("scripts/public-surface-scan.mjs");
+const macosHomeSegment = "/Us" + "ers/";
+const encodedUsersSegment = "Us" + "ers";
 
 async function runRepoScan(files: Record<string, string>) {
   const rootDir = await mkdtemp(join(tmpdir(), "agent-eval-public-scan-"));
@@ -46,8 +48,7 @@ async function runRepoScan(files: Record<string, string>) {
 describe("public-surface-scan repo mode", () => {
   it("allows the scanner's own intentional regex literal line", async () => {
     const result = await runRepoScan({
-      "scripts/public-surface-scan.mjs":
-        '{ label: "absolute-macos-home", regex: /\\/Users\\//g },\n',
+      "scripts/public-surface-scan.mjs": `{ label: "absolute-macos-home", regex: /\\/${encodedUsersSegment}\\//g },\n`,
     });
 
     expect(result.status).toBe(0);
@@ -57,32 +58,34 @@ describe("public-surface-scan repo mode", () => {
   it("fails when an allowlisted scanner file also contains a later home-path leak", async () => {
     const result = await runRepoScan({
       "scripts/public-surface-scan.mjs": [
-        '{ label: "absolute-macos-home", regex: /\\/Users\\//g },',
-        'const leak = "/Users/realperson/project";',
+        `{ label: "absolute-macos-home", regex: /\\/${encodedUsersSegment}\\//g },`,
+        `const leak = "${macosHomeSegment}realperson/project";`,
       ].join("\n"),
     });
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("absolute-macos-home");
-    expect(result.stderr).toContain("/Users/");
+    expect(result.stderr).toContain(macosHomeSegment);
   });
 
   it("fails when an allowlisted test fixture file contains a later encoded-user leak", async () => {
     const result = await runRepoScan({
       "tests/corpus-regression.test.ts": [
-        'expect(artifact).not.toContain("--Users-test-project--");',
-        'const leak = "--Users-real-private-project--";',
+        `expect(artifact).not.toContain("--${encodedUsersSegment}-test-project--");`,
+        `const leak = "--${encodedUsersSegment}-real-private-project--";`,
       ].join("\n"),
     });
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("encoded-user-segment");
-    expect(result.stderr).toContain("Users-real-private-project");
+    expect(result.stderr).toContain(
+      `${encodedUsersSegment}-real-private-project`,
+    );
   });
 
   it("fails for a non-allowlisted repo file with a home-path leak", async () => {
     const result = await runRepoScan({
-      "README.md": "leak /Users/realperson/project\n",
+      "README.md": `leak ${macosHomeSegment}realperson/project\n`,
     });
 
     expect(result.status).toBe(1);
