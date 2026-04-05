@@ -41,112 +41,180 @@ const REPO_MODE_ALLOWLIST = [
   {
     path: /\/src\/sanitization\.ts$/,
     label: "ssh-directory",
-    sample: /\.ssh\//,
+    lineText: 'match.replace(/~\\/\\.ssh/i, "[redacted-ssh-path]"),',
   },
   {
     path: /\/scripts\/public-surface-scan\.mjs$/,
     label: "absolute-macos-home",
-    sample: /\/Users\//,
+    lineText: '{ label: "absolute-macos-home", regex: /\\/Users\\//g },',
+  },
+  {
+    path: /\/scripts\/public-surface-scan\.mjs$/,
+    label: "absolute-macos-home",
+    lineText: 'sample: /\\/Users\\//,',
   },
   {
     path: /\/scripts\/public-surface-scan\.mjs$/,
     label: "private-var-folders",
-    sample: /\/private\/var\/folders\//,
+    lineText: '{ label: "private-var-folders", regex: /\\/private\\/var\\/folders\\//g },',
+  },
+  {
+    path: /\/scripts\/public-surface-scan\.mjs$/,
+    label: "private-var-folders",
+    lineText: 'sample: /\\/private\\/var\\/folders\\//,',
   },
   {
     path: /\/scripts\/public-surface-scan\.mjs$/,
     label: "ssh-directory",
-    sample: /\.ssh\//,
+    lineText: '{ label: "ssh-directory", regex: /\\.ssh\\//g },',
+  },
+  {
+    path: /\/scripts\/public-surface-scan\.mjs$/,
+    label: "ssh-directory",
+    lineText: 'sample: /\\.ssh\\//,',
   },
   {
     path: /\/scripts\/public-surface-scan\.mjs$/,
     label: "encoded-user-segment",
-    sample: /-Users-test-project--/,
+    lineText: 'sample: /-Users-test-project--/,',
+  },
+  {
+    path: /\/scripts\/public-surface-scan\.mjs$/,
+    label: "encoded-user-segment",
+    lineText: 'sample: /-Users-test-project/,',
+  },
+  {
+    path: /\/scripts\/public-surface-scan\.mjs$/,
+    label: "encoded-user-segment",
+    lineText: 'sample: /-Users-example-Projects-AI-agent-eval--/,',
   },
   {
     path: /\/scripts\/public-surface-scan\.mjs$/,
     label: "encoded-temp-root",
-    sample: /-private-var-folders-rf-t1b4c-cn7sgc-f6tkyg0wsk00000gn-T/,
+    lineText:
+      'sample: /-private-var-folders-rf-t1b4c-cn7sgc-f6tkyg0wsk00000gn-T/,',
   },
   {
     path: /\/tests\/corpus-regression\.test\.ts$/,
     label: "absolute-macos-home",
-    sample: /\/Users\//,
+    lineText: 'expect(artifact).not.toContain("/Users/");',
   },
   {
     path: /\/tests\/corpus-regression\.test\.ts$/,
     label: "private-var-folders",
-    sample: /\/private\/var\/folders\//,
+    lineText: 'expect(artifact).not.toContain("/private/var/folders/");',
   },
   {
     path: /\/tests\/corpus-regression\.test\.ts$/,
     label: "encoded-user-segment",
-    sample: /-Users-test-project--/,
+    lineText: 'expect(artifact).not.toContain("--Users-test-project--");',
   },
   {
     path: /\/tests\/corpus-regression\.test\.ts$/,
     label: "encoded-temp-root",
-    sample: /-private-var-folders-rf-t1b4c-cn7sgc-f6tkyg0wsk00000gn-T/,
+    lineText:
+      '"-private-var-folders-rf-t1b4c-cn7sgc-f6tkyg0wsk00000gn-T",',
   },
   {
     path: /\/tests\/discovery\.test\.ts$/,
     label: "encoded-user-segment",
-    sample: /-Users-test-project/,
+    lineText:
+      'const projectsDir = join(testDir, "projects", "-Users-test-project");',
   },
   {
-    path: /\/tests\/evaluator\.test\.ts$/,
-    label: "linux-home",
-    sample: /\/home\/test\//,
+    path: /\/tests\/discovery\.test\.ts$/,
+    label: "encoded-user-segment",
+    lineText: '"--Users-test-project",',
   },
   {
     path: /\/tests\/sanitization\.test\.ts$/,
     label: "absolute-macos-home",
-    sample: /\/Users\//,
+    lineText:
+      '"See /Users/example/project and email me at dev@example.com for details.",',
+  },
+  {
+    path: /\/tests\/sanitization\.test\.ts$/,
+    label: "absolute-macos-home",
+    lineText: 'homeDirectory: "/Users/example",',
+  },
+  {
+    path: /\/tests\/sanitization\.test\.ts$/,
+    label: "absolute-macos-home",
+    lineText: 'expect(sanitized).not.toContain("/Users/example");',
   },
   {
     path: /\/tests\/sanitization\.test\.ts$/,
     label: "ssh-directory",
-    sample: /\.ssh\//,
+    lineText:
+      '"DID YOU FUCKING DELETE MY SSH KEYS??? no such identity: ~/.ssh/example_id_ed25519 Permission denied (publickey)",',
+  },
+  {
+    path: /\/tests\/sanitization\.test\.ts$/,
+    label: "ssh-directory",
+    lineText:
+      '"See the following: DID YOU FUCKING DELETE MY SSH KEYS??? no such identity: ~/.ssh/example_id_ed25519",',
   },
   {
     path: /\/tests\/session-display\.test\.ts$/,
     label: "absolute-macos-home",
-    sample: /\/Users\//,
+    lineText:
+      'expect(deriveSessionProjectLabel("/Users/example/Downloads", [])).toBe(',
   },
   {
     path: /\/tests\/session-display\.test\.ts$/,
     label: "private-var-folders",
-    sample: /\/private\/var\/folders\//,
+    lineText:
+      'deriveSessionProjectLabel("/private/var/folders/rf/t1b4c/T", sourceRefs),',
   },
   {
     path: /\/tests\/session-display\.test\.ts$/,
     label: "encoded-user-segment",
-    sample: /-Users-example-Projects-AI-agent-eval--/,
+    lineText:
+      'path: "~/.pi/agent/sessions/--Users-example-Projects-AI-agent-eval--/2026-04-01T13-20-09-770Z_da2795a9-4b2a-44d8-a617-5400603bb00e.jsonl",',
   },
   {
     path: /\/tests\/session-display\.test\.ts$/,
     label: "encoded-temp-root",
-    sample: /-private-var-folders-rf-t1b4c-cn7sgc-f6tkyg0wsk00000gn-T/,
-  },
-  {
-    path: /\/tests\/session-processor\.test\.ts$/,
-    label: "linux-home",
-    sample: /\/home\/user\//,
+    lineText:
+      'path: "~/.claude/projects/-private-var-folders-rf-t1b4c-cn7sgc-f6tkyg0wsk00000gn-T/25751d6d.jsonl",',
   },
   {
     path: /\/tests\/session-ranking\.test\.ts$/,
     label: "absolute-macos-home",
-    sample: /\/Users\//,
+    lineText: 'cwd: "/Users/example/Projects/AI/agent-eval",',
+  },
+  {
+    path: /\/tests\/session-ranking\.test\.ts$/,
+    label: "absolute-macos-home",
+    lineText: 'cwd: "/Users/example/Projects/AI/repeated-project",',
+  },
+  {
+    path: /\/tests\/session-ranking\.test\.ts$/,
+    label: "absolute-macos-home",
+    lineText: 'cwd: "/Users/example/Projects/AI/another-project",',
   },
   {
     path: /\/tests\/support\/transcript-fixtures\.ts$/,
     label: "encoded-user-segment",
-    sample: /-Users-test-project/,
+    lineText:
+      'const projectsDir = join(homeDir, "projects", "-Users-test-project");',
+  },
+  {
+    path: /\/tests\/support\/transcript-fixtures\.ts$/,
+    label: "encoded-user-segment",
+    lineText: '"--Users-test-project--",',
   },
   {
     path: /\/tests\/transcript\.test\.ts$/,
     label: "encoded-user-segment",
-    sample: /-Users-test-project/,
+    lineText:
+      'const projectsDir = join(root, "projects", "-Users-test-project");',
+  },
+  {
+    path: /\/tests\/transcript\.test\.ts$/,
+    label: "encoded-user-segment",
+    lineText:
+      'const sessionsDir = join(root, "agent", "sessions", "--Users-test-project");',
   },
 ];
 
@@ -157,9 +225,7 @@ function printHelp() {
   );
   process.stdout.write(`Usage:\n`);
   process.stdout.write(`  node scripts/public-surface-scan.mjs <path...>\n`);
-  process.stdout.write(
-    `  node scripts/public-surface-scan.mjs --mode=repo\n`,
-  );
+  process.stdout.write(`  node scripts/public-surface-scan.mjs --mode=repo\n`);
   process.stdout.write(
     `  node scripts/public-surface-scan.mjs --mode=repo README.md docs src scripts\n`,
   );
@@ -194,19 +260,54 @@ async function collectFiles(targetPath, files, mode) {
   }
 }
 
-function isAllowedFinding(mode, filePath, label, sample) {
-  if (mode !== "repo") {
+function extractLineText(content, index) {
+  const lineStart = content.lastIndexOf("\n", Math.max(0, index - 1)) + 1;
+  const rawLineEnd = content.indexOf("\n", index);
+  const lineEnd = rawLineEnd === -1 ? content.length : rawLineEnd;
+  return content.slice(lineStart, lineEnd).trim();
+}
+
+function decodeQuotedLineText(lineText) {
+  const match = lineText.match(/^(?:lineText:\s*)?'((?:\\'|[^'])*)',?$/);
+  if (!match) {
+    return null;
+  }
+
+  return match[1].replace(/\\'/g, "'").replace(/\\\\/g, "\\");
+}
+
+function isScannerAllowlistDeclarationLine(filePath, label, lineText) {
+  if (!/\/scripts\/public-surface-scan\.mjs$/.test(filePath)) {
+    return false;
+  }
+
+  const decodedLineText = decodeQuotedLineText(lineText);
+  if (!decodedLineText) {
     return false;
   }
 
   return REPO_MODE_ALLOWLIST.some(
-    (rule) =>
-      rule.path.test(filePath) &&
-      (typeof rule.label === "string"
-        ? rule.label === label
-        : rule.label.test(label)) &&
-      rule.sample.test(sample),
+    (rule) => rule.label === label && rule.lineText === decodedLineText,
   );
+}
+
+function isAllowedFinding(mode, filePath, label, lineText) {
+  if (mode !== "repo") {
+    return false;
+  }
+
+  if (
+    REPO_MODE_ALLOWLIST.some(
+      (rule) =>
+        rule.path.test(filePath) &&
+        rule.label === label &&
+        rule.lineText === lineText,
+    )
+  ) {
+    return true;
+  }
+
+  return isScannerAllowlistDeclarationLine(filePath, label, lineText);
 }
 
 function trackedRepoPaths() {
@@ -256,15 +357,17 @@ async function main() {
     const content = await readFile(filePath, "utf8");
     for (const pattern of LEAK_PATTERNS) {
       pattern.regex.lastIndex = 0;
-      const match = pattern.regex.exec(content);
-      if (!match || isAllowedFinding(mode, filePath, pattern.label, match[0])) {
-        continue;
+      for (const match of content.matchAll(pattern.regex)) {
+        const lineText = extractLineText(content, match.index ?? 0);
+        if (isAllowedFinding(mode, filePath, pattern.label, lineText)) {
+          continue;
+        }
+        findings.push({
+          filePath,
+          label: pattern.label,
+          sample: match[0],
+        });
       }
-      findings.push({
-        filePath,
-        label: pattern.label,
-        sample: match[0],
-      });
     }
   }
 
