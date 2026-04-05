@@ -156,4 +156,160 @@ describe("buildSessionFacts", () => {
       { label: "regression_report", count: 1 },
     ]);
   });
+
+  it("replaces empty unsurfaced evidence with a deterministic fallback", () => {
+    const [fact] = buildSessionFacts(
+      [
+        {
+          sessionId: "session-empty",
+          provider: "claude",
+          harness: "claude",
+          modelProvider: null,
+          model: null,
+          startedAt: null,
+          endedAt: null,
+          durationMs: null,
+          turnCount: 1,
+          userMessageCount: 1,
+          assistantMessageCount: 0,
+          toolCallCount: 0,
+          writeToolCallCount: 0,
+          verificationToolCallCount: 0,
+          mcpToolCallCount: 0,
+          writeCount: 0,
+          verificationCount: 0,
+          endedVerified: false,
+          complianceScore: 100,
+          failedRules: [],
+          topTools: [],
+          mcpServers: [],
+          rawLabelCounts: {},
+          deTemplatedLabelCounts: {},
+          template: { artifactScore: 17, textSharePct: 7, flags: [] },
+          attribution: {
+            primary: "unknown",
+            confidence: "low",
+            reasons: ["Transcript-visible evidence was insufficient."],
+          },
+          title: undefined,
+          evidencePreviews: [],
+          sourceRefs: [],
+        },
+      ],
+      createV3Summary(),
+    );
+
+    expect(fact?.evidencePreviews).toEqual([
+      "No durable public-safe evidence preview survived extraction for this session.",
+    ]);
+  });
+
+  it("replaces scaffold-dominated unsurfaced evidence with a deterministic fallback", () => {
+    const [fact] = buildSessionFacts(
+      [
+        {
+          sessionId: "session-scaffold",
+          provider: "codex",
+          harness: "codex",
+          modelProvider: "openai",
+          model: null,
+          startedAt: null,
+          endedAt: null,
+          durationMs: null,
+          turnCount: 2,
+          userMessageCount: 2,
+          assistantMessageCount: 0,
+          toolCallCount: 0,
+          writeToolCallCount: 0,
+          verificationToolCallCount: 0,
+          mcpToolCallCount: 0,
+          writeCount: 0,
+          verificationCount: 0,
+          endedVerified: false,
+          complianceScore: 100,
+          failedRules: [],
+          topTools: [],
+          mcpServers: [],
+          rawLabelCounts: {},
+          deTemplatedLabelCounts: {},
+          template: {
+            artifactScore: 100,
+            textSharePct: 65,
+            flags: [
+              "instruction_scaffold",
+              "template_heavy",
+              "template_present",
+            ],
+          },
+          attribution: {
+            primary: "template_artifact",
+            confidence: "high",
+            reasons: ["The visible transcript surface was scaffold-dominated."],
+          },
+          title: undefined,
+          evidencePreviews: [
+            "**Keep this file updated** as you learn project patterns. Follow: concise, index-style, no duplication.",
+            "Infer intent when reasonable. Ask clarifying questions only when ambiguity materially changes the work.",
+          ],
+          sourceRefs: [],
+        },
+      ],
+      createV3Summary(),
+    );
+
+    expect(fact?.evidencePreviews).toEqual([
+      "No durable public-safe evidence preview survived extraction for this session.",
+    ]);
+  });
+
+  it("drops thin procedural fragments from unsurfaced evidence and falls back when nothing durable remains", () => {
+    const [fact] = buildSessionFacts(
+      [
+        {
+          sessionId: "session-fragment",
+          provider: "pi",
+          harness: "pi",
+          modelProvider: "openai-codex",
+          model: "gpt-5.4",
+          startedAt: null,
+          endedAt: null,
+          durationMs: null,
+          turnCount: 3,
+          userMessageCount: 3,
+          assistantMessageCount: 1,
+          toolCallCount: 0,
+          writeToolCallCount: 0,
+          verificationToolCallCount: 0,
+          mcpToolCallCount: 0,
+          writeCount: 0,
+          verificationCount: 0,
+          endedVerified: false,
+          complianceScore: 100,
+          failedRules: [],
+          topTools: [],
+          mcpServers: [],
+          rawLabelCounts: {},
+          deTemplatedLabelCounts: {},
+          template: { artifactScore: 0, textSharePct: 0, flags: [] },
+          attribution: {
+            primary: "unknown",
+            confidence: "low",
+            reasons: ["Transcript-visible evidence was insufficient."],
+          },
+          title: undefined,
+          evidencePreviews: [
+            "copy the previous logs first as normal. then run 3",
+            "Exact command for Run 3",
+            "up",
+          ],
+          sourceRefs: [],
+        },
+      ],
+      createV3Summary(),
+    );
+
+    expect(fact?.evidencePreviews).toEqual([
+      "No durable public-safe evidence preview survived extraction for this session.",
+    ]);
+  });
 });

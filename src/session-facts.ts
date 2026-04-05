@@ -4,6 +4,10 @@
  * Notes: Derives canonical session facts from evaluator projections and the v3 summary surface; the artifact writer remains serialization-only.
  */
 
+import {
+  isLowSignalPreview,
+  normalizePublicPreviewCandidate,
+} from "./sanitization.js";
 import type {
   LabelCountRecord,
   SessionFactRecord,
@@ -44,6 +48,65 @@ export interface SessionFactProjection {
   title?: string | undefined;
   evidencePreviews: string[];
   sourceRefs: SessionFactRecord["sourceRefs"];
+}
+
+const UNSURFACED_EVIDENCE_FALLBACK =
+  "No durable public-safe evidence preview survived extraction for this session.";
+
+function previewWordCount(preview: string): number {
+  return preview.split(/\s+/).filter((token) => token.length > 0).length;
+}
+
+function isThinProceduralEvidencePreview(preview: string): boolean {
+  const normalized = normalizePublicPreviewCandidate(preview);
+  const wordCount = previewWordCount(normalized);
+  if (wordCount === 0) {
+    return true;
+  }
+
+  return (
+    wordCount <= 1 ||
+    (wordCount <= 6 &&
+      /^(?:exact\s+)?(?:command|commands?|run|rerun|retry|repeat|step)\b/i.test(
+        normalized,
+      )) ||
+    (wordCount <= 12 &&
+      /\b(?:first|then|next|after(?:\s+that)?)\b/i.test(normalized) &&
+      /\b(?:run|rerun|retry|repeat|step)\s+\d+\b/i.test(normalized))
+  );
+}
+
+function isScaffoldDominatedFallbackCandidate(
+  projection: SessionFactProjection,
+): boolean {
+  return (
+    !projection.title &&
+    projection.template.flags.includes("instruction_scaffold") &&
+    (projection.template.artifactScore ?? 0) >= 80
+  );
+}
+
+function canonicalizeUnsurfacedEvidencePreviews(
+  projection: SessionFactProjection,
+): string[] {
+  const normalized = [
+    ...new Set(
+      projection.evidencePreviews
+        .map((preview) => normalizePublicPreviewCandidate(preview))
+        .filter((preview) => preview.length > 0),
+    ),
+  ];
+
+  const cleaned = normalized.filter(
+    (preview) =>
+      !isLowSignalPreview(preview) && !isThinProceduralEvidencePreview(preview),
+  );
+
+  if (cleaned.length > 0 && !isScaffoldDominatedFallbackCandidate(projection)) {
+    return cleaned;
+  }
+
+  return [UNSURFACED_EVIDENCE_FALLBACK];
 }
 
 function defaultAttributionReason(
@@ -106,6 +169,9 @@ export function buildSessionFacts(
     const reviewSurface = reviewQueueById.get(projection.sessionId);
     const exemplarSurface = exemplarById.get(projection.sessionId);
     const surface = exemplarSurface ?? reviewSurface;
+    const evidencePreviews = surface?.evidencePreviews
+      ? surface.evidencePreviews
+      : canonicalizeUnsurfacedEvidencePreviews(projection);
 
     return {
       engineVersion: ENGINE_VERSION,
@@ -152,8 +218,7 @@ export function buildSessionFacts(
         reasons: [attributionReason],
       },
       title: surface?.title ?? projection.title ?? null,
-      evidencePreviews:
-        surface?.evidencePreviews ?? projection.evidencePreviews,
+      evidencePreviews,
       sourceRefs: surface?.sourceRefs ?? projection.sourceRefs,
       surfacedIn: {
         exemplar: exemplarById.has(projection.sessionId),
