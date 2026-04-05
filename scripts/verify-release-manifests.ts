@@ -10,6 +10,7 @@ import { execFileSync } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 
+import { initializeConfig } from "../src/config/index.js";
 import {
   computeReleaseConfigFingerprint,
   releaseManifestSchema,
@@ -86,6 +87,7 @@ async function main() {
   let headCommit = "";
   let headBranch = "";
   try {
+    await initializeConfig({ cwd: process.cwd() });
     headCommit = runGit(["rev-parse", "HEAD"]);
     headBranch = runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
   } catch (error) {

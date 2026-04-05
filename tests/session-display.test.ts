@@ -140,6 +140,31 @@ describe("collectSessionContexts", () => {
     ]);
   });
 
+  it("drops weak secondary evidence residue after a strong primary preview is found", () => {
+    const contexts = collectSessionContexts([
+      createTurn({
+        userMessagePreviews: [
+          "Do the highest-risk wake-path spike before porting the full worker.",
+          "Wake-path spike implementation or proof-of-failure 3.",
+          "Keep only duplicate groups. do i need a for loop?",
+          "I reloaded. Extension changes are active in this thread now.",
+          "make all of your changes and commit to our fork but do not open a PR yet",
+        ],
+        assistantMessagePreviews: [
+          "**mode selection is not wired through the user-facing executable path yet** If you want, I can fix that next by wiring:",
+          "Now I have a thorough understanding of the problem. Let me also check the agent docs directory for any relevant context.",
+          "Here's the full review output from reviewer model. User may select one or more comments to resolve.</context> <action>review</action> <results> I did not find a discrete correctness regression in this commit.",
+          "My best evidence-backed bet is: real code or a real-ish repo, file/diff manipulation, safe changes, tests or validation, and discussion of trade-offs and failure modes.",
+        ],
+      }),
+    ]);
+
+    const context = contexts.get("session-1");
+    expect(context?.evidencePreviews).toEqual([
+      "Do the highest-risk wake-path spike before porting the full worker.",
+    ]);
+  });
+
   it("strips conversational lead-ins from user-facing titles", () => {
     const contexts = collectSessionContexts([
       createTurn({

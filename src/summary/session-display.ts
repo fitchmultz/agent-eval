@@ -149,6 +149,56 @@ function appendUniquePreviewEntries(
   }
 }
 
+function previewSignalTokens(preview: string): string[] {
+  return (
+    preview
+      .toLowerCase()
+      .match(/[a-z][a-z0-9_./-]{2,}/g)
+      ?.filter(
+        (token) =>
+          !new Set([
+            "that",
+            "this",
+            "with",
+            "from",
+            "they",
+            "them",
+            "your",
+            "have",
+            "what",
+            "when",
+            "where",
+            "which",
+            "would",
+            "could",
+            "should",
+            "after",
+            "before",
+            "then",
+            "there",
+            "their",
+            "about",
+            "because",
+            "please",
+          ]).has(token),
+      ) ?? []
+  );
+}
+
+function hasMeaningfulPreviewOverlap(
+  primaryPreview: string,
+  candidatePreview: string,
+): boolean {
+  const primaryTokens = new Set(previewSignalTokens(primaryPreview));
+  if (primaryTokens.size === 0) {
+    return false;
+  }
+
+  return previewSignalTokens(candidatePreview).some((token) =>
+    primaryTokens.has(token),
+  );
+}
+
 function isInstructionBulletBundle(preview: string): boolean {
   const bulletCount = preview.match(/(?:^|\s)[-*•]\s+/g)?.length ?? 0;
   return (
@@ -178,6 +228,20 @@ function isContextSetupPreview(preview: string): boolean {
   );
 }
 
+function isSecondaryEvidenceResiduePreview(preview: string): boolean {
+  return (
+    /^now i have a thorough understanding of the problem\b/i.test(preview) ||
+    /^here'?s the full review output from reviewer model\b/i.test(preview) ||
+    /^my best evidence-backed bet is:\s*/i.test(preview) ||
+    /^i reloaded\.\s*/i.test(preview) ||
+    /\bextension changes are active in this thread now\b/i.test(preview) ||
+    /\bif you want,?\s+i can\b/i.test(preview) ||
+    /\bcommit to (?:our|my) fork\b/i.test(preview) ||
+    /\bopen a pr\b/i.test(preview) ||
+    /\b\d+[.)]\s*$/i.test(preview)
+  );
+}
+
 function isWeakLeadPreview(preview: string): boolean {
   return (
     isInstructionBulletBundle(preview) ||
@@ -186,9 +250,10 @@ function isWeakLeadPreview(preview: string): boolean {
     /^(?:sounds good|okay|ok|alright|all right)\b/i.test(preview) ||
     /^(?:so,?\s+)?i(?:['’]m| am) going to\b/i.test(preview) ||
     /^(?:so,?\s+)?let me\b/i.test(preview) ||
-    /^i(?:['’]m| am)\s+(?:checking|reading|reviewing|inspecting|looking|trying|focusing|opening|walking|digging)\b/i.test(
+    /^i(?:['’]m| am)\s+(?:checking|reading|reviewing|inspecting|looking|trying|focusing|opening|walking|digging|tightening)\b/i.test(
       preview,
     ) ||
+    /^(?:first\s+)?i(?:['’]m| am)\s+re-?checking\b/i.test(preview) ||
     /^there(?:['’]s| is) one more important thing to verify before\b/i.test(
       preview,
     ) ||
@@ -202,6 +267,7 @@ function isWeakLeadPreview(preview: string): boolean {
     /^the key point:\s*/i.test(preview) ||
     /^my honest view\b/i.test(preview) ||
     /^better rule going forward\b/i.test(preview) ||
+    isSecondaryEvidenceResiduePreview(preview) ||
     /^the helper scripts are present\b/i.test(preview) ||
     /^the (?:first|initial) pass found\b/i.test(preview) ||
     /\*\*Bottom Line\*\*/i.test(preview) ||
@@ -338,6 +404,7 @@ function chooseLeadPreview(
 function chooseEvidencePreviews(
   userPreviews: readonly string[],
   assistantPreviews: readonly string[],
+  leadPreview?: LeadPreviewSelection,
 ): EvidencePreviewSelection {
   const selected: Array<{ preview: string; source: "user" | "assistant" }> = [];
   const groups: PreviewCandidateGroup[] = [
@@ -402,6 +469,25 @@ function chooseEvidencePreviews(
   ];
 
   let evidenceConfidence: SummaryConfidence = "weak";
+
+  if (
+    leadPreview?.preview &&
+    leadPreview.source &&
+    isPublicOperatorPreview(leadPreview.preview, {
+      source: leadPreview.source,
+      purpose: "evidence",
+    }) &&
+    !isUnsafePreview(leadPreview.preview) &&
+    !isCodeLikePreview(leadPreview.preview) &&
+    !isWeakLeadPreview(leadPreview.preview)
+  ) {
+    selected.push({
+      preview: normalizePublicPreviewCandidate(leadPreview.preview),
+      source: leadPreview.source,
+    });
+    evidenceConfidence = leadPreview.confidence ?? evidenceConfidence;
+  }
+
   for (const group of groups) {
     appendUniquePreviewEntries(selected, group.previews, group.source, 3);
     if (selected.length > 0 && evidenceConfidence === "weak") {
@@ -412,8 +498,24 @@ function chooseEvidencePreviews(
     }
   }
 
-  const previews = selected.map((entry) => entry.preview);
-  const sourceSet = new Set(selected.map((entry) => entry.source));
+  const primarySelected = selected[0];
+  const leadPreviewText = leadPreview?.preview;
+  const filteredSelected =
+    leadPreviewText && primarySelected && selected.length > 1
+      ? [
+          primarySelected,
+          ...selected
+            .slice(1)
+            .filter(
+              (entry) =>
+                !isSecondaryEvidenceResiduePreview(entry.preview) &&
+                hasMeaningfulPreviewOverlap(leadPreviewText, entry.preview),
+            ),
+        ]
+      : selected;
+
+  const previews = filteredSelected.map((entry) => entry.preview);
+  const sourceSet = new Set(filteredSelected.map((entry) => entry.source));
   const source: EvidenceSource =
     sourceSet.size === 0
       ? "none"
@@ -625,6 +727,7 @@ export function collectSessionContexts(
       const evidenceSelection = chooseEvidencePreviews(
         context.userPreviews,
         context.assistantPreviews,
+        leadPreview,
       );
       const sessionContext: SessionContext = {
         sessionId,
