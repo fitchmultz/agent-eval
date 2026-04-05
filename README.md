@@ -207,7 +207,7 @@ Not in scope yet:
 ```bash
 make ci
 # or, explicitly:
-pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark && pnpm build && pnpm smoke:dist
+pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark && pnpm scan:repo && pnpm build && pnpm smoke:dist
 ```
 
 `make ci` is the baseline local gate. It is not formatting-mutating, but it does generate benchmark and dist smoke artifacts as part of validation. Use `make bootstrap` for first-time dependency setup and `make fix` when you want formatting rewrites.
@@ -231,6 +231,7 @@ pnpm check:release
 - requiring local `HEAD` to match its upstream exactly
 - verifying that the local final QA manifests were generated from the current clean `HEAD`, on the current branch, under the current live config fingerprint, and with the expected on-disk artifact inventory
 - rerunning the clean/main/upstream check after the validation commands finish so release validation does not leave tracked drift behind
+- scanning the tracked repo surface for obvious path/secret-shaped public-surface residue
 - scanning the benchmark bundle and the regenerated final QA artifacts:
   - `artifacts/final-qa-codex`
   - `artifacts/final-qa-claude`

@@ -142,7 +142,10 @@ function renderPatternCards(section: PresentationPatternSection): string {
       (pattern) => `<article class="pattern-card">
         <div class="pattern-head">
           <h3>${escapeHtml(pattern.label)}</h3>
-          ${renderPill(`${pattern.sessionCount ?? "N/A"} sessions`, "pattern-pill")}
+          ${renderPill(
+            `${pattern.sessionCount ?? "N/A"} ${pattern.sessionCount === 1 ? "session" : "sessions"}`,
+            "pattern-pill",
+          )}
         </div>
         <p>${escapeHtml(pattern.explanation)}</p>
         ${

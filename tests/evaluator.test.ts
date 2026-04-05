@@ -244,7 +244,7 @@ function createParsedSession(sessionId: string): ParsedSession {
 describe("evaluateArtifacts", () => {
   beforeEach(() => {
     resetConfig();
-    mockGetHomeDirectory.mockReturnValue("/home/test");
+    mockGetHomeDirectory.mockReturnValue("/tmp/test-home");
     mockDiscoverArtifacts.mockResolvedValue({
       inventory: createInventory(),
       sessionFiles: ["/path/session-a.jsonl"],
@@ -288,7 +288,7 @@ describe("evaluateArtifacts", () => {
   it("returns summary-only artifacts with session facts and without raw payloads", async () => {
     const result = await evaluateArtifacts({
       source: "codex",
-      home: "/home/test/.codex",
+      home: "/tmp/test-home/.codex",
       outputMode: "summary",
     });
 
@@ -301,7 +301,7 @@ describe("evaluateArtifacts", () => {
   it("returns full artifacts with raw payloads and session facts", async () => {
     const result = await evaluateArtifacts({
       source: "codex",
-      home: "/home/test/.codex",
+      home: "/tmp/test-home/.codex",
       outputMode: "full",
     });
 
@@ -340,7 +340,7 @@ describe("parseArtifacts", () => {
   it("parses raw turns without generating evaluation artifacts", async () => {
     const result = await parseArtifacts({
       source: "codex",
-      home: "/home/test/.codex",
+      home: "/tmp/test-home/.codex",
     });
 
     expect(result.sessionCount).toBe(1);

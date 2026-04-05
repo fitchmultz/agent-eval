@@ -6,6 +6,7 @@
  * Invariants/Assumptions: Exits non-zero on any detected leak pattern outside narrowly allowlisted implementation fixtures.
  */
 
+import { execFileSync } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { extname, join, resolve } from "node:path";
 
@@ -54,6 +55,86 @@ const REPO_MODE_ALLOWLIST = [
     label: /.*/,
     sample: /.*/,
   },
+  {
+    path: /\/tests\/corpus-regression\.test\.ts$/,
+    label: "absolute-macos-home",
+    sample: /\/Users\//,
+  },
+  {
+    path: /\/tests\/corpus-regression\.test\.ts$/,
+    label: "private-var-folders",
+    sample: /\/private\/var\/folders\//,
+  },
+  {
+    path: /\/tests\/corpus-regression\.test\.ts$/,
+    label: "encoded-user-segment",
+    sample: /-Users-test-project--/,
+  },
+  {
+    path: /\/tests\/corpus-regression\.test\.ts$/,
+    label: "encoded-temp-root",
+    sample: /-private-var-folders-rf-t1b4c-cn7sgc-f6tkyg0wsk00000gn-T/,
+  },
+  {
+    path: /\/tests\/discovery\.test\.ts$/,
+    label: "encoded-user-segment",
+    sample: /-Users-test-project/,
+  },
+  {
+    path: /\/tests\/evaluator\.test\.ts$/,
+    label: "linux-home",
+    sample: /\/home\/test\//,
+  },
+  {
+    path: /\/tests\/sanitization\.test\.ts$/,
+    label: "absolute-macos-home",
+    sample: /\/Users\//,
+  },
+  {
+    path: /\/tests\/sanitization\.test\.ts$/,
+    label: "ssh-directory",
+    sample: /\.ssh\//,
+  },
+  {
+    path: /\/tests\/session-display\.test\.ts$/,
+    label: "absolute-macos-home",
+    sample: /\/Users\//,
+  },
+  {
+    path: /\/tests\/session-display\.test\.ts$/,
+    label: "private-var-folders",
+    sample: /\/private\/var\/folders\//,
+  },
+  {
+    path: /\/tests\/session-display\.test\.ts$/,
+    label: "encoded-user-segment",
+    sample: /-Users-example-Projects-AI-agent-eval--/,
+  },
+  {
+    path: /\/tests\/session-display\.test\.ts$/,
+    label: "encoded-temp-root",
+    sample: /-private-var-folders-rf-t1b4c-cn7sgc-f6tkyg0wsk00000gn-T/,
+  },
+  {
+    path: /\/tests\/session-processor\.test\.ts$/,
+    label: "linux-home",
+    sample: /\/home\/user\//,
+  },
+  {
+    path: /\/tests\/session-ranking\.test\.ts$/,
+    label: "absolute-macos-home",
+    sample: /\/Users\//,
+  },
+  {
+    path: /\/tests\/support\/transcript-fixtures\.ts$/,
+    label: "encoded-user-segment",
+    sample: /-Users-test-project/,
+  },
+  {
+    path: /\/tests\/transcript\.test\.ts$/,
+    label: "encoded-user-segment",
+    sample: /-Users-test-project/,
+  },
 ];
 
 function printHelp() {
@@ -63,6 +144,9 @@ function printHelp() {
   );
   process.stdout.write(`Usage:\n`);
   process.stdout.write(`  node scripts/public-surface-scan.mjs <path...>\n`);
+  process.stdout.write(
+    `  node scripts/public-surface-scan.mjs --mode=repo\n`,
+  );
   process.stdout.write(
     `  node scripts/public-surface-scan.mjs --mode=repo README.md docs src scripts\n`,
   );
@@ -112,6 +196,17 @@ function isAllowedFinding(mode, filePath, label, sample) {
   );
 }
 
+function trackedRepoPaths() {
+  return execFileSync("git", ["ls-files"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  })
+    .trim()
+    .split("\n")
+    .filter((path) => path.length > 0);
+}
+
 async function main() {
   const rawArgs = process.argv.slice(2);
   if (rawArgs.includes("-h") || rawArgs.includes("--help")) {
@@ -128,7 +223,9 @@ async function main() {
   }
 
   const args = rawArgs.filter((arg) => !arg.startsWith("--mode="));
-  if (args.length === 0) {
+  const scanTargets =
+    mode === "repo" && args.length === 0 ? trackedRepoPaths() : args;
+  if (scanTargets.length === 0) {
     process.stderr.write(
       "public-surface-scan requires at least one file or directory path.\n",
     );
@@ -138,7 +235,7 @@ async function main() {
 
   const textExtensions = TEXT_EXTENSIONS_BY_MODE[mode];
   const files = [];
-  for (const rawPath of args) {
+  for (const rawPath of scanTargets) {
     await collectFiles(resolve(rawPath), files, textExtensions);
   }
 
@@ -160,7 +257,9 @@ async function main() {
   }
 
   if (findings.length > 0) {
-    process.stderr.write("public-surface-scan found suspicious artifact content:\n");
+    process.stderr.write(
+      `public-surface-scan found suspicious ${mode === "repo" ? "repo" : "artifact"} content:\n`,
+    );
     for (const finding of findings) {
       process.stderr.write(
         `- ${finding.label}: ${finding.filePath} :: ${finding.sample}\n`,
@@ -175,7 +274,7 @@ async function main() {
       {
         mode,
         scannedFileCount: files.length,
-        scannedTargets: args,
+        scannedTargets: scanTargets,
         status: "ok",
       },
       null,

@@ -78,7 +78,7 @@ describe("processSession", () => {
   };
 
   it("should process a session and return structured data", async () => {
-    const result = await processSession(mockSession, "/home/user");
+    const result = await processSession(mockSession, "/tmp/test-home");
 
     expect(result.sessionId).toBe("test-session-123");
     expect(result.turns).toHaveLength(2);

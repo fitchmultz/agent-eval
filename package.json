@@ -41,7 +41,7 @@
     "eval": "tsx src/cli.ts eval",
     "report": "tsx src/cli.ts report",
     "scan:artifacts": "node scripts/public-surface-scan.mjs",
-    "scan:repo": "node scripts/public-surface-scan.mjs --mode=repo README.md AGENTS.md LICENSE Makefile package.json .agent-evalrc.example docs src scripts",
+    "scan:repo": "node scripts/public-surface-scan.mjs --mode=repo",
     "smoke:dist": "node scripts/dist-smoke.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
