@@ -20,9 +20,39 @@ import {
   createV3Summary,
 } from "./support/v3-fixtures.js";
 
+function artifactFilesForFixture(options?: {
+  rawTurns?: boolean;
+  incidents?: boolean;
+}): string[] {
+  return [
+    ...(options?.rawTurns === false ? [] : ["raw-turns.jsonl"]),
+    ...(options?.incidents === false ? [] : ["incidents.jsonl"]),
+    "metrics.json",
+    "summary.json",
+    "session-facts.jsonl",
+    "release-manifest.json",
+    "report.md",
+    "report.html",
+    "favicon.ico",
+    "favicon.svg",
+    "sessions-over-time.svg",
+    "provider-share.svg",
+    "harness-share.svg",
+    "tool-family-share.svg",
+    "attribution-mix.svg",
+  ];
+}
+
 function createEvaluationArtifacts(
   overrides: Partial<EvaluationArtifacts> = {},
 ): EvaluationArtifacts {
+  const rawTurns = Object.hasOwn(overrides, "rawTurns")
+    ? overrides.rawTurns
+    : createRawTurns();
+  const incidents = Object.hasOwn(overrides, "incidents")
+    ? overrides.incidents
+    : createIncidents();
+
   return {
     metrics: createV3Metrics(),
     summary: createV3Summary(),
@@ -39,7 +69,7 @@ function createEvaluationArtifacts(
       configFingerprint: "deadbeefcafebabe",
       evaluation: {
         source: "codex",
-        outputMode: "full",
+        outputMode: rawTurns && incidents ? "full" : "summary",
         sessionLimit: 10,
         startDate: null,
         endDate: null,
@@ -51,12 +81,15 @@ function createEvaluationArtifacts(
       counts: {
         sessions: 2,
         turns: 4,
-        incidents: 1,
+        incidents: incidents?.length ?? 0,
         sessionFacts: 2,
         exemplarSessions: 1,
         reviewQueueSessions: 1,
       },
-      artifactFiles: ["metrics.json", "summary.json", "session-facts.jsonl"],
+      artifactFiles: artifactFilesForFixture({
+        rawTurns: rawTurns !== undefined,
+        incidents: incidents !== undefined,
+      }),
     },
     report: "# Test Report\n",
     presentation: {
@@ -69,8 +102,8 @@ function createEvaluationArtifacts(
       toolFamilyShareChartSvg: "<svg>tools</svg>",
       attributionMixChartSvg: "<svg>attribution</svg>",
     },
-    rawTurns: createRawTurns(),
-    incidents: createIncidents(),
+    rawTurns,
+    incidents,
     ...overrides,
   };
 }
@@ -174,5 +207,18 @@ describe("artifact-writer", () => {
     });
 
     await expect(writeArtifacts(result, tempDir)).rejects.toThrow();
+  });
+
+  it("rejects mismatched release-manifest artifact inventories at write time", async () => {
+    const result = createEvaluationArtifacts({
+      releaseManifest: {
+        ...createEvaluationArtifacts().releaseManifest,
+        artifactFiles: ["metrics.json", "summary.json"],
+      },
+    });
+
+    await expect(writeArtifacts(result, tempDir)).rejects.toThrow(
+      /artifactFiles mismatch/,
+    );
   });
 });

@@ -353,6 +353,33 @@ function stripQuotedPromptBlock(text: string): string {
   );
 }
 
+function stripLeadingGenericImperativeStub(text: string): string {
+  return text.replace(
+    /^\s*(?:please\s+)?(?:do|fix|debug|review|inspect|check|investigate|implement)(?:\s+(?:it|this|that|this\s+(?:change|issue|bug)))?\.\s+/i,
+    "",
+  );
+}
+
+function stripTrailingWorklogLabel(text: string): string {
+  return text.replace(
+    /(?:^|\s+)(?:(?:what i changed|how to verify|what'?s next):\s*)$/i,
+    "",
+  );
+}
+
+export function normalizePublicPreviewCandidate(text: string): string {
+  return normalizeWhitespace(
+    stripTrailingWorklogLabel(stripLeadingGenericImperativeStub(text)),
+  );
+}
+
+function appendPreviewCandidate(candidates: string[], candidate: string): void {
+  const normalized = normalizePublicPreviewCandidate(candidate);
+  if (normalized.length > 0) {
+    candidates.push(normalized);
+  }
+}
+
 function extractStructuredPreviewCandidates(message: string): string[] {
   const normalized = stripQuotedPromptBlock(
     message.replace(/\r\n?/g, "\n").trim(),
@@ -374,14 +401,14 @@ function extractStructuredPreviewCandidates(message: string): string[] {
       continue;
     }
 
-    candidates.push(inlineBlock);
+    appendPreviewCandidate(candidates, inlineBlock);
 
     const blockLines = block
       .split("\n")
       .map((line) => normalizeWhitespace(line))
       .filter((line) => line.length > 0);
     for (const line of blockLines) {
-      candidates.push(line);
+      appendPreviewCandidate(candidates, line);
     }
 
     for (const match of block.matchAll(
@@ -391,14 +418,15 @@ function extractStructuredPreviewCandidates(message: string): string[] {
       if (!rawMessage) {
         continue;
       }
-      candidates.push(
+      appendPreviewCandidate(
+        candidates,
         rawMessage.replace(/\\"/g, '"').replace(/\\n/g, " ").trim(),
       );
     }
 
     const sentences = splitIntoSentences(inlineBlock);
     for (const sentence of sentences) {
-      candidates.push(sentence);
+      appendPreviewCandidate(candidates, sentence);
     }
 
     const inlineBulletSegments = inlineBlock
@@ -407,7 +435,7 @@ function extractStructuredPreviewCandidates(message: string): string[] {
       .filter((segment) => segment.length > 0);
     if (inlineBulletSegments.length > 1) {
       for (const segment of inlineBulletSegments) {
-        candidates.push(segment);
+        appendPreviewCandidate(candidates, segment);
       }
     }
 
@@ -417,7 +445,7 @@ function extractStructuredPreviewCandidates(message: string): string[] {
       .filter((segment) => segment.length > 0);
     if (inlineNumberedSegments.length > 1) {
       for (const segment of inlineNumberedSegments) {
-        candidates.push(segment);
+        appendPreviewCandidate(candidates, segment);
       }
     }
 
@@ -427,11 +455,11 @@ function extractStructuredPreviewCandidates(message: string): string[] {
       if (!first || !second) {
         continue;
       }
-      candidates.push(`${first} ${second}`);
+      appendPreviewCandidate(candidates, `${first} ${second}`);
     }
   }
 
-  candidates.push(normalizeWhitespace(normalized));
+  appendPreviewCandidate(candidates, normalized);
   return [...new Set(candidates)];
 }
 
@@ -787,7 +815,18 @@ function isAssistantProgressPreview(preview: string): boolean {
     /^now let me\b/i.test(normalized) ||
     /^i(?:['’]m| am) rerunning\b/i.test(normalized) ||
     /^i(?:['’]m| am) patching\b/i.test(normalized) ||
-    /^i(?:['’]m| am) checking\b/i.test(normalized)
+    /^i(?:['’]m| am) checking\b/i.test(normalized) ||
+    /^i need one reload now\b/i.test(normalized) ||
+    /\bafter you reload\b/i.test(normalized) ||
+    /\bfinish validation\b/i.test(normalized)
+  );
+}
+
+function isAssistantWorklogPreview(preview: string): boolean {
+  const normalized = normalizeWhitespace(preview);
+  return (
+    isAssistantProgressPreview(normalized) ||
+    /^(?:what i changed|how to verify|what'?s next):?\s*$/i.test(normalized)
   );
 }
 
@@ -813,12 +852,16 @@ export function isPublicOperatorPreview(
     return false;
   }
 
-  if (options?.source === "assistant" && options?.purpose === "title") {
+  if (options?.source === "assistant") {
+    if (isAssistantWorklogPreview(normalized)) {
+      return false;
+    }
+
     if (
+      options?.purpose === "title" &&
       /^(?:i(?:['’]ve| have)|we(?:['’]ve| have))\s+(?:narrowed|confirmed|found|traced|reviewed|checked)\b/i.test(
         normalized,
-      ) ||
-      isAssistantProgressPreview(normalized)
+      )
     ) {
       return false;
     }
@@ -920,7 +963,7 @@ export function createMessagePreviews(
 }
 
 function normalizePreviewDedupKey(preview: string): string {
-  return preview
+  return normalizePublicPreviewCandidate(preview)
     .trim()
     .replace(/^\s*(?:[-*•]\s+|\d+[.)]\s+)+/, "")
     .replace(/\s+/g, " ")

@@ -261,6 +261,39 @@ Reports should show meaningful human evidence instead of batch boilerplate.`,
       "the worker was misclassifying those refs as artifacts, then spending minutes timing out downloads in downloading_artifacts.",
     ]);
   });
+
+  it("strips leading generic imperative stubs when richer task text follows", () => {
+    const previews = createMessagePreviews(
+      [
+        "do it. figure out where our tesseract version comes from, likely homebrew, and do that in the gather script.",
+      ],
+      {
+        maxItems: 2,
+        maxLength: 180,
+      },
+    );
+
+    expect(previews[0]).toBe(
+      "figure out where our tesseract version comes from, likely homebrew, and do that in the gather script.",
+    );
+  });
+
+  it("trims trailing assistant worklog tails from diagnostic previews", () => {
+    const previews = createMessagePreviews(
+      [
+        "the worker was misclassifying those refs as artifacts, then spending minutes timing out downloads in `downloading_artifacts` So `/oracle-auth` was not the issue. What I changed:",
+      ],
+      {
+        maxItems: 3,
+        maxLength: 220,
+      },
+    );
+
+    expect(previews[0]).toBe(
+      "the worker was misclassifying those refs as artifacts, then spending minutes timing out downloads in `downloading_artifacts` So `/oracle-auth` was not the issue.",
+    );
+    expect(previews).not.toContain("What I changed:");
+  });
 });
 
 describe("isLowSignalPreview", () => {

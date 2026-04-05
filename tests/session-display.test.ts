@@ -123,6 +123,23 @@ describe("collectSessionContexts", () => {
     expect(context?.leadPreview).toContain("login callback");
   });
 
+  it("keeps assistant diagnostics but drops assistant worklog evidence chatter", () => {
+    const contexts = collectSessionContexts([
+      createTurn({
+        userMessagePreviews: [],
+        assistantMessagePreviews: [
+          "the worker was misclassifying those refs as artifacts, then spending minutes timing out downloads in `downloading_artifacts` So `/oracle-auth` was not the issue. What I changed:",
+          "I need one reload now so this thread picks up the Thinking fix. After you reload, I’ll immediately rerun the Thinking scenario and finish validation.",
+        ],
+      }),
+    ]);
+
+    const context = contexts.get("session-1");
+    expect(context?.evidencePreviews).toEqual([
+      "the worker was misclassifying those refs as artifacts, then spending minutes timing out downloads in `downloading_artifacts` So `/oracle-auth` was not the issue.",
+    ]);
+  });
+
   it("strips conversational lead-ins from user-facing titles", () => {
     const contexts = collectSessionContexts([
       createTurn({

@@ -11,6 +11,7 @@ import {
   isLowSignalPreview,
   isPublicOperatorPreview,
   isUnsafePreview,
+  normalizePublicPreviewCandidate,
   selectBestPreviews,
 } from "../sanitization.js";
 import type {
@@ -134,10 +135,14 @@ function appendUniquePreviewEntries(
   maxItems: number,
 ): void {
   for (const preview of selectBestPreviews(previews, maxItems)) {
-    if (target.some((entry) => entry.preview === preview)) {
+    const normalizedPreview = normalizePublicPreviewCandidate(preview);
+    if (
+      normalizedPreview.length === 0 ||
+      target.some((entry) => entry.preview === normalizedPreview)
+    ) {
       continue;
     }
-    target.push({ preview, source });
+    target.push({ preview: normalizedPreview, source });
     if (target.length >= maxItems) {
       return;
     }

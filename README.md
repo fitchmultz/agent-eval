@@ -229,7 +229,7 @@ pnpm check:release
 - requiring a clean git worktree before validation starts
 - requiring branch `main`
 - requiring local `HEAD` to match its upstream exactly
-- verifying that the committed final QA manifests were generated from the current clean `HEAD`
+- verifying that the committed final QA manifests were generated from the current clean `HEAD`, on the current branch, under the current live config fingerprint, and with the expected on-disk artifact inventory
 - rerunning the clean/main/upstream check after the validation commands finish so release validation does not leave tracked drift behind
 - scanning the benchmark bundle and the regenerated final QA artifacts:
   - `artifacts/final-qa-codex`

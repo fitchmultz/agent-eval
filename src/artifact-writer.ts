@@ -47,6 +47,41 @@ export interface EvaluationArtifacts {
   incidents?: IncidentRecord[] | undefined;
 }
 
+function plannedArtifactFiles(result: EvaluationArtifacts): string[] {
+  return [
+    ...(result.rawTurns ? ["raw-turns.jsonl"] : []),
+    ...(result.incidents ? ["incidents.jsonl"] : []),
+    "metrics.json",
+    "summary.json",
+    "session-facts.jsonl",
+    "release-manifest.json",
+    "report.md",
+    "report.html",
+    "favicon.ico",
+    "favicon.svg",
+    "sessions-over-time.svg",
+    "provider-share.svg",
+    "harness-share.svg",
+    "tool-family-share.svg",
+    "attribution-mix.svg",
+  ].sort();
+}
+
+function assertReleaseManifestArtifactInventory(
+  result: EvaluationArtifacts,
+): void {
+  const expected = plannedArtifactFiles(result);
+  const actual = [...result.releaseManifest.artifactFiles].sort();
+  if (
+    expected.length !== actual.length ||
+    expected.some((file, index) => file !== actual[index])
+  ) {
+    throw new Error(
+      `release-manifest artifactFiles mismatch: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`,
+    );
+  }
+}
+
 /**
  * Writes parse-only artifacts.
  */
@@ -89,6 +124,7 @@ export async function writeArtifacts(
     sessionFactSchema.parse(sessionFact);
   }
   releaseManifestSchema.parse(result.releaseManifest);
+  assertReleaseManifestArtifactInventory(result);
 
   if (result.rawTurns) {
     for (const turn of result.rawTurns) {

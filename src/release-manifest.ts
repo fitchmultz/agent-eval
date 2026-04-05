@@ -65,6 +65,12 @@ export const releaseManifestSchema = z
 
 export type ReleaseManifest = z.infer<typeof releaseManifestSchema>;
 
+export interface ReleaseConfigFingerprintInput {
+  evaluation: ReleaseManifest["evaluation"];
+  corpusScope: MetricsRecord["corpusScope"];
+  appliedFilters: MetricsRecord["appliedFilters"];
+}
+
 function readGitValue(args: string[]): string | null {
   try {
     const output = execFileSync("git", args, {
@@ -91,25 +97,16 @@ function readGitDirtyState(): boolean | null {
   }
 }
 
-function computeConfigFingerprint(
-  metrics: MetricsRecord,
-  options: EvaluateOptions,
+export function computeReleaseConfigFingerprint(
+  input: ReleaseConfigFingerprintInput,
 ): string {
   return createHash("sha256")
     .update(
       JSON.stringify({
         config: getConfig(),
-        evaluation: {
-          source: options.source,
-          outputMode: options.outputMode ?? "full",
-          sessionLimit: options.sessionLimit ?? null,
-          startDate: options.startDate ?? null,
-          endDate: options.endDate ?? null,
-          timeBucket: options.timeBucket ?? "week",
-          parseTimeoutMs: options.parseTimeoutMs ?? null,
-        },
-        corpusScope: metrics.corpusScope,
-        appliedFilters: metrics.appliedFilters,
+        evaluation: input.evaluation,
+        corpusScope: input.corpusScope,
+        appliedFilters: input.appliedFilters,
       }),
     )
     .digest("hex")
@@ -132,7 +129,19 @@ export function buildReleaseManifest(
       branch: readGitValue(["rev-parse", "--abbrev-ref", "HEAD"]),
       dirty: readGitDirtyState(),
     },
-    configFingerprint: computeConfigFingerprint(metrics, options),
+    configFingerprint: computeReleaseConfigFingerprint({
+      evaluation: {
+        source: options.source,
+        outputMode: options.outputMode ?? "full",
+        sessionLimit: options.sessionLimit ?? null,
+        startDate: options.startDate ?? null,
+        endDate: options.endDate ?? null,
+        timeBucket: options.timeBucket ?? "week",
+        parseTimeoutMs: options.parseTimeoutMs ?? null,
+      },
+      corpusScope: metrics.corpusScope,
+      appliedFilters: metrics.appliedFilters,
+    }),
     evaluation: {
       source: options.source,
       outputMode: options.outputMode ?? "full",
