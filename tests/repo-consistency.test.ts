@@ -5,6 +5,7 @@
  * Usage: Executed by Vitest via `pnpm test`.
  * Invariants/Assumptions: Public-facing docs and workflow files should describe the v3 dashboard/learning/review product, not the old operator-first contract.
  */
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -115,5 +116,22 @@ describe("repo consistency", () => {
       .map((path) => relative(repoRoot, path));
 
     expect(dsStoreFiles).toEqual([]);
+  });
+
+  it("keeps verification screenshots out of the tracked public repo surface", () => {
+    const trackedVerificationFiles = execFileSync(
+      "git",
+      ["ls-files", "notes/final-release/verification"],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    )
+      .trim()
+      .split("\n")
+      .filter((path) => path.length > 0);
+
+    expect(trackedVerificationFiles).toEqual([]);
   });
 });

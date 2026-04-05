@@ -32,7 +32,7 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-runtime-assets.mjs",
     "benchmark": "tsx src/cli.ts benchmark --output-dir artifacts/benchmark",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark && pnpm build && pnpm smoke:dist",
-    "check:release": "node scripts/check-clean-worktree.mjs && node scripts/verify-release-manifests.mjs artifacts/final-qa-codex artifacts/final-qa-claude artifacts/final-qa-pi && pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark artifacts/final-qa-codex artifacts/final-qa-claude artifacts/final-qa-pi && pnpm build && pnpm smoke:dist",
+    "check:release": "node scripts/check-clean-worktree.mjs --require-main --require-upstream-clean && node scripts/verify-release-manifests.mjs artifacts/final-qa-codex artifacts/final-qa-claude artifacts/final-qa-pi && pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark artifacts/final-qa-codex artifacts/final-qa-claude artifacts/final-qa-pi && pnpm build && pnpm smoke:dist && node scripts/check-clean-worktree.mjs --require-main --require-upstream-clean",
     "dev": "tsx src/cli.ts",
     "format": "biome check --write .",
     "inspect": "tsx src/cli.ts inspect",

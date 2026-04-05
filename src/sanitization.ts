@@ -346,8 +346,17 @@ function splitIntoSentences(text: string): string[] {
     .filter((sentence) => sentence.length > 0);
 }
 
+function stripQuotedPromptBlock(text: string): string {
+  return text.replace(
+    /^\s*(?:This|The)\s+prompt:\s*(?:"""|```)[\s\S]*?(?:"""|```)\s*/i,
+    "",
+  );
+}
+
 function extractStructuredPreviewCandidates(message: string): string[] {
-  const normalized = message.replace(/\r\n?/g, "\n").trim();
+  const normalized = stripQuotedPromptBlock(
+    message.replace(/\r\n?/g, "\n").trim(),
+  );
   if (normalized.length === 0) {
     return [];
   }
@@ -640,6 +649,10 @@ function previewSignalScore(preview: string): number {
     score -= 6;
   }
 
+  if (isQuotedPromptComplaintPreview(preview)) {
+    score -= 12;
+  }
+
   if (
     /\b(?:Repo Execution Trust|Trust Boundary|trust file shape|allow_project_commands|repo-local executable settings|create-subagent:\s+Create custom subagents)\b/i.test(
       preview,
@@ -751,6 +764,22 @@ function isManifestoStylePreview(preview: string): boolean {
   return /^\d*\.?\s*I trust the system because\b/i.test(normalized);
 }
 
+function isQuotedPromptComplaintPreview(preview: string): boolean {
+  const normalized = normalizeWhitespace(preview);
+  return (
+    ((/^(?:do not|write|mention|include|keep|avoid|use|prefer)\b/i.test(
+      normalized,
+    ) &&
+      /["”]\s+(?:is|this|that)\b/i.test(normalized)) ||
+      /^(?:is a wildly disingenuous|unless i am missing something this mandate)\b/i.test(
+        normalized,
+      )) &&
+    /\b(?:mandate|requirement|disingenuous|brittle|fragile|contrived|test)\b/i.test(
+      normalized,
+    )
+  );
+}
+
 function isAssistantProgressPreview(preview: string): boolean {
   const normalized = normalizeWhitespace(preview);
   return (
@@ -778,7 +807,8 @@ export function isPublicOperatorPreview(
   if (
     isInstructionalSpecPreview(normalized) ||
     isSocialCheckinPreview(normalized) ||
-    isManifestoStylePreview(normalized)
+    isManifestoStylePreview(normalized) ||
+    isQuotedPromptComplaintPreview(normalized)
   ) {
     return false;
   }

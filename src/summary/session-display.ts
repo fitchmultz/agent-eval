@@ -154,9 +154,30 @@ function isInstructionBulletBundle(preview: string): boolean {
   );
 }
 
+function isGenericImperativeStub(preview: string): boolean {
+  const normalized = normalizeLeadPreviewForTitle(preview);
+  const words = normalized.split(/\s+/).filter((word) => word.length > 0);
+  return (
+    words.length <= 4 &&
+    /^(?:please\s+)?(?:do|debug|fix|review|inspect|check|investigate|implement)(?:\s+(?:it|this|that|this\s+(?:change|issue|bug)))?\.?$/i.test(
+      normalized,
+    )
+  );
+}
+
+function isContextSetupPreview(preview: string): boolean {
+  return (
+    /^i just\s+(?:created|forked|cloned|opened|re-ran|reran|ran|reloaded|deployed)\b/i.test(
+      preview,
+    ) || /^if you need\b.*\blet me know\b/i.test(preview)
+  );
+}
+
 function isWeakLeadPreview(preview: string): boolean {
   return (
     isInstructionBulletBundle(preview) ||
+    isGenericImperativeStub(preview) ||
+    isContextSetupPreview(preview) ||
     /^(?:sounds good|okay|ok|alright|all right)\b/i.test(preview) ||
     /^(?:so,?\s+)?i(?:['’]m| am) going to\b/i.test(preview) ||
     /^(?:so,?\s+)?let me\b/i.test(preview) ||
@@ -178,6 +199,9 @@ function isWeakLeadPreview(preview: string): boolean {
     /^better rule going forward\b/i.test(preview) ||
     /^the helper scripts are present\b/i.test(preview) ||
     /^the (?:first|initial) pass found\b/i.test(preview) ||
+    /\*\*Bottom Line\*\*/i.test(preview) ||
+    /^if we want\b.+\bi['’]?d implement:\s*$/i.test(preview) ||
+    /^staging tests to assert\b/i.test(preview) ||
     /^stabilize them\./i.test(preview) ||
     /^(?:\d+\.\s*)?on unexpected failure:\s/i.test(preview) ||
     /^(?:\d+\.\s*)?establish the problem narrowly\b/i.test(preview) ||
@@ -200,7 +224,7 @@ function leadSentence(preview: string): string {
 function hasUserLeadSignalPreview(preview: string): boolean {
   const lead = leadSentence(preview);
   return (
-    /\b(please|help me|can you|could you|would you|i need|i want|i just|we need|we want|bug|issue|problem|broken|broke|failing|failure|regression|error|wrong|confusing|stuck|fix|remove|replace|port|migrate|integrate|support|review|audit|inspect|check|investigate|scan)\b/i.test(
+    /\b(please|help me|can you|could you|would you|i need|i want|we need|we want|bug|issue|problem|broken|broke|failing|failure|regression|error|wrong|confusing|stuck|fix|remove|replace|port|migrate|integrate|support|review|audit|inspect|check|investigate|scan)\b/i.test(
       lead,
     ) ||
     /^(?:do|implement|build|debug|wire|make|update|add|finish|port|scan|review|audit|inspect|check|investigate|initial)\b/i.test(
@@ -221,7 +245,7 @@ function hasUserMediumLeadSignalPreview(preview: string): boolean {
 }
 
 function hasAssistantLeadSignalPreview(preview: string): boolean {
-  return /\b(bug|issue|problem|broken|broke|failing|failure|regression|error|wrong|confusing|stuck|fix|fixed|remove|replace|verify|verified|root cause|user-visible)\b/i.test(
+  return /\b(bug|issue|problem|broken|broke|failing|failure|regression|error|wrong|confusing|stuck|fix|fixed|remove|replace|verify|verified|root cause|user-visible|timeout|timed out|misclassif(?:y|ies|ied|ying))\b/i.test(
     leadSentence(preview),
   );
 }

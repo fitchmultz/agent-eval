@@ -5,7 +5,7 @@
  * Usage: `discoverArtifacts(homePath, { provider })` to inventory one source home.
  * Invariants/Assumptions: Transcript JSONL remains the only required canonical input for each provider.
  */
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { ValidationError } from "./errors.js";
 import {
   type ListOptions,
@@ -53,6 +53,10 @@ function buildInventoryRecord(
  * Default timeout for discovery operations (60 seconds).
  */
 const DEFAULT_DISCOVERY_TIMEOUT_MS = 60000;
+
+function isCanonicalPiSessionFile(path: string): boolean {
+  return !/^\d+\.jsonl$/i.test(basename(path));
+}
 
 async function resolveSessionsPath(
   homePath: string,
@@ -170,7 +174,11 @@ async function doDiscoverArtifacts(
           timeoutMs: options?.timeoutMs,
           signal: options?.signal,
         })
-      ).filter((path) => path.endsWith(".jsonl"))
+      ).filter(
+        (path) =>
+          path.endsWith(".jsonl") &&
+          (provider !== "pi" || isCanonicalPiSessionFile(path)),
+      )
     : [];
   const discoveredCanonicalSessionInput = sessionFiles.length > 0;
 

@@ -158,7 +158,13 @@ describe("discoverArtifacts", () => {
       "--Users-test-project",
     );
     await mkdir(sessionsDir, { recursive: true });
-    await writeFile(join(sessionsDir, "session.jsonl"), "{}\n");
+    await writeFile(
+      join(
+        sessionsDir,
+        "2026-04-05T04-21-12-846Z_b775e768-a62c-4b98-82e9-61b93974adb7.jsonl",
+      ),
+      "{}\n",
+    );
 
     const result = await discoverArtifacts(testDir, { provider: "pi" });
 
@@ -174,6 +180,32 @@ describe("discoverArtifacts", () => {
       optional: false,
       path: join(testDir, "agent", "sessions"),
     });
+  });
+
+  it("ignores non-canonical numeric pi session copies", async () => {
+    const testDir = join(testDirBase, "pi-home-numeric-copy");
+    const sessionsDir = join(
+      testDir,
+      "agent",
+      "sessions",
+      "--Users-test-project",
+    );
+    await mkdir(sessionsDir, { recursive: true });
+    await writeFile(join(sessionsDir, "1.jsonl"), "{}\n");
+    await writeFile(
+      join(
+        sessionsDir,
+        "2026-04-05T04-21-12-846Z_b775e768-a62c-4b98-82e9-61b93974adb7.jsonl",
+      ),
+      "{}\n",
+    );
+
+    const result = await discoverArtifacts(testDir, { provider: "pi" });
+
+    expect(result.sessionFiles).toHaveLength(1);
+    expect(result.sessionFiles[0]).toContain(
+      "2026-04-05T04-21-12-846Z_b775e768-a62c-4b98-82e9-61b93974adb7.jsonl",
+    );
   });
 
   it("marks missing pi stores as undiscovered without failing", async () => {

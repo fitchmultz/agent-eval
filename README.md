@@ -175,6 +175,7 @@ Use `pnpm scan:artifacts <path...>` when you want a local public-surface leak sc
 
 - Tests use synthetic fixtures only; no private transcript corpora are committed.
 - Local evaluation outputs, local agent homes, and temporary analysis material stay untracked.
+- Visual QA screenshots should stay local and untracked under `notes/**/verification/`; regenerate the latest captures locally and attach them to review/oracle archives instead of committing PNG history.
 - Report previews are redacted and truncated, but they are not a substitute for full secret scanning.
 - If a presentation artifact ever disagrees with the JSON artifacts, treat the JSON artifacts as canonical.
 
@@ -224,7 +225,15 @@ make release-check
 pnpm check:release
 ```
 
-`make release-check` extends the baseline gate by requiring a clean git worktree and by verifying that the committed final QA manifests were generated from the current clean `HEAD`, then scanning the benchmark bundle and the regenerated final QA artifacts:
-- `artifacts/final-qa-codex`
-- `artifacts/final-qa-claude`
-- `artifacts/final-qa-pi`
+`make release-check` extends the baseline gate by:
+- requiring a clean git worktree before validation starts
+- requiring branch `main`
+- requiring local `HEAD` to match its upstream exactly
+- verifying that the committed final QA manifests were generated from the current clean `HEAD`
+- rerunning the clean/main/upstream check after the validation commands finish so release validation does not leave tracked drift behind
+- scanning the benchmark bundle and the regenerated final QA artifacts:
+  - `artifacts/final-qa-codex`
+  - `artifacts/final-qa-claude`
+  - `artifacts/final-qa-pi`
+
+Visual QA screenshots are intentionally outside the committed release contract. Regenerate them locally under `notes/final-release/verification/` when needed for manual review or oracle archives, but do not commit them.

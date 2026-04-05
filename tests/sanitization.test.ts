@@ -227,6 +227,40 @@ Reports should show meaningful human evidence instead of batch boilerplate.`,
 
     expect(previews[0]).toContain("I want to port this tool for use in Cursor");
   });
+
+  it("drops quoted prompt dumps before preview ranking", () => {
+    const previews = createMessagePreviews(
+      [
+        'This prompt:\n"""\nWrite a longer plain-text response about this repo. Do not put filenames on their own lines or in a dedicated file list.\n"""\n\nIs a wildly disingenuous test and this mandate should NOT be a requirement. Continue',
+      ],
+      {
+        maxItems: 2,
+        maxLength: 160,
+      },
+    );
+
+    expect(previews[0]).not.toContain(
+      "Do not put filenames on their own lines",
+    );
+    expect(previews[0]).not.toContain("wildly disingenuous test");
+  });
+
+  it("demotes quoted prompt-complaint residue below real diagnostics", () => {
+    const previews = createMessagePreviews(
+      [
+        'Do not put filenames on their own lines or in a dedicated file list." Is 100% NOT the way to make hacky, fragile, brittle code work. Unless I am missing something this mandate should NOT be a requirement.',
+        "the worker was misclassifying those refs as artifacts, then spending minutes timing out downloads in downloading_artifacts.",
+      ],
+      {
+        maxItems: 1,
+        maxLength: 180,
+      },
+    );
+
+    expect(previews).toEqual([
+      "the worker was misclassifying those refs as artifacts, then spending minutes timing out downloads in downloading_artifacts.",
+    ]);
+  });
 });
 
 describe("isLowSignalPreview", () => {

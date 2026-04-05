@@ -269,6 +269,52 @@ describe("collectSessionContexts", () => {
     );
   });
 
+  it("demotes generic imperative stubs in favor of better nearby evidence", () => {
+    const contexts = collectSessionContexts([
+      createTurn({
+        userMessagePreviews: [
+          "I just created a fork of this repo.",
+          "I need you to dig through system logs and see if you can find logs of when it has issues.",
+          "implement this change",
+          "fix it",
+          "do it",
+          "If you need sudo and can't use it let me know and I can run commands and pipe to files for you to review, but try it yourself first.",
+          "staging tests to assert `.tmp/` and `.ralph/` are excluded **Bottom Line** If we want one coherent repo policy, I'd implement:",
+          "If we want one coherent repo policy, I'd implement:",
+        ],
+        assistantMessagePreviews: [
+          "The worker was misclassifying those refs as artifacts, then spending minutes timing out downloads.",
+        ],
+      }),
+    ]);
+
+    const context = contexts.get("session-1");
+    expect(context?.leadPreview).toBe(
+      "I need you to dig through system logs and see if you can find logs of when it has issues.",
+    );
+    expect(context?.evidencePreviews).not.toContain("implement this change");
+  });
+
+  it("falls back to assistant diagnosis when only setup chatter and generic debug asks remain", () => {
+    const contexts = collectSessionContexts([
+      createTurn({
+        userMessagePreviews: [
+          "i just re-ran oracle-auth in a separate window btw. continue",
+          "Please debug.",
+          'Do not put filenames on their own lines or in a dedicated file list." Is 100% NOT the way to make hacky, fragile, brittle code work. Unless I am missing something this mandate should NOT be a requirement.',
+        ],
+        assistantMessagePreviews: [
+          "the worker was misclassifying those refs as artifacts, then spending minutes timing out downloads in downloading_artifacts.",
+        ],
+      }),
+    ]);
+
+    const context = contexts.get("session-1");
+    expect(context?.leadPreview).toBe(
+      "the worker was misclassifying those refs as artifacts, then spending minutes timing out downloads in downloading_artifacts.",
+    );
+  });
+
   it("does not promote weak control text ahead of real user evidence", () => {
     const contexts = collectSessionContexts([
       createTurn({
