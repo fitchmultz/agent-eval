@@ -24,7 +24,7 @@ import {
 } from "./types.js";
 
 const BENCHMARK_VERSION = "3";
-const BENCHMARK_HOME = "/Users/benchmark";
+const BENCHMARK_HOME = "/tmp/benchmark-home";
 
 function safeRate(numerator: number, denominator: number): number {
   if (denominator <= 0) {
@@ -246,10 +246,10 @@ async function materializeCalibrationHome(
     const fixturePath = join(
       root,
       "projects",
-      "-Users-benchmark-project",
+      "benchmark-project-root",
       testCase.fixture,
     );
-    await mkdir(join(root, "projects", "-Users-benchmark-project"), {
+    await mkdir(join(root, "projects", "benchmark-project-root"), {
       recursive: true,
     });
     await writeFile(fixturePath, fixtureContent, "utf8");
@@ -260,10 +260,10 @@ async function materializeCalibrationHome(
     root,
     "agent",
     "sessions",
-    "--Users-benchmark-project--",
+    "--benchmark-project-root--",
     testCase.fixture,
   );
-  await mkdir(join(root, "agent", "sessions", "--Users-benchmark-project--"), {
+  await mkdir(join(root, "agent", "sessions", "--benchmark-project-root--"), {
     recursive: true,
   });
   await writeFile(fixturePath, fixtureContent, "utf8");

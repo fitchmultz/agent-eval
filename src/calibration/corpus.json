@@ -52,7 +52,7 @@
     },
     "sanitizationChecks": [
       {
-        "input": "Authorization: Bearer demoTokenValue1234567890 and path /tmp/demo/project plus URL https://example.com/x and IP 10.0.0.1",
+        "input": "Authorization: Bearer demoTokenValue16 and path /tmp/demo/project plus URL https://example.com/x and IP 10.0.0.1",
         "mustContain": [
           "[redacted-token]",
           "[redacted-path]",
@@ -60,7 +60,7 @@
           "[redacted-ip]"
         ],
         "mustNotContain": [
-          "Bearer demoTokenValue1234567890",
+          "Bearer demoTokenValue16",
           "/tmp/demo/project",
           "https://example.com/x",
           "10.0.0.1"

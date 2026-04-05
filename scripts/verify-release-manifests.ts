@@ -1,5 +1,5 @@
 /**
- * Purpose: Verify committed release manifests describe a clean, current, schema-valid release snapshot.
+ * Purpose: Verify local release manifests describe a clean, current, schema-valid release snapshot.
  * Responsibilities: Validate manifest schema, require clean/current git provenance, recompute config fingerprints, verify artifact inventory, and exit non-zero on any mismatch.
  * Scope: Local release-signoff helper for generated final QA bundles.
  * Usage: `pnpm exec tsx scripts/verify-release-manifests.ts <manifest-or-dir...>` or `--help`.

@@ -31,8 +31,8 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/copy-runtime-assets.mjs",
     "benchmark": "tsx src/cli.ts benchmark --output-dir artifacts/benchmark",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark && pnpm build && pnpm smoke:dist",
-    "check:release": "node scripts/check-clean-worktree.mjs --require-main --require-upstream-clean && pnpm exec tsx scripts/verify-release-manifests.ts artifacts/final-qa-codex artifacts/final-qa-claude artifacts/final-qa-pi && pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark artifacts/final-qa-codex artifacts/final-qa-claude artifacts/final-qa-pi && pnpm build && pnpm smoke:dist && node scripts/check-clean-worktree.mjs --require-main --require-upstream-clean",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark && pnpm scan:repo && pnpm build && pnpm smoke:dist",
+    "check:release": "node scripts/check-clean-worktree.mjs --require-main --require-upstream-clean && pnpm exec tsx scripts/verify-release-manifests.ts artifacts/final-qa-codex artifacts/final-qa-claude artifacts/final-qa-pi && pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark artifacts/final-qa-codex artifacts/final-qa-claude artifacts/final-qa-pi && pnpm scan:repo && pnpm build && pnpm smoke:dist && node scripts/check-clean-worktree.mjs --require-main --require-upstream-clean",
     "dev": "tsx src/cli.ts",
     "format": "biome check --write .",
     "inspect": "tsx src/cli.ts inspect",
@@ -41,6 +41,7 @@
     "eval": "tsx src/cli.ts eval",
     "report": "tsx src/cli.ts report",
     "scan:artifacts": "node scripts/public-surface-scan.mjs",
+    "scan:repo": "node scripts/public-surface-scan.mjs --mode=repo README.md AGENTS.md LICENSE Makefile package.json .agent-evalrc.example docs src scripts",
     "smoke:dist": "node scripts/dist-smoke.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
