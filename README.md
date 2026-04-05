@@ -217,9 +217,9 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifact
 If you are doing a final public-release pass, use this sequence:
 
 ```bash
-# 1. Regenerate the provider QA bundles.
-# 2. Review them and commit the refreshed artifacts.
-# 3. From the clean committed tree, run:
+# 1. Regenerate the provider QA bundles locally under artifacts/.
+# 2. Review them locally (and refresh local verification screenshots if needed).
+# 3. From the clean committed source tree, run:
 make release-check
 # equivalent to:
 pnpm check:release
@@ -229,11 +229,11 @@ pnpm check:release
 - requiring a clean git worktree before validation starts
 - requiring branch `main`
 - requiring local `HEAD` to match its upstream exactly
-- verifying that the committed final QA manifests were generated from the current clean `HEAD`, on the current branch, under the current live config fingerprint, and with the expected on-disk artifact inventory
+- verifying that the local final QA manifests were generated from the current clean `HEAD`, on the current branch, under the current live config fingerprint, and with the expected on-disk artifact inventory
 - rerunning the clean/main/upstream check after the validation commands finish so release validation does not leave tracked drift behind
 - scanning the benchmark bundle and the regenerated final QA artifacts:
   - `artifacts/final-qa-codex`
   - `artifacts/final-qa-claude`
   - `artifacts/final-qa-pi`
 
-Visual QA screenshots are intentionally outside the committed release contract. Regenerate them locally under `notes/final-release/verification/` when needed for manual review or oracle archives, but do not commit them.
+Final QA bundles under `artifacts/` and visual QA screenshots under `notes/final-release/verification/` are intentionally local-only inputs to release review. Regenerate them locally when needed for manual review or oracle archives, but do not commit them.

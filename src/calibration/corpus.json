@@ -52,7 +52,7 @@
     },
     "sanitizationChecks": [
       {
-        "input": "Token ghp_1234567890abcdefghijklmnop and path /Users/demo/project plus URL https://example.com/x and IP 10.0.0.1",
+        "input": "Authorization: Bearer demoTokenValue1234567890 and path /tmp/demo/project plus URL https://example.com/x and IP 10.0.0.1",
         "mustContain": [
           "[redacted-token]",
           "[redacted-path]",
@@ -60,8 +60,8 @@
           "[redacted-ip]"
         ],
         "mustNotContain": [
-          "ghp_1234567890abcdefghijklmnop",
-          "/Users/demo/project",
+          "Bearer demoTokenValue1234567890",
+          "/tmp/demo/project",
           "https://example.com/x",
           "10.0.0.1"
         ]
