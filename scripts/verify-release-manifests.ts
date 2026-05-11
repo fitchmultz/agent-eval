@@ -23,7 +23,7 @@ function printHelp() {
   );
   process.stdout.write("Usage:\n");
   process.stdout.write(
-    "  pnpm exec tsx scripts/verify-release-manifests.ts artifacts/final-qa-codex artifacts/final-qa-pi\n",
+    "  pnpm exec tsx scripts/verify-release-manifests.ts artifacts/final-qa-codex artifacts/final-qa-claude artifacts/final-qa-pi artifacts/final-qa-opencode\n",
   );
   process.stdout.write(
     "  pnpm exec tsx scripts/verify-release-manifests.ts artifacts/final-qa-codex/release-manifest.json\n",

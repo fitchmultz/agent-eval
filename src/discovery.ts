@@ -1,9 +1,9 @@
 /**
  * Purpose: Discovers canonical transcript files and optional local enrichment stores under a supported agent home directory.
- * Responsibilities: Source-aware inventory building for Codex, Claude Code, and pi transcript stores.
+ * Responsibilities: Source-aware inventory building for Codex, Claude Code, pi, and opencode transcript stores.
  * Scope: Called by CLI commands before parsing or evaluation begins.
  * Usage: `discoverArtifacts(homePath, { provider })` to inventory one source home.
- * Invariants/Assumptions: Transcript JSONL remains the only required canonical input for each provider.
+ * Invariants/Assumptions: Transcript/session artifacts remain the only required canonical input for each provider.
  */
 import { basename, join } from "node:path";
 import { ValidationError } from "./errors.js";
@@ -28,7 +28,7 @@ export interface DiscoveredArtifacts {
   sessionDirectoryExists: boolean;
   /** Inventory records for all expected and discovered artifact types */
   inventory: InventoryRecord[];
-  /** Full paths to all discovered session JSONL files */
+  /** Full paths to all discovered canonical session artifact files */
   sessionFiles: string[];
 }
 
@@ -66,6 +66,10 @@ async function resolveSessionsPath(
     return join(homePath, "projects");
   }
 
+  if (provider === "opencode") {
+    return join(homePath, "storage", "session");
+  }
+
   if (provider === "pi") {
     const primaryPath = join(homePath, "agent", "sessions");
     const fallbackPath = join(homePath, "sessions");
@@ -97,7 +101,7 @@ export interface DiscoveryOptions extends ListOptions {
  * under a supported agent home directory.
  *
  * This function scans for:
- * - Required: Session JSONL files (sessions directory)
+ * - Required: session artifacts (JSONL for Codex/Claude/pi, session JSON for opencode)
  * - Optional: SQLite state database, history JSONL, TUI logs, shell snapshots
  *
  * Supports timeout and cancellation via AbortSignal.
@@ -158,6 +162,9 @@ async function doDiscoverArtifacts(
       ? join(homePath, "shell-snapshots")
       : join(homePath, "shell_snapshots");
   const sessionEnvPath = join(homePath, "session-env");
+  const opencodeDbPath = join(homePath, "opencode.db");
+  const opencodeLogPath = join(homePath, "log");
+  const opencodeSnapshotPath = join(homePath, "snapshot");
 
   // Check for abort
   throwIfAborted(options?.signal);
@@ -174,11 +181,15 @@ async function doDiscoverArtifacts(
           timeoutMs: options?.timeoutMs,
           signal: options?.signal,
         })
-      ).filter(
-        (path) =>
+      ).filter((path) => {
+        if (provider === "opencode") {
+          return path.endsWith(".json") && basename(path).startsWith("ses_");
+        }
+        return (
           path.endsWith(".jsonl") &&
-          (provider !== "pi" || isCanonicalPiSessionFile(path)),
-      )
+          (provider !== "pi" || isCanonicalPiSessionFile(path))
+        );
+      })
     : [];
   const discoveredCanonicalSessionInput = sessionFiles.length > 0;
 
@@ -188,7 +199,7 @@ async function doDiscoverArtifacts(
   const inventory: InventoryRecord[] = [
     buildInventoryRecord(
       provider,
-      "session_jsonl",
+      provider === "opencode" ? "session_json" : "session_jsonl",
       sessionsPath,
       discoveredCanonicalSessionInput,
       true,
@@ -255,7 +266,31 @@ async function doDiscoverArtifacts(
               false,
             ),
           ]
-        : []),
+        : provider === "opencode"
+          ? [
+              buildInventoryRecord(
+                provider,
+                "opencode_db",
+                opencodeDbPath,
+                await pathExists(opencodeDbPath),
+                false,
+              ),
+              buildInventoryRecord(
+                provider,
+                "tui_log",
+                opencodeLogPath,
+                await pathExists(opencodeLogPath),
+                false,
+              ),
+              buildInventoryRecord(
+                provider,
+                "shell_snapshot",
+                opencodeSnapshotPath,
+                await pathExists(opencodeSnapshotPath),
+                false,
+              ),
+            ]
+          : []),
   ];
 
   return {

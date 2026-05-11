@@ -4,7 +4,7 @@
 
 ## Executive summary
 
-`agent-eval` is a local, deterministic transcript analytics engine for developer-agent transcripts. It uses a source-aware architecture so the same analytics engine can ingest Claude Code, Codex, and pi transcripts through provider-specific adapters and a shared normalized model.
+`agent-eval` is a local, deterministic transcript analytics engine for developer-agent transcripts and session artifacts. It uses a source-aware architecture so the same analytics engine can ingest Claude Code, Codex, pi, and opencode artifacts through provider-specific adapters and a shared normalized model.
 
 That decision matters because most teams adopting coding agents do not need another demo. They need a repeatable way to understand how work is actually happening, what is working well, where friction clusters, how often changes are verified, and how to share results without exposing raw session data.
 
@@ -21,7 +21,7 @@ The goal is a system that stays grounded in auditable artifacts and still produc
 
 ## Design goals
 
-- Keep transcript JSONL as the canonical input.
+- Keep transcript/session artifacts as the canonical input.
 - Favor deterministic methods over model-graded interpretation for the core pipeline.
 - Normalize multiple providers into one downstream session model.
 - Keep the public artifact layer safe enough for an open GitHub repo.
@@ -31,7 +31,7 @@ The goal is a system that stays grounded in auditable artifacts and still produc
 
 ### 1. Source-aware adapters, shared analytics core
 
-Discovery and parsing are provider-specific because Codex, Claude Code, and pi store data differently. Everything after normalization is shared:
+Discovery and parsing are provider-specific because Codex, Claude Code, pi, and opencode store data differently. Everything after normalization is shared:
 
 - parsed sessions
 - normalized turns
@@ -45,7 +45,7 @@ This makes the system easier to extend without forking downstream analytics logi
 
 ### 2. Transcript-first over enrichment-first
 
-The analytics engine inventories optional stores such as history files, SQLite databases, shell snapshots, and Claude session environment files, but the canonical methodology still starts from transcript JSONL. That keeps the system stable even when optional stores drift.
+The analytics engine inventories optional stores such as history files, SQLite databases, shell snapshots, opencode databases/logs, and Claude session environment files, but the canonical methodology still starts from each provider's transcript/session artifacts. That keeps the system stable even when optional stores drift.
 
 ### 3. Deterministic public artifacts
 

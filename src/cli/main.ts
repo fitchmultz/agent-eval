@@ -112,7 +112,7 @@ function buildProgram(): Command {
     .showHelpAfterError()
     .option(
       "--source <provider>",
-      "Source provider to inspect: codex, claude, or pi (env: AGENT_EVAL_SOURCE)",
+      "Source provider to inspect: codex, claude, pi, or opencode (env: AGENT_EVAL_SOURCE)",
       defaultSource,
     )
     .option(
@@ -169,7 +169,7 @@ function buildProgram(): Command {
         "    - agent-eval.config.json",
         "",
         "  Environment variables:",
-        "    AGENT_EVAL_SOURCE              - Source provider (codex|claude|pi)",
+        "    AGENT_EVAL_SOURCE              - Source provider (codex|claude|pi|opencode)",
         "    AGENT_EVAL_SOURCE_HOME         - Source home directory",
         "    AGENT_EVAL_OUTPUT_DIR          - Output directory for artifacts",
         "    AGENT_EVAL_CONCURRENCY_FULL    - Concurrency for full evaluation",
@@ -180,10 +180,12 @@ function buildProgram(): Command {
         "  agent-eval inspect --source codex --home ~/.codex",
         "  agent-eval inspect --source claude --home ~/.claude",
         "  agent-eval inspect --source pi --home ~/.pi",
+        "  agent-eval inspect --source opencode --home ~/.local/share/opencode",
         "  agent-eval parse --source codex --home ~/.codex --output-dir artifacts",
         "  cat artifacts/raw-turns.jsonl",
         "  agent-eval eval --source claude --home ~/.claude --output-dir artifacts",
         "  agent-eval eval --source pi --home ~/.pi --summary-only --session-limit 25",
+        "  agent-eval eval --source opencode --home ~/.local/share/opencode --summary-only --session-limit 25",
         "  agent-eval eval --source codex --home ~/.codex --start-date 2026-03-01 --end-date 2026-03-31 --time-bucket day",
         "  agent-eval benchmark --output-dir artifacts/benchmark",
         "  agent-eval report --source codex --home ~/.codex --output-dir artifacts",

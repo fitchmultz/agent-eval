@@ -1,7 +1,7 @@
 /**
  * Purpose: Defines the strict typed schema shared by discovery, parsing, clustering, scoring, and artifact output.
  * Entrypoint: Exported Zod schemas and inferred types are consumed by runtime modules and tests.
- * Notes: Transcript JSONL is canonical input; all non-transcript sources are optional enrichment only.
+ * Notes: Transcript/session artifacts are canonical input; all non-transcript sources are optional enrichment only.
  */
 import { z } from "zod";
 import { sourceProviderValues } from "./sources.js";
@@ -30,12 +30,14 @@ export const sessionArchetypeValues = [
 export { sourceProviderValues };
 export const sourceKindValues = [
   "session_jsonl",
+  "session_json",
   "state_sqlite",
   "history_jsonl",
   "tui_log",
   "codex_dev_db",
   "shell_snapshot",
   "session_env",
+  "opencode_db",
 ] as const;
 export const toolCategoryValues = ["write", "verification", "other"] as const;
 export const toolFamilyValues = [

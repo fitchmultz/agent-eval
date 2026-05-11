@@ -59,7 +59,7 @@ export function createSourceRef(
 ): SourceRef {
   return {
     provider,
-    kind: "session_jsonl",
+    kind: provider === "opencode" ? "session_json" : "session_jsonl",
     path,
     line,
   };

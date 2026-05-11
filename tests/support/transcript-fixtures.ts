@@ -1,6 +1,6 @@
 /**
- * Purpose: Provides shared synthetic Codex, Claude, and pi transcript fixtures for integration-style tests.
- * Responsibilities: Generate provider-shaped JSONL content and materialize temporary homes for CLI and evaluator tests.
+ * Purpose: Provides shared synthetic Codex, Claude, pi, and opencode transcript fixtures for integration-style tests.
+ * Responsibilities: Generate provider-shaped content and materialize temporary homes for CLI and evaluator tests.
  * Scope: Test-only helper used by cross-provider integration coverage; fixtures remain synthetic and public-facing redaction.
  * Usage: Import `createCodexHome()`, `createClaudeHome()`, or `createPiHome()` with a temporary base directory per test suite.
  * Invariants/Assumptions: Provider fixtures describe equivalent workflows unless a test overrides the default transcript content.
@@ -11,6 +11,10 @@ import { join } from "node:path";
 
 function writeJsonl(records: readonly unknown[]): string {
   return `${records.map((record) => JSON.stringify(record)).join("\n")}\n`;
+}
+
+function writeJson(record: unknown): string {
+  return JSON.stringify(record, null, 2);
 }
 
 export function createCodexSessionContent(sessionId: string): string {
@@ -376,4 +380,116 @@ export async function createPiHome(
       content: createPiSessionContent(`pi-session-${index + 1}`),
     })),
   );
+}
+
+export async function createOpencodeHome(
+  baseDir: string,
+  name: string,
+): Promise<string> {
+  const homeDir = join(baseDir, name);
+  const sessionId = "ses_opencode_1";
+  const projectId = "project-1";
+  const userMessageId = "msg_opencode_user_1";
+  const assistantMessageId = "msg_opencode_assistant_1";
+  await mkdir(join(homeDir, "storage", "session", projectId), {
+    recursive: true,
+  });
+  await mkdir(join(homeDir, "storage", "message", sessionId), {
+    recursive: true,
+  });
+  await mkdir(join(homeDir, "storage", "part", userMessageId), {
+    recursive: true,
+  });
+  await mkdir(join(homeDir, "storage", "part", assistantMessageId), {
+    recursive: true,
+  });
+
+  await writeFile(
+    join(homeDir, "storage", "session", projectId, `${sessionId}.json`),
+    writeJson({
+      id: sessionId,
+      projectID: projectId,
+      directory: "/workspace/demo",
+      title: "Fix tests",
+      time: { created: 1770000000000, updated: 1770000004000 },
+    }),
+    "utf8",
+  );
+  await writeFile(
+    join(homeDir, "storage", "message", sessionId, `${userMessageId}.json`),
+    writeJson({
+      id: userMessageId,
+      sessionID: sessionId,
+      role: "user",
+      time: { created: 1770000000001 },
+      model: { providerID: "anthropic", modelID: "claude-sonnet-4" },
+      path: { cwd: "/workspace/demo" },
+    }),
+    "utf8",
+  );
+  await writeFile(
+    join(homeDir, "storage", "part", userMessageId, "prt_user.json"),
+    writeJson({
+      id: "prt_user",
+      sessionID: sessionId,
+      messageID: userMessageId,
+      type: "text",
+      text: "Please fix the tests and verify before finishing.",
+      time: { start: 1770000000002 },
+    }),
+    "utf8",
+  );
+  await writeFile(
+    join(
+      homeDir,
+      "storage",
+      "message",
+      sessionId,
+      `${assistantMessageId}.json`,
+    ),
+    writeJson({
+      id: assistantMessageId,
+      sessionID: sessionId,
+      role: "assistant",
+      parentID: userMessageId,
+      providerID: "anthropic",
+      modelID: "claude-sonnet-4",
+      time: { created: 1770000001000, completed: 1770000003000 },
+      tokens: { input: 100, output: 25 },
+      path: { cwd: "/workspace/demo" },
+    }),
+    "utf8",
+  );
+  await writeFile(
+    join(homeDir, "storage", "part", assistantMessageId, "prt_text.json"),
+    writeJson({
+      id: "prt_text",
+      sessionID: sessionId,
+      messageID: assistantMessageId,
+      type: "text",
+      text: "I will run the tests and report back with terminal verification status.",
+      time: { start: 1770000001001 },
+    }),
+    "utf8",
+  );
+  await writeFile(
+    join(homeDir, "storage", "part", assistantMessageId, "prt_tool.json"),
+    writeJson({
+      id: "prt_tool",
+      sessionID: sessionId,
+      messageID: assistantMessageId,
+      type: "tool",
+      callID: "call_opencode_1",
+      tool: "bash",
+      state: {
+        status: "completed",
+        input: { command: "pnpm test" },
+        output: "Process exited with code 0",
+        time: { start: 1770000002000, end: 1770000002500 },
+      },
+    }),
+    "utf8",
+  );
+
+  return homeDir;
 }

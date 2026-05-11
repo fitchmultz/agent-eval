@@ -87,7 +87,7 @@ function renderNoDataPanel(
 
   return `<section><div class="panel empty-hero">
     <h2>No Data Yet</h2>
-    <p>The selected source home has the expected transcript layout, but no session JSONL files were discovered yet.</p>
+    <p>The selected source home has the expected transcript layout, but no canonical session artifact files were discovered yet.</p>
     <p>This is a valid first-run or freshly bootstrapped state, so the report renders a deterministic empty corpus instead of treating it as a runtime failure.</p>
   </div></section>`;
 }

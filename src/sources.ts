@@ -3,19 +3,24 @@
  * Responsibilities: Define supported providers, resolve default homes, detect providers from paths, and support source-aware UX.
  * Scope: Shared by discovery, CLI, parsers, and report formatting.
  * Usage: Import helpers like `detectSourceProviderFromPath()` and `getDefaultSourceHome()`.
- * Invariants/Assumptions: Supported providers are currently limited to `codex`, `claude`, and `pi`.
+ * Invariants/Assumptions: Supported providers are currently limited to `codex`, `claude`, `pi`, and `opencode`.
  */
 
 import { join } from "node:path";
 
-export const sourceProviderValues = ["codex", "claude", "pi"] as const;
+export const sourceProviderValues = [
+  "codex",
+  "claude",
+  "pi",
+  "opencode",
+] as const;
 
 export type SourceProvider = (typeof sourceProviderValues)[number];
 
 export interface SourceDescriptor {
   provider: SourceProvider;
   label: string;
-  defaultHomeDirname: `.${string}`;
+  defaultHomeDirname: string;
 }
 
 export const SOURCE_DESCRIPTORS: Record<SourceProvider, SourceDescriptor> = {
@@ -33,6 +38,11 @@ export const SOURCE_DESCRIPTORS: Record<SourceProvider, SourceDescriptor> = {
     provider: "pi",
     label: "pi",
     defaultHomeDirname: ".pi",
+  },
+  opencode: {
+    provider: "opencode",
+    label: "opencode",
+    defaultHomeDirname: ".local/share/opencode",
   },
 };
 
@@ -60,6 +70,15 @@ export function detectSourceProviderFromPath(
 
   if (path.includes("/.pi/") || path.endsWith("/.pi")) {
     return "pi";
+  }
+
+  if (
+    path.includes("/.local/share/opencode/") ||
+    path.endsWith("/.local/share/opencode") ||
+    path.includes("/.opencode/") ||
+    path.endsWith("/.opencode")
+  ) {
+    return "opencode";
   }
 
   return undefined;

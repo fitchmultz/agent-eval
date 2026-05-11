@@ -54,6 +54,9 @@ export function getDefaultHome(source: SourceProvider): string {
     if (source === "pi") {
       return ".pi";
     }
+    if (source === "opencode") {
+      return ".local/share/opencode";
+    }
     return ".codex";
   }
 }
@@ -120,7 +123,7 @@ export function normalizeOptions(options: GlobalOptions): GlobalOptions {
   const fallbackSource = getDefaultSource();
   if (!isSourceProvider(options.source)) {
     throw new ValidationError(
-      `Invalid source provider: ${options.source}. Expected one of: codex, claude, pi.`,
+      `Invalid source provider: ${options.source}. Expected one of: codex, claude, pi, opencode.`,
     );
   }
 

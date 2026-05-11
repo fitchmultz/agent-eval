@@ -153,7 +153,7 @@ export class MissingTranscriptInputError extends EvaluatorError {
     super(
       detail === "missing-directory"
         ? `Canonical transcript directory not found: ${path}. Check --home or run inspect to verify the source layout.`
-        : `No transcript JSONL files found under ${path}. Check --home or run inspect to verify the selected source home.`,
+        : `No canonical session artifact files found under ${path}. Check --home or run inspect to verify the selected source home.`,
       "MISSING_TRANSCRIPT_INPUT",
       1,
     );

@@ -16,6 +16,7 @@ export {
   extractMessageText,
   handleMessageResponse,
 } from "./message-extractor.js";
+export { parseOpencodeTranscriptFile } from "./opencode-parser.js";
 // Main entrypoint
 export {
   createParserContext,

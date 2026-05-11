@@ -1,6 +1,6 @@
 /**
  * Purpose: Main transcript parsing dispatcher for supported developer-agent transcript formats.
- * Responsibilities: Parse Codex transcript files directly and route Claude Code and pi files to source-specific adapters.
+ * Responsibilities: Parse Codex transcript files directly and route Claude Code, pi, and opencode files to source-specific adapters.
  * Scope: Shared entrypoint used by the evaluator to normalize transcript files into ParsedSession objects.
  * Usage: Call `parseTranscriptFile(path, options)` and optionally set `sourceProvider` to skip path inference.
  * Invariants/Assumptions: Codex transcript parsing remains Zod-validated; Claude Code and pi use source-specific adapters.
@@ -16,6 +16,7 @@ import {
 import { parseClaudeTranscriptFile } from "./claude-parser.js";
 import { createSourceRef, routeEvent } from "./event-router.js";
 import { createTranscriptLineReader, getReaderStream } from "./file-reader.js";
+import { parseOpencodeTranscriptFile } from "./opencode-parser.js";
 import { parsePiTranscriptFile } from "./pi-parser.js";
 import { validateEventRecord } from "./schema.js";
 import {
@@ -169,11 +170,11 @@ async function doParseCodexTranscriptFile(
 }
 
 /**
- * Parses a transcript JSONL file into a normalized ParsedSession.
+ * Parses a transcript/session artifact file into a normalized ParsedSession.
  * Orchestrates the parsing process with Zod schema validation.
  * Supports timeout and cancellation via AbortSignal.
  *
- * @param path - Path to the transcript JSONL file
+ * @param path - Path to the transcript/session artifact file
  * @param options - Optional parsing options including timeoutMs and signal
  * @returns The parsed session
  * @throws TranscriptParseError if strict mode is enabled and a line fails to parse
@@ -212,6 +213,14 @@ export async function parseTranscriptFile(
 
     if (sourceProvider === "pi") {
       return await parsePiTranscriptFile(path, {
+        ...options,
+        signal: combinedSignal,
+        sourceProvider,
+      });
+    }
+
+    if (sourceProvider === "opencode") {
+      return await parseOpencodeTranscriptFile(path, {
         ...options,
         signal: combinedSignal,
         sourceProvider,

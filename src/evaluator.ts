@@ -357,7 +357,7 @@ async function discoverSessionInputs(
   throwIfAborted(signal);
 
   const sessionInventory = discovered.inventory.find(
-    (item) => item.kind === "session_jsonl",
+    (item) => item.kind === "session_jsonl" || item.kind === "session_json",
   );
   const sessionInventoryPath =
     sessionInventory?.path ??
@@ -365,7 +365,9 @@ async function discoverSessionInputs(
       ? `${options.home}/projects`
       : options.source === "pi"
         ? `${options.home}/agent/sessions`
-        : `${options.home}/sessions`);
+        : options.source === "opencode"
+          ? `${options.home}/storage/session`
+          : `${options.home}/sessions`);
 
   if (!discovered.sessionDirectoryExists) {
     throw new MissingTranscriptInputError(

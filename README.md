@@ -21,7 +21,7 @@ It does **not** claim anything about your private transcripts until you run `ins
 ## Who this is for
 
 - Engineering leads adopting coding agents who need repeatable usage evidence.
-- Developers who want to review their own Codex, Claude Code, or pi sessions.
+- Developers who want to review their own Codex, Claude Code, pi, or opencode sessions.
 - Evaluators and portfolio reviewers who want proof beyond screenshots or informal impressions.
 - Maintainers who need static artifacts that can be inspected without a hosted service.
 
@@ -34,13 +34,13 @@ Developer-agent work leaves useful evidence in local transcripts, but that evide
 - anecdotes do not show verification, friction, or review-worthy patterns
 - dashboards are not trustworthy if they are detached from auditable artifacts
 
-`agent-eval` keeps transcript JSONL as the canonical input, normalizes supported providers into one model, and emits deterministic JSON/JSONL plus static Markdown/HTML/SVG reports.
+`agent-eval` keeps transcript/session artifacts as the canonical input, normalizes supported providers into one model, and emits deterministic JSON/JSONL plus static Markdown/HTML/SVG reports.
 
 ## What it does
 
 | Problem | Capability | Proof |
 |---|---|---|
-| Agent homes are provider-specific | Discovers Codex, Claude Code, and pi transcript stores through source-aware adapters | `pnpm inspect --source pi --home ~/.pi` |
+| Agent homes are provider-specific | Discovers Codex, Claude Code, pi, and opencode transcript stores through source-aware adapters | `pnpm inspect --source opencode --home ~/.local/share/opencode` |
 | Raw transcripts are too noisy to review directly | Normalizes sessions, turns, tools, labels, compliance, attribution, and session facts | `docs/schema-v3.md` |
 | Teams need a quick read of usage patterns | Generates a static dashboard with overview, what worked, needs review, and why it happened | `docs/report-v3.md` |
 | Public sharing can leak too much context | Uses redacted, truncated previews and local public-surface scan commands | `pnpm scan:repo` and `pnpm scan:artifacts <path>` |
@@ -77,6 +77,7 @@ Start with discovery. It inventories canonical transcripts plus optional enrichm
 pnpm inspect --source codex --home ~/.codex
 pnpm inspect --source claude --home ~/.claude
 pnpm inspect --source pi --home ~/.pi
+pnpm inspect --source opencode --home ~/.local/share/opencode
 ```
 
 Run the full deterministic pipeline and open the static report from `artifacts/report.html`.
@@ -103,13 +104,15 @@ When `--session-limit` is set, the limit applies to the most recent discovered s
 - `codex`: canonical transcripts under `~/.codex/sessions/**/*.jsonl`
 - `claude`: canonical transcripts under `~/.claude/projects/**/*.jsonl`
 - `pi`: canonical transcripts under `~/.pi/agent/sessions/**/*.jsonl`
+- `opencode`: canonical session metadata under `~/.local/share/opencode/storage/session/**/*.json`, joined with related `storage/message` and `storage/part` records
 
-Optional enrichment stores such as history, SQLite, shell snapshots, and session environment files are inventoried when present, but transcript JSONL remains the canonical input.
+Optional enrichment stores such as history, SQLite, shell snapshots, opencode databases/logs, and session environment files are inventoried when present, but transcript/session artifacts remain the canonical input.
 
 ## Command reference
 
 ```bash
 pnpm inspect --source pi --home ~/.pi
+pnpm inspect --source opencode --home ~/.local/share/opencode
 pnpm parse --source codex --home ~/.codex --output-dir artifacts
 pnpm eval --source claude --home ~/.claude --output-dir artifacts
 pnpm report --source codex --home ~/.codex --output-dir artifacts
@@ -189,8 +192,8 @@ source home
 
 Key implementation choices:
 
-- **Transcript-first:** canonical analytics starts from transcript JSONL, not optional side stores.
-- **Source-aware adapters:** Codex, Claude Code, and pi use separate discovery/parsing logic, then converge on one normalized session model.
+- **Transcript-first:** canonical analytics starts from transcript/session artifacts, not optional side stores.
+- **Source-aware adapters:** Codex, Claude Code, pi, and opencode use separate discovery/parsing logic, then converge on one normalized session model.
 - **Deterministic scoring:** labels, clustering, compliance scoring, summaries, and presentation artifacts are rule-based.
 - **Redacted previews:** generated reports prefer redacted, truncated previews over full transcript bodies.
 - **Static export:** HTML, Markdown, JSON, JSONL, and SVG outputs stay portable and dependency-light.
@@ -250,7 +253,7 @@ pnpm scan:repo
 
 Real today:
 
-- local CLI for Codex, Claude Code, and pi transcript JSONL
+- local CLI for Codex, Claude Code, pi, and opencode transcript/session artifacts
 - deterministic parsing, labeling, clustering, scoring, and attribution
 - static HTML/Markdown/SVG report generation
 - canonical v3 machine-readable artifacts

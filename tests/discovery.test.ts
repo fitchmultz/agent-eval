@@ -1,6 +1,6 @@
 /**
  * Purpose: Tests source-aware artifact discovery and inventory building.
- * Responsibilities: Verify Codex, Claude Code, and pi homes resolve the expected transcript and enrichment stores.
+ * Responsibilities: Verify Codex, Claude Code, pi, and opencode homes resolve the expected transcript and enrichment stores.
  * Scope: Uses temporary directories only, with synthetic files and no private local data.
  * Usage: Executed by Vitest via `pnpm test`.
  * Invariants/Assumptions: Discovery requires an explicit provider in tests so temp paths stay unambiguous.
@@ -206,6 +206,54 @@ describe("discoverArtifacts", () => {
     expect(result.sessionFiles[0]).toContain(
       "2026-04-05T04-21-12-846Z_b775e768-a62c-4b98-82e9-61b93974adb7.jsonl",
     );
+  });
+
+  it("discovers opencode session JSON files and optional stores", async () => {
+    const testDir = join(testDirBase, "opencode-home");
+    const sessionsDir = join(testDir, "storage", "session", "project-a");
+    await mkdir(sessionsDir, { recursive: true });
+    await writeFile(join(sessionsDir, "ses_alpha.json"), "{}\n");
+    await writeFile(join(sessionsDir, "not-a-session.json"), "{}\n");
+    await writeFile(join(testDir, "opencode.db"), "sqlite");
+    await mkdir(join(testDir, "log"), { recursive: true });
+    await mkdir(join(testDir, "snapshot"), { recursive: true });
+
+    const result = await discoverArtifacts(testDir, { provider: "opencode" });
+
+    expect(result.provider).toBe("opencode");
+    expect(result.homePath).toBe(testDir);
+    expect(result.sessionFiles).toEqual([join(sessionsDir, "ses_alpha.json")]);
+    expect(result.inventory).toHaveLength(4);
+    expect(result.inventory[0]).toMatchObject({
+      provider: "opencode",
+      kind: "session_json",
+      discovered: true,
+      required: true,
+      optional: false,
+      path: join(testDir, "storage", "session"),
+    });
+    expect(
+      result.inventory.find((record) => record.kind === "opencode_db"),
+    ).toMatchObject({
+      provider: "opencode",
+      discovered: true,
+      optional: true,
+      path: join(testDir, "opencode.db"),
+    });
+  });
+
+  it("marks missing opencode stores as undiscovered without failing", async () => {
+    const testDir = join(testDirBase, "opencode-empty");
+    await mkdir(testDir, { recursive: true });
+
+    const result = await discoverArtifacts(testDir, { provider: "opencode" });
+
+    expect(result.sessionFiles).toHaveLength(0);
+    expect(result.inventory).toHaveLength(4);
+    for (const record of result.inventory) {
+      expect(record.provider).toBe("opencode");
+      expect(record.discovered).toBe(false);
+    }
   });
 
   it("marks missing pi stores as undiscovered without failing", async () => {

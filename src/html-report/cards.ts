@@ -19,7 +19,7 @@ function inventoryStatusLabel(
 ): string {
   if (
     record.required &&
-    record.kind === "session_jsonl" &&
+    (record.kind === "session_jsonl" || record.kind === "session_json") &&
     !record.discovered
   ) {
     return "missing canonical input";

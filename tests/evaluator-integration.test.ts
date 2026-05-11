@@ -1,5 +1,5 @@
 /**
- * Purpose: Exercise the real evaluator pipeline against synthetic Codex, Claude, and pi transcript homes.
+ * Purpose: Exercise the real evaluator pipeline against synthetic Codex, Claude, pi, and opencode transcript homes.
  * Responsibilities: Verify end-to-end discovery, parsing, normalization, v3 summary generation, and session-facts emission without mocks.
  * Scope: High-signal integration coverage for the source-aware evaluator boundary.
  * Usage: Executed by Vitest via `pnpm test`.
@@ -17,6 +17,7 @@ import {
   createCodexHome,
   createCodexHomeFromSessions,
   createCodexSessionContent,
+  createOpencodeHome,
   createPiHome,
 } from "./support/transcript-fixtures.js";
 
@@ -78,6 +79,26 @@ describe("evaluateArtifacts integration", () => {
     expect(result.metrics.sessionCount).toBe(1);
     expect(result.sessionFacts).toHaveLength(1);
     expect(result.summary.overview.corpusContext).toContain("pi corpus");
+    expect(result.presentation.reportHtml).toContain("Overview Dashboard");
+  });
+
+  it("evaluates a real opencode session store through the shared summary pipeline", async () => {
+    const homeDir = await createOpencodeHome(testDirBase, "opencode-home");
+
+    const result = await evaluateArtifacts({
+      source: "opencode",
+      home: homeDir,
+      outputMode: "summary",
+    });
+
+    expect(result.metrics.sessionCount).toBe(1);
+    expect(result.metrics.providerDistribution[0]).toMatchObject({
+      key: "opencode",
+      count: 1,
+    });
+    expect(result.sessionFacts).toHaveLength(1);
+    expect(result.sessionFacts[0]?.provider).toBe("opencode");
+    expect(result.summary.overview.corpusContext).toContain("opencode corpus");
     expect(result.presentation.reportHtml).toContain("Overview Dashboard");
   });
 

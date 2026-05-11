@@ -5,7 +5,7 @@
  */
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -13,6 +13,7 @@ import { TranscriptParseError } from "../src/errors.js";
 import {
   parseClaudeTranscriptFile,
   parseEventLine,
+  parseOpencodeTranscriptFile,
   parsePiTranscriptFile,
   parseTranscriptFile,
 } from "../src/transcript/index.js";
@@ -661,6 +662,204 @@ describe("parseClaudeTranscriptFile", () => {
         signal: abortController.signal,
       }),
     ).rejects.toMatchObject({ name: "AbortError" });
+  });
+});
+
+describe("parseOpencodeTranscriptFile", () => {
+  it("parses opencode file-backed session stores with usage and tool calls", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agent-eval-opencode-"));
+    const storage = join(root, "storage");
+    const sessionId = "ses_test";
+    const messageId = "msg_user";
+    const assistantId = "msg_assistant";
+    const sessionPath = join(
+      storage,
+      "session",
+      "project-a",
+      `${sessionId}.json`,
+    );
+    await mkdir(dirname(sessionPath), { recursive: true });
+    await mkdir(join(storage, "message", sessionId), { recursive: true });
+    await mkdir(join(storage, "part", messageId), { recursive: true });
+    await mkdir(join(storage, "part", assistantId), { recursive: true });
+
+    await writeFile(
+      sessionPath,
+      JSON.stringify({
+        id: sessionId,
+        directory: "/workspace/demo",
+        time: { created: 1770000000000, updated: 1770000005000 },
+      }),
+    );
+    await writeFile(
+      join(storage, "message", sessionId, `${messageId}.json`),
+      JSON.stringify({
+        id: messageId,
+        sessionID: sessionId,
+        role: "user",
+        time: { created: 1770000000001 },
+        model: { providerID: "anthropic", modelID: "claude-sonnet-4" },
+        path: { cwd: "/workspace/demo" },
+      }),
+    );
+    await writeFile(
+      join(storage, "part", messageId, "prt_user.json"),
+      JSON.stringify({
+        id: "prt_user",
+        sessionID: sessionId,
+        messageID: messageId,
+        type: "text",
+        text: "Fix this and run tests.",
+        time: { start: 1770000000002 },
+      }),
+    );
+    await writeFile(
+      join(storage, "message", sessionId, `${assistantId}.json`),
+      JSON.stringify({
+        id: assistantId,
+        sessionID: sessionId,
+        role: "assistant",
+        parentID: messageId,
+        providerID: "anthropic",
+        modelID: "claude-sonnet-4",
+        time: { created: 1770000001000, completed: 1770000003000 },
+        tokens: { input: 10, output: 5 },
+        path: { cwd: "/workspace/demo" },
+      }),
+    );
+    await writeFile(
+      join(storage, "part", assistantId, "prt_reasoning.json"),
+      JSON.stringify({
+        id: "prt_reasoning",
+        sessionID: sessionId,
+        messageID: assistantId,
+        type: "reasoning",
+        text: "private chain of thought ignored",
+        time: { start: 1770000001001 },
+      }),
+    );
+    await writeFile(
+      join(storage, "part", assistantId, "prt_tool.json"),
+      JSON.stringify({
+        id: "prt_tool",
+        sessionID: sessionId,
+        messageID: assistantId,
+        type: "tool",
+        callID: "call_1",
+        tool: "bash",
+        state: {
+          status: "completed",
+          input: { command: "pnpm test" },
+          output: "Tests passed",
+          time: { start: 1770000002000, end: 1770000002500 },
+        },
+      }),
+    );
+
+    const session = await parseOpencodeTranscriptFile(sessionPath, {
+      sourceProvider: "opencode",
+    });
+
+    expect(session.provider).toBe("opencode");
+    expect(session.harness).toBe("opencode");
+    expect(session.sessionId).toBe(sessionId);
+    expect(session.cwd).toBe("/workspace/demo");
+    expect(session.modelProvider).toBe("anthropic");
+    expect(session.model).toBe("claude-sonnet-4");
+    expect(session.inputTokens).toBe(10);
+    expect(session.outputTokens).toBe(5);
+    expect(session.totalTokens).toBe(15);
+    expect(session.turns).toHaveLength(1);
+    expect(session.turns[0]?.userMessages).toEqual(["Fix this and run tests."]);
+    expect(session.turns[0]?.assistantMessages).toEqual([]);
+    expect(session.turns[0]?.toolCalls[0]).toMatchObject({
+      callId: "call_1",
+      toolName: "bash",
+      outputText: "Tests passed",
+      status: "completed",
+      timestamp: new Date(1770000002000).toISOString(),
+    });
+    expect(
+      session.turns[0]?.sourceRefs.every((ref) => ref.kind === "session_json"),
+    ).toBe(true);
+  });
+
+  it("skips corrupt opencode message and part files in non-strict mode", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agent-eval-opencode-corrupt-"));
+    const storage = join(root, "storage");
+    const sessionId = "ses_corrupt";
+    const goodMessageId = "msg_good";
+    const sessionPath = join(
+      storage,
+      "session",
+      "project-a",
+      `${sessionId}.json`,
+    );
+    await mkdir(dirname(sessionPath), { recursive: true });
+    await mkdir(join(storage, "message", sessionId), { recursive: true });
+    await mkdir(join(storage, "part", goodMessageId), { recursive: true });
+    await writeFile(sessionPath, JSON.stringify({ id: sessionId }));
+    await writeFile(
+      join(storage, "message", sessionId, `${goodMessageId}.json`),
+      JSON.stringify({
+        id: goodMessageId,
+        sessionID: sessionId,
+        role: "user",
+        time: { created: 1770000000001 },
+      }),
+    );
+    await writeFile(
+      join(storage, "message", sessionId, "msg_bad.json"),
+      "not json",
+    );
+    await writeFile(
+      join(storage, "part", goodMessageId, "prt_good.json"),
+      JSON.stringify({
+        id: "prt_good",
+        sessionID: sessionId,
+        messageID: goodMessageId,
+        type: "text",
+        text: "Keep the valid message.",
+      }),
+    );
+    await writeFile(
+      join(storage, "part", goodMessageId, "prt_bad.json"),
+      "not json",
+    );
+
+    const warnings: string[] = [];
+    const session = await parseOpencodeTranscriptFile(sessionPath, {
+      sourceProvider: "opencode",
+      onParseError: (line) => warnings.push(line),
+    });
+
+    expect(session.parseWarningCount).toBe(2);
+    expect(warnings).toHaveLength(2);
+    expect(session.turns[0]?.userMessages).toEqual(["Keep the valid message."]);
+  });
+
+  it("routes opencode paths through the shared parser dispatcher", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agent-eval-opencode-dispatch-"));
+    const sessionPath = join(
+      root,
+      ".local",
+      "share",
+      "opencode",
+      "storage",
+      "session",
+      "project-a",
+      "ses_dispatch.json",
+    );
+    await mkdir(dirname(sessionPath), { recursive: true });
+    await writeFile(
+      sessionPath,
+      JSON.stringify({ id: "ses_dispatch", directory: "/workspace/demo" }),
+    );
+
+    const session = await parseTranscriptFile(sessionPath);
+
+    expect(session.provider).toBe("opencode");
+    expect(session.harness).toBe("opencode");
   });
 });
 

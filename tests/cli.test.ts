@@ -281,7 +281,7 @@ describe("CLI", () => {
       expect.stringContaining("## No Data Yet"),
     );
     expect(await readFile(join(outputDir, "report.md"), "utf8")).toContain(
-      "The selected source home has the expected transcript layout, but no session JSONL files were discovered yet.",
+      "The selected source home has the expected transcript layout, but no canonical session artifact files were discovered yet.",
     );
     expect(await readFile(join(outputDir, "metrics.json"), "utf8")).toContain(
       '"sessionCount": 0',
