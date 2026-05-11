@@ -103,12 +103,12 @@ export function renderHtmlReport(
   const contentSections = model.isEmptyCorpus
     ? [
         renderNoDataPanel(model),
-        `<section id="overview"><h2>Overview Dashboard</h2><div class="metric-grid">${renderPrimaryMetricCards(model)}</div><div class="metric-grid secondary-metric-grid">${renderSecondaryMetricCards(model)}</div></section>`,
+        `<section id="overview"><h2>Overview Dashboard</h2><div class="metric-grid">${renderPrimaryMetricCards(model)}${renderSecondaryMetricCards(model)}</div></section>`,
         `<details class="panel lower-section" id="inventory"><summary>Inventory</summary>${renderInventoryList(model)}</details>`,
         `<details class="panel lower-section" id="methodology-and-limitations"><summary>Methodology And Limitations</summary>${renderMethodologyList(model)}</details>`,
       ]
     : [
-        `<section id="overview"><h2>Overview Dashboard</h2><div class="metric-grid">${renderPrimaryMetricCards(model)}</div><div class="metric-grid secondary-metric-grid">${renderSecondaryMetricCards(model)}</div><div class="panel overview-highlights">${renderOverviewHighlights(model)}</div>${renderOverviewCharts(charts)}<div class="detail-grid">${renderDashboardDistributions(model)}</div>${renderSummaryNotes(model.overviewNotes)}</section>`,
+        `<section id="overview"><h2>Overview Dashboard</h2><div class="metric-grid">${renderPrimaryMetricCards(model)}${renderSecondaryMetricCards(model)}</div><div class="panel overview-highlights">${renderOverviewHighlights(model)}</div>${renderOverviewCharts(charts)}<div class="detail-grid">${renderDashboardDistributions(model)}</div>${renderSummaryNotes(model.overviewNotes)}</section>`,
         `<section id="what-worked"><h2>What Worked</h2>${renderSurfaceSection(model.worked)}</section>`,
         `<section id="needs-review"><h2>Needs Review</h2>${renderSurfaceSection(model.review)}</section>`,
         `<section id="why-this-happened"><h2>Why This Happened</h2><div class="detail-grid">${renderAttributionSummary(model)}${renderTemplateSubstrate(model)}</div><div class="detail-grid cause-grid">${renderCausePatterns(model)}</div></section>`,

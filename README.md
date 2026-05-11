@@ -1,44 +1,102 @@
 # agent-eval
 
-`agent-eval` is a deterministic, static, transcript-first agent usage evaluation tool. It discovers local session artifacts, normalizes Codex, Claude Code, and pi transcripts into one shared model, and emits machine-readable artifacts plus static HTML/Markdown reports.
+`agent-eval` helps engineers and reviewers turn local coding-agent transcripts into deterministic, public-safe HTML reports without uploading raw session logs or relying on anecdotal scoring.
 
-The v3 direction is dashboard-first rather than triage-first. The report is intended to support four lenses:
+![Static HTML report preview generated from synthetic transcript fixtures](docs/assets/report-preview.png)
 
-1. **Overview dashboard**
-2. **What worked**
-3. **Needs review**
-4. **Why this happened**
+## What you are seeing
 
-The project remains local-first, deterministic, static, and public-safe.
+This screenshot shows the generated static HTML dashboard: navigation pills, metric cards, and verification status styling rendered from the same deterministic artifacts that the CLI writes to disk. The same report continues with SVG charts, exemplar sessions, review queue, attribution, and methodology sections. The preview image was generated from checked-in synthetic Codex fixtures, not from private local transcripts.
 
-## Prerequisites and install
+The HTML report helps readers see:
+
+- how many sessions and write sessions were analyzed
+- how often write sessions ended verified or unverified
+- provider, harness, tool-family, and attribution mixes
+- exemplar sessions worth learning from
+- review-queue sessions worth inspecting
+
+It does **not** claim anything about your private transcripts until you run `inspect` or `eval` against your own local agent home.
+
+## Who this is for
+
+- Engineering leads adopting coding agents who need repeatable usage evidence.
+- Developers who want to review their own Codex, Claude Code, or pi sessions.
+- Evaluators and portfolio reviewers who want proof beyond screenshots or informal impressions.
+- Maintainers who need static artifacts that can be inspected without a hosted service.
+
+## Problem
+
+Developer-agent work leaves useful evidence in local transcripts, but that evidence is hard to compare:
+
+- each provider stores sessions differently
+- raw logs are noisy and often sensitive
+- anecdotes do not show verification, friction, or review-worthy patterns
+- dashboards are not trustworthy if they are detached from auditable artifacts
+
+`agent-eval` keeps transcript JSONL as the canonical input, normalizes supported providers into one model, and emits deterministic JSON/JSONL plus static Markdown/HTML/SVG reports.
+
+## What it does
+
+| Problem | Capability | Proof |
+|---|---|---|
+| Agent homes are provider-specific | Discovers Codex, Claude Code, and pi transcript stores through source-aware adapters | `pnpm inspect --source pi --home ~/.pi` |
+| Raw transcripts are too noisy to review directly | Normalizes sessions, turns, tools, labels, compliance, attribution, and session facts | `docs/schema-v3.md` |
+| Teams need a quick read of usage patterns | Generates a static dashboard with overview, what worked, needs review, and why it happened | `docs/report-v3.md` |
+| Public sharing can leak too much context | Uses redacted, truncated previews and local public-surface scan commands | `pnpm scan:repo` and `pnpm scan:artifacts <path>` |
+| Rule changes need regression protection | Runs a synthetic calibration benchmark across expected labels, incidents, attribution, and surfaced sessions | `pnpm benchmark` |
+
+## Fastest way to see the HTML
 
 Requirements:
 
-- Node.js 22.16+ (current local validation uses Node 25.x)
+- Node.js 22.16+
 - pnpm 10+
 
-This repository is currently GitHub-first and is not published to npm. Use it from a local clone:
+This repository is GitHub-first and is not currently published to npm.
 
 ```bash
 git clone https://github.com/fitchmultz/agent-eval.git
 cd agent-eval
 pnpm install
+rm -rf artifacts/demo-home artifacts/demo-report
+mkdir -p artifacts/demo-home/sessions
+cp src/calibration/fixtures/codex-*.jsonl artifacts/demo-home/sessions/
+pnpm eval --source codex --home artifacts/demo-home --output-dir artifacts/demo-report --summary-only
 ```
 
-## Why this project exists
+Expected result: a generated static report at `artifacts/demo-report/report.html`, plus the canonical JSON/JSONL/SVG artifact bundle in the same directory. Open that HTML file in your browser to inspect the dashboard, charts, review queue, and methodology sections.
 
-Teams adopting coding agents need a repeatable way to inspect real usage patterns without relying on vague anecdotes or opaque scoring.
+For a faster calibration-only check that does not generate the HTML report, run `pnpm benchmark`.
 
-`agent-eval` is designed to answer questions like:
+## Run it on your local transcripts
 
-- How many sessions happened, and across which providers?
-- How often did sessions include code changes?
-- How often did write sessions end verified versus unverified?
-- What does usage look like quantitatively?
-- Which sessions are worth learning from?
-- Which sessions need review?
-- Can those results be shared without dumping raw transcript bodies?
+Start with discovery. It inventories canonical transcripts plus optional enrichment stores when present.
+
+```bash
+pnpm inspect --source codex --home ~/.codex
+pnpm inspect --source claude --home ~/.claude
+pnpm inspect --source pi --home ~/.pi
+```
+
+Run the full deterministic pipeline and open the static report from `artifacts/report.html`.
+
+```bash
+pnpm eval --source pi --home ~/.pi --output-dir artifacts --summary-only
+```
+
+Use date filters and a time bucket when you want a bounded corpus:
+
+```bash
+pnpm eval --source pi --home ~/.pi \
+  --output-dir artifacts \
+  --summary-only \
+  --start-date 2026-03-01 \
+  --end-date 2026-03-31 \
+  --time-bucket day
+```
+
+When `--session-limit` is set, the limit applies to the most recent discovered sessions after date filtering.
 
 ## Supported sources
 
@@ -48,7 +106,76 @@ Teams adopting coding agents need a repeatable way to inspect real usage pattern
 
 Optional enrichment stores such as history, SQLite, shell snapshots, and session environment files are inventoried when present, but transcript JSONL remains the canonical input.
 
-## Architecture
+## Command reference
+
+```bash
+pnpm inspect --source pi --home ~/.pi
+pnpm parse --source codex --home ~/.codex --output-dir artifacts
+pnpm eval --source claude --home ~/.claude --output-dir artifacts
+pnpm report --source codex --home ~/.codex --output-dir artifacts
+pnpm benchmark
+```
+
+Use `parse` when you only want normalized turn reconstruction; it writes `raw-turns.jsonl` and `parse-metrics.json` without scoring or report generation. Use `report` when you want the Markdown report on stdout while still writing the full evaluation artifact bundle.
+
+Example local config:
+
+```bash
+cp .agent-evalrc.example .agent-evalrc
+```
+
+Built binary smoke path:
+
+```bash
+pnpm build
+node dist/cli.js inspect --source pi --home ~/.pi
+```
+
+## Outputs
+
+`eval` and `report` always emit the canonical v3 bundle:
+
+- `metrics.json`
+- `summary.json`
+- `session-facts.jsonl`
+- `release-manifest.json`
+
+Every machine-readable output includes `engineVersion` and `schemaVersion`. `release-manifest.json` also records release provenance such as the current git revision when available, dirty-worktree state, config fingerprint, evaluation parameters, and emitted artifact inventory.
+
+Presentation outputs:
+
+- `report.md`
+- `report.html`
+- `favicon.ico`
+- `favicon.svg`
+- `sessions-over-time.svg`
+- `provider-share.svg`
+- `harness-share.svg`
+- `tool-family-share.svg`
+- `attribution-mix.svg`
+
+Full mode also emits heavier drilldown files:
+
+- `raw-turns.jsonl`
+- `incidents.jsonl`
+
+`--summary-only` is the preferred mode for large corpora. It skips the heavier raw-turn and incident JSONL files while preserving the dashboard, session facts, release manifest, and static reports.
+
+## How to read the report
+
+Read the v3 report top to bottom:
+
+1. **Overview Dashboard** — corpus metrics and diagnostic context.
+2. **What Worked** — exemplar sessions and learning surfaces.
+3. **Needs Review** — ranked sessions worth deeper inspection.
+4. **Why This Happened** — attribution and template-substrate context.
+5. **Comparative Slices** — deterministic slice comparisons.
+6. **Methodology And Limitations** — caveats and scope.
+7. **Inventory** — discovered local inputs.
+
+If a presentation artifact ever disagrees with the JSON artifacts, treat the JSON artifacts as canonical.
+
+## How it works
 
 ```text
 source home
@@ -60,141 +187,82 @@ source home
   -> markdown/html/svg reports
 ```
 
-Key design choices:
+Key implementation choices:
 
-- Transcript-first: canonical analytics starts from session JSONL, not optional side stores.
-- Source-aware adapters: Codex, Claude Code, and pi use separate discovery/parsing logic but converge on one normalized session model.
-- Deterministic scoring: labeling, clustering, compliance scoring, summaries, and presentation artifacts are rule-based.
-- Redacted-preview defaults: reports use redacted, truncated previews rather than full transcript bodies.
-- Static exportability: HTML, Markdown, JSON, and JSONL outputs remain portable and dependency-free.
+- **Transcript-first:** canonical analytics starts from transcript JSONL, not optional side stores.
+- **Source-aware adapters:** Codex, Claude Code, and pi use separate discovery/parsing logic, then converge on one normalized session model.
+- **Deterministic scoring:** labels, clustering, compliance scoring, summaries, and presentation artifacts are rule-based.
+- **Redacted previews:** generated reports prefer redacted, truncated previews over full transcript bodies.
+- **Static export:** HTML, Markdown, JSON, JSONL, and SVG outputs stay portable and dependency-light.
 
-## CLI
+## Project map
+
+| Path | Purpose |
+|---|---|
+| `src/cli/` | CLI command wiring and option handling |
+| `src/discovery.ts` and `src/sources.ts` | Source discovery and supported-provider definitions |
+| `src/transcript/` | Transcript event normalization helpers |
+| `src/evaluator.ts` | Evaluation orchestration from discovery through artifact generation |
+| `src/metrics-aggregation.ts` | Corpus metrics aggregation |
+| `src/summary*.ts` and `src/summary/` | Canonical summary and presentation section derivation |
+| `src/html-report/`, `src/report.ts`, `src/svg-charts.ts` | Static HTML, Markdown, and SVG presentation outputs |
+| `src/calibration/` | Synthetic benchmark fixtures and calibration runner |
+| `tests/` | Synthetic fixture-based regression tests |
+| `docs/schema-v3.md` | Canonical artifact contract |
+| `docs/report-v3.md` | Report product model |
+| `docs/case-study.md` | Architecture and design rationale |
+
+## Local verification
+
+Baseline local gate:
 
 ```bash
-pnpm inspect -- --source codex --home ~/.codex
-pnpm inspect -- --source claude --home ~/.claude
-pnpm inspect -- --source pi --home ~/.pi
-pnpm parse -- --source codex --home ~/.codex --output-dir artifacts
-pnpm eval -- --source claude --home ~/.claude --output-dir artifacts
-pnpm report -- --source codex --home ~/.codex --output-dir artifacts
-pnpm exec tsx src/cli.ts eval --source pi --home ~/.pi --summary-only --session-limit 100
+make ci
+```
+
+Equivalent explicit command:
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark && pnpm scan:repo && pnpm build && pnpm smoke:dist
+```
+
+Useful focused commands:
+
+```bash
+pnpm test
 pnpm benchmark
+pnpm scan:artifacts artifacts/benchmark
+pnpm scan:repo
 ```
 
-Built binary:
-
-```bash
-pnpm build
-node dist/cli.js inspect --source pi --home ~/.pi
-```
-
-Example local config:
-
-```bash
-cp .agent-evalrc.example .agent-evalrc
-```
-
-Quick local review loop:
-
-```bash
-pnpm exec tsx src/cli.ts eval --source pi --home ~/.pi --output-dir artifacts --summary-only
-# Then open artifacts/report.html in your browser.
-```
-
-## Outputs
-
-Canonical outputs:
-
-- `metrics.json`
-- `summary.json`
-- `session-facts.jsonl`
-- `release-manifest.json`
-
-Optional heavier outputs:
-
-- `raw-turns.jsonl`
-- `incidents.jsonl`
-
-Presentation outputs:
-
-- `report.md`
-- `report.html`
-- `sessions-over-time.svg`
-- `provider-share.svg`
-- `harness-share.svg`
-- `tool-family-share.svg`
-- `attribution-mix.svg`
-
-`parse` writes:
-
-- `raw-turns.jsonl`
-- `parse-metrics.json`
-
-Every machine-readable output includes `engineVersion` and `schemaVersion`. `release-manifest.json` also records release provenance such as the current git revision when available, dirty-worktree state, a config fingerprint, evaluation parameters, and emitted artifact inventory.
-
-The current public artifact contract is `schemaVersion: "3"`.
-
-## How to read the v3 report
-
-Read the report from top to bottom in this order:
-
-1. **Overview Dashboard** — broad corpus metrics and diagnostic context.
-2. **What Worked** — exemplar sessions and positive learning surfaces.
-3. **Needs Review** — ranked sessions that merit deeper inspection.
-4. **Why This Happened** — attribution and template-substrate context.
-5. **Comparative Slices** — static slice comparisons.
-6. **Methodology And Limitations** — deterministic caveats.
-7. **Inventory** — discovered local inputs.
-
-The current release includes corpus-regression gates, provider-parity checks, session-facts behavioral tests, and a canonical-evaluator calibration benchmark to protect the dashboard + learning + review + attribution contract across Codex, Claude, and pi.
-
-`--summary-only` remains the preferred mode for large corpora. It skips heavy raw JSONL artifacts while preserving the canonical `metrics.json`, `summary.json`, `session-facts.jsonl`, and the static HTML/Markdown reports.
-
-## Suggested workflow
-
-```bash
-pnpm inspect -- --source pi --home ~/.pi
-pnpm eval -- --source pi --home ~/.pi --output-dir artifacts --summary-only
-pnpm eval -- --source pi --home ~/.pi --output-dir artifacts --summary-only --start-date 2026-03-01 --end-date 2026-03-31 --time-bucket day
-cat artifacts/report.md
-jq '.usageDashboard.headlineMetrics' artifacts/summary.json
-jq '.appliedFilters' artifacts/metrics.json
-jq '.temporalBuckets' artifacts/metrics.json
-head -n 5 artifacts/session-facts.jsonl
-```
-
-Use `inspect` first to inventory what is available locally. Use `parse` when you want normalized turn reconstruction only; it writes `raw-turns.jsonl` and does not run clustering, scoring, summaries, or report generation. Use `eval` for the full deterministic pipeline. Use `report` when you want the markdown report on stdout while still writing the full evaluation artifact bundle to disk.
-
-Use `benchmark` to run the synthetic calibration corpus. It now validates the canonical evaluator path end-to-end, including terminal verification, case-scoped label matching, incident matching, attribution expectations, surfaced-session expectations, parse-warning handling, and sanitization behavior.
-
-Use `pnpm smoke:dist` after `pnpm build` when you want a packaged-CLI smoke test that verifies bundled runtime assets, benchmark execution, and styled HTML emission from `dist/cli.js`.
-
-Use `pnpm scan:artifacts <path...>` when you want a local public-surface leak scan across generated `.json`, `.jsonl`, `.md`, `.html`, and `.svg` artifacts.
+`make ci` is not formatting-mutating, but it does generate benchmark and dist smoke artifacts as part of validation. Use `make bootstrap` for first-time dependency setup and `make fix` when you want formatting rewrites.
 
 ## Public repo hygiene
 
 - Tests use synthetic fixtures only; no private transcript corpora are committed.
 - Local evaluation outputs, local agent homes, and temporary analysis material stay untracked.
-- Visual QA screenshots should stay local and untracked under `notes/**/verification/`; regenerate the latest captures locally and attach them to review/oracle archives instead of committing PNG history.
-- Report previews are redacted and truncated, but they are not a substitute for full secret scanning.
-- If a presentation artifact ever disagrees with the JSON artifacts, treat the JSON artifacts as canonical.
+- Generated report previews are redacted and truncated, but they are not a substitute for full secret scanning.
+- Use `pnpm scan:artifacts <path...>` before sharing generated `.json`, `.jsonl`, `.md`, `.html`, or `.svg` artifacts.
+- Use `pnpm scan:repo` before publishing repo changes.
+- Visual QA screenshots should stay local under ignored `notes/**/verification/` paths unless intentionally curated.
 
-## Scope and limitations
+## Current limits
 
-In scope today:
+Real today:
 
-- Multi-source discovery and parsing for Codex, Claude Code, and pi
-- Deterministic local analytics from transcript JSONL
-- Static HTML/Markdown report generation
-- Canonical machine-readable artifacts for dashboard, review, and session facts
-- Strong local test coverage with synthetic fixtures only
+- local CLI for Codex, Claude Code, and pi transcript JSONL
+- deterministic parsing, labeling, clustering, scoring, and attribution
+- static HTML/Markdown/SVG report generation
+- canonical v3 machine-readable artifacts
+- synthetic fixture coverage and calibration benchmark
 
 Not in scope yet:
 
-- Semantic proof that repository state is correct
-- Deep optional-store joins beyond transcript-first enrichment
-- Richer learning-pattern breadth and deeper exemplar semantics beyond the current deterministic starter catalog
-- Additional corpus breadth and public-surface hardening beyond the current regression and calibration gate set
+- semantic proof that repository state at the end of a session is correct
+- deep optional-store joins beyond transcript-first enrichment
+- model-graded interpretation of transcript quality
+- hosted dashboards or live multi-user service behavior
+- npm package publication
 
 ## Documentation
 
@@ -202,39 +270,16 @@ Not in scope yet:
 - `docs/report-v3.md` — report/product model
 - `docs/case-study.md` — architecture and design context
 
-## Local verification
-
-```bash
-make ci
-# or, explicitly:
-pnpm lint && pnpm typecheck && pnpm test && pnpm benchmark && pnpm scan:artifacts artifacts/benchmark && pnpm scan:repo && pnpm build && pnpm smoke:dist
-```
-
-`make ci` is the baseline local gate. It is not formatting-mutating, but it does generate benchmark and dist smoke artifacts as part of validation. Use `make bootstrap` for first-time dependency setup and `make fix` when you want formatting rewrites.
-
 ## Release signoff
 
-If you are doing a final public-release pass, use this sequence:
+For a final public-release pass, regenerate the provider QA bundles locally under `artifacts/`, review them, then run:
 
 ```bash
-# 1. Regenerate the provider QA bundles locally under artifacts/.
-# 2. Review them locally (and refresh local verification screenshots if needed).
-# 3. From the clean committed source tree, run:
 make release-check
-# equivalent to:
-pnpm check:release
 ```
 
-`make release-check` extends the baseline gate by:
-- requiring a clean git worktree before validation starts
-- requiring branch `main`
-- requiring local `HEAD` to match its upstream exactly
-- verifying that the local final QA manifests were generated from the current clean `HEAD`, on the current branch, under the current live config fingerprint, and with the expected on-disk artifact inventory
-- rerunning the clean/main/upstream check after the validation commands finish so release validation does not leave tracked drift behind
-- scanning the tracked repo surface for obvious path/secret-shaped public-surface residue
-- scanning the benchmark bundle and the regenerated final QA artifacts:
-  - `artifacts/final-qa-codex`
-  - `artifacts/final-qa-claude`
-  - `artifacts/final-qa-pi`
+`make release-check` extends the baseline gate by requiring a clean `main` worktree that matches upstream, validating final QA manifests, scanning benchmark and final QA artifacts, and rerunning the clean/upstream check after validation.
 
-Final QA bundles under `artifacts/` and visual QA screenshots under `notes/final-release/verification/` are intentionally local-only inputs to release review. Regenerate them locally when needed for manual review or oracle archives, but do not commit them.
+## Next action
+
+Generate the synthetic HTML preview first, then run `inspect` against the local agent home you actually use and open `artifacts/report.html` after `eval`.

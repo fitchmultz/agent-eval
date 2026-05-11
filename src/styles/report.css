@@ -84,7 +84,6 @@ section { margin-top: 32px; }
   gap: 16px;
 }
 .metric-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
-.secondary-metric-grid { margin-top: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
 .detail-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); margin-top: 16px; }
 .chart-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); margin-top: 16px; }
 .surface-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); margin-top: 16px; }
