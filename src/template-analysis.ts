@@ -64,6 +64,26 @@ export interface TemplateRegistry {
   labelSummaries: TemplateLabelSummary[];
 }
 
+interface TemplateSignature {
+  familyId: string;
+  label: TemplateFamilyLabel;
+}
+
+export interface TemplateCorpusBuilder {
+  docFrequency: Map<string, Set<string>>;
+  familyBySignature: Map<string, TemplateFamilyLabel>;
+}
+
+export interface TemplateCorpusIndex {
+  templateSignatures: Map<string, TemplateSignature>;
+}
+
+export interface TemplateSummaryBuilder {
+  familySessionIds: Map<string, Set<string>>;
+  familyTemplateChars: Map<string, number>;
+  totalCorpusChars: number;
+}
+
 function roundPct(value: number): number {
   return Number(value.toFixed(1));
 }
@@ -240,64 +260,61 @@ function uniqueSorted(values: Iterable<string>): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
-/**
- * Builds a deterministic TemplateRegistry for the selected parsed corpus.
- */
-export function buildTemplateRegistry(
-  sessions: readonly ParsedSession[],
-): TemplateRegistry {
-  const segments: MessageSegment[] = [];
-  const docFrequency = new Map<string, Set<string>>();
-  const familyBySignature = new Map<string, TemplateFamilyLabel>();
+export function createTemplateCorpusBuilder(): TemplateCorpusBuilder {
+  return {
+    docFrequency: new Map(),
+    familyBySignature: new Map(),
+  };
+}
 
-  for (const session of sessions) {
-    for (const turn of session.turns) {
-      turn.userMessages.forEach((message, messageIndex) => {
-        for (const segment of segmentMessage(
-          session.sessionId,
-          turn.turnIndex,
-          "user",
-          messageIndex,
-          message,
-        )) {
-          segments.push(segment);
-          if (segment.familyLabel) {
-            const set =
-              docFrequency.get(segment.normalized) ?? new Set<string>();
-            set.add(session.sessionId);
-            docFrequency.set(segment.normalized, set);
-            familyBySignature.set(segment.normalized, segment.familyLabel);
-          }
-        }
-      });
+export function addTemplateCorpusSession(
+  builder: TemplateCorpusBuilder,
+  session: ParsedSession,
+): void {
+  for (const turn of session.turns) {
+    const addSegment = (segment: MessageSegment): void => {
+      if (!segment.familyLabel) {
+        return;
+      }
+      const set =
+        builder.docFrequency.get(segment.normalized) ?? new Set<string>();
+      set.add(session.sessionId);
+      builder.docFrequency.set(segment.normalized, set);
+      builder.familyBySignature.set(segment.normalized, segment.familyLabel);
+    };
 
-      turn.assistantMessages.forEach((message, messageIndex) => {
-        for (const segment of segmentMessage(
-          session.sessionId,
-          turn.turnIndex,
-          "assistant",
-          messageIndex,
-          message,
-        )) {
-          segments.push(segment);
-          if (segment.familyLabel) {
-            const set =
-              docFrequency.get(segment.normalized) ?? new Set<string>();
-            set.add(session.sessionId);
-            docFrequency.set(segment.normalized, set);
-            familyBySignature.set(segment.normalized, segment.familyLabel);
-          }
-        }
-      });
-    }
+    turn.userMessages.forEach((message, messageIndex) => {
+      for (const segment of segmentMessage(
+        session.sessionId,
+        turn.turnIndex,
+        "user",
+        messageIndex,
+        message,
+      )) {
+        addSegment(segment);
+      }
+    });
+
+    turn.assistantMessages.forEach((message, messageIndex) => {
+      for (const segment of segmentMessage(
+        session.sessionId,
+        turn.turnIndex,
+        "assistant",
+        messageIndex,
+        message,
+      )) {
+        addSegment(segment);
+      }
+    });
   }
+}
 
-  const templateSignatures = new Map<
-    string,
-    { familyId: string; label: TemplateFamilyLabel }
-  >();
-  for (const [signature, sessionIds] of docFrequency.entries()) {
-    const label = familyBySignature.get(signature);
+export function buildTemplateCorpusIndex(
+  builder: TemplateCorpusBuilder,
+): TemplateCorpusIndex {
+  const templateSignatures = new Map<string, TemplateSignature>();
+  for (const [signature, sessionIds] of builder.docFrequency.entries()) {
+    const label = builder.familyBySignature.get(signature);
     if (!label || sessionIds.size < 2) {
       continue;
     }
@@ -306,40 +323,67 @@ export function buildTemplateRegistry(
       label,
     });
   }
+  return { templateSignatures };
+}
 
-  const sessionAnalyses = new Map<string, SessionTemplateAnalysis>();
-  const sessionRawChars = new Map<string, number>();
-  const sessionTemplateChars = new Map<string, number>();
-  const familySessionIds = new Map<string, Set<string>>();
-  const familyTemplateChars = new Map<string, number>();
-  let totalCorpusChars = 0;
+export function createTemplateSummaryBuilder(): TemplateSummaryBuilder {
+  return {
+    familySessionIds: new Map(),
+    familyTemplateChars: new Map(),
+    totalCorpusChars: 0,
+  };
+}
 
-  for (const session of sessions) {
-    sessionAnalyses.set(
-      session.sessionId,
-      createEmptySessionAnalysis(session.sessionId),
-    );
+function collectSessionSegments(session: ParsedSession): MessageSegment[] {
+  const segments: MessageSegment[] = [];
+  for (const turn of session.turns) {
+    turn.userMessages.forEach((message, messageIndex) => {
+      segments.push(
+        ...segmentMessage(
+          session.sessionId,
+          turn.turnIndex,
+          "user",
+          messageIndex,
+          message,
+        ),
+      );
+    });
+
+    turn.assistantMessages.forEach((message, messageIndex) => {
+      segments.push(
+        ...segmentMessage(
+          session.sessionId,
+          turn.turnIndex,
+          "assistant",
+          messageIndex,
+          message,
+        ),
+      );
+    });
   }
+  return segments;
+}
 
+export function analyzeSessionTemplates(
+  session: ParsedSession,
+  index: TemplateCorpusIndex,
+  summaryBuilder?: TemplateSummaryBuilder,
+): SessionTemplateAnalysis {
+  const analysis = createEmptySessionAnalysis(session.sessionId);
   const groupedSegments = new Map<string, MessageSegment[]>();
-  for (const segment of segments) {
+  for (const segment of collectSessionSegments(session)) {
     const grouped = groupedSegments.get(segment.key) ?? [];
     grouped.push(segment);
     groupedSegments.set(segment.key, grouped);
-    totalCorpusChars += segment.text.length;
+    if (summaryBuilder) {
+      summaryBuilder.totalCorpusChars += segment.text.length;
+    }
   }
 
+  let sessionRawChars = 0;
+  let sessionTemplateChars = 0;
+
   for (const [key, messageSegments] of groupedSegments.entries()) {
-    const sessionId = messageSegments[0]?.sessionId;
-    if (!sessionId) {
-      continue;
-    }
-
-    const analysis = sessionAnalyses.get(sessionId);
-    if (!analysis) {
-      continue;
-    }
-
     const keptSegments: string[] = [];
     let messageChars = 0;
     let templateChars = 0;
@@ -350,7 +394,7 @@ export function buildTemplateRegistry(
 
     for (const segment of messageSegments) {
       messageChars += segment.text.length;
-      const template = templateSignatures.get(segment.normalized);
+      const template = index.templateSignatures.get(segment.normalized);
       if (!template) {
         keptSegments.push(segment.text);
         continue;
@@ -358,18 +402,22 @@ export function buildTemplateRegistry(
 
       templateChars += segment.text.length;
       messageFamilyIds.add(template.familyId);
-      const sessionIds =
-        familySessionIds.get(template.familyId) ?? new Set<string>();
-      sessionIds.add(sessionId);
-      familySessionIds.set(template.familyId, sessionIds);
-      familyTemplateChars.set(
-        template.familyId,
-        (familyTemplateChars.get(template.familyId) ?? 0) + segment.text.length,
-      );
+      if (summaryBuilder) {
+        const sessionIds =
+          summaryBuilder.familySessionIds.get(template.familyId) ??
+          new Set<string>();
+        sessionIds.add(session.sessionId);
+        summaryBuilder.familySessionIds.set(template.familyId, sessionIds);
+        summaryBuilder.familyTemplateChars.set(
+          template.familyId,
+          (summaryBuilder.familyTemplateChars.get(template.familyId) ?? 0) +
+            segment.text.length,
+        );
+      }
 
       const sameFamilyCount = messageSegments.filter(
         (candidate) =>
-          templateSignatures.get(candidate.normalized)?.familyId ===
+          index.templateSignatures.get(candidate.normalized)?.familyId ===
           template.familyId,
       ).length;
       if (sameFamilyCount > dominantTemplateCount) {
@@ -386,14 +434,12 @@ export function buildTemplateRegistry(
     ]);
     analysis.hasTemplateContent = analysis.familyIds.length > 0;
 
-    const nextRawChars = (sessionRawChars.get(sessionId) ?? 0) + messageChars;
-    const nextTemplateChars =
-      (sessionTemplateChars.get(sessionId) ?? 0) + templateChars;
-    sessionRawChars.set(sessionId, nextRawChars);
-    sessionTemplateChars.set(sessionId, nextTemplateChars);
-
+    sessionRawChars += messageChars;
+    sessionTemplateChars += templateChars;
     analysis.textSharePct =
-      nextRawChars > 0 ? roundPct((nextTemplateChars / nextRawChars) * 100) : 0;
+      sessionRawChars > 0
+        ? roundPct((sessionTemplateChars / sessionRawChars) * 100)
+        : 0;
     analysis.artifactScore = Math.min(
       100,
       Math.round((analysis.textSharePct ?? 0) + analysis.familyIds.length * 10),
@@ -407,16 +453,21 @@ export function buildTemplateRegistry(
     }
   }
 
-  for (const analysis of sessionAnalyses.values()) {
-    const share = analysis.textSharePct ?? 0;
-    analysis.flags = uniqueSorted([
-      ...(share >= 20 ? ["template_present"] : []),
-      ...(share >= 50 ? ["template_heavy"] : []),
-      ...(analysis.dominantFamilyLabel ? [analysis.dominantFamilyLabel] : []),
-    ]);
-  }
+  const share = analysis.textSharePct ?? 0;
+  analysis.flags = uniqueSorted([
+    ...(share >= 20 ? ["template_present"] : []),
+    ...(share >= 50 ? ["template_heavy"] : []),
+    ...(analysis.dominantFamilyLabel ? [analysis.dominantFamilyLabel] : []),
+  ]);
 
-  const familySummaries = [...templateSignatures.values()].reduce<
+  return analysis;
+}
+
+export function buildTemplateSummaries(
+  index: TemplateCorpusIndex,
+  summaryBuilder: TemplateSummaryBuilder,
+): Pick<TemplateRegistry, "familySummaries" | "labelSummaries"> {
+  const familySummaries = [...index.templateSignatures.values()].reduce<
     Map<string, TemplateFamilySummary>
   >((summaries, family) => {
     if (summaries.has(family.familyId)) {
@@ -426,18 +477,20 @@ export function buildTemplateRegistry(
     summaries.set(family.familyId, {
       familyId: family.familyId,
       label: family.label,
-      affectedSessionCount: familySessionIds.get(family.familyId)?.size ?? 0,
+      affectedSessionCount:
+        summaryBuilder.familySessionIds.get(family.familyId)?.size ?? 0,
       estimatedTextSharePct:
-        totalCorpusChars > 0
+        summaryBuilder.totalCorpusChars > 0
           ? roundPct(
-              ((familyTemplateChars.get(family.familyId) ?? 0) /
-                totalCorpusChars) *
+              ((summaryBuilder.familyTemplateChars.get(family.familyId) ?? 0) /
+                summaryBuilder.totalCorpusChars) *
                 100,
             )
           : null,
     });
     return summaries;
   }, new Map());
+
   const labelSummaries = [...templateFamilyLabels]
     .map<TemplateLabelSummary | null>((label) => {
       const labelFamilies = [...familySummaries.values()].filter(
@@ -449,7 +502,7 @@ export function buildTemplateRegistry(
 
       const labelSessionIds = new Set<string>();
       for (const family of labelFamilies) {
-        const sessionIds = familySessionIds.get(family.familyId);
+        const sessionIds = summaryBuilder.familySessionIds.get(family.familyId);
         if (!sessionIds) {
           continue;
         }
@@ -463,14 +516,16 @@ export function buildTemplateRegistry(
         label,
         affectedSessionCount: labelSessionIds.size,
         estimatedTextSharePct:
-          totalCorpusChars > 0
+          summaryBuilder.totalCorpusChars > 0
             ? roundPct(
                 (labelFamilies.reduce(
                   (total, family) =>
-                    total + (familyTemplateChars.get(family.familyId) ?? 0),
+                    total +
+                    (summaryBuilder.familyTemplateChars.get(family.familyId) ??
+                      0),
                   0,
                 ) /
-                  totalCorpusChars) *
+                  summaryBuilder.totalCorpusChars) *
                   100,
               )
             : null,
@@ -486,7 +541,6 @@ export function buildTemplateRegistry(
     );
 
   return {
-    sessionAnalyses,
     familySummaries: [...familySummaries.values()].sort(
       (left, right) =>
         right.affectedSessionCount - left.affectedSessionCount ||
@@ -495,5 +549,30 @@ export function buildTemplateRegistry(
         left.familyId.localeCompare(right.familyId),
     ),
     labelSummaries,
+  };
+}
+
+/**
+ * Builds a deterministic TemplateRegistry for the selected parsed corpus.
+ */
+export function buildTemplateRegistry(
+  sessions: readonly ParsedSession[],
+): TemplateRegistry {
+  const corpusBuilder = createTemplateCorpusBuilder();
+  for (const session of sessions) {
+    addTemplateCorpusSession(corpusBuilder, session);
+  }
+  const index = buildTemplateCorpusIndex(corpusBuilder);
+  const summaryBuilder = createTemplateSummaryBuilder();
+  const sessionAnalyses = new Map<string, SessionTemplateAnalysis>();
+  for (const session of sessions) {
+    sessionAnalyses.set(
+      session.sessionId,
+      analyzeSessionTemplates(session, index, summaryBuilder),
+    );
+  }
+  return {
+    sessionAnalyses,
+    ...buildTemplateSummaries(index, summaryBuilder),
   };
 }

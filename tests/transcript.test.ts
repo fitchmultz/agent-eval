@@ -136,6 +136,46 @@ describe("parseTranscriptFile", () => {
     expect(session.turns[1]?.userMessages[0]).toContain("You lost context");
   });
 
+  it("parses large tool output lines without retaining full output", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agent-eval-large-output-"));
+    const sessionPath = join(root, "large-output.jsonl");
+    const largeOutput = `${"x".repeat(1_100_000)} Process exited with code 0`;
+
+    const content = [
+      JSON.stringify(sampleTranscript[0]),
+      JSON.stringify(sampleTranscript[1]),
+      JSON.stringify(sampleTranscript[2]),
+      JSON.stringify({
+        timestamp: "2026-03-06T19:00:03.000Z",
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments: '{"cmd":"pnpm test"}',
+          call_id: "call-large",
+        },
+      }),
+      JSON.stringify({
+        timestamp: "2026-03-06T19:00:04.000Z",
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call-large",
+          output: largeOutput,
+        },
+      }),
+    ].join("\n");
+    await writeFile(sessionPath, `${content}\n`, "utf8");
+
+    const session = await parseTranscriptFile(sessionPath);
+
+    expect(session.turns[0]?.toolCalls[0]).toMatchObject({
+      callId: "call-large",
+      status: "completed",
+      outputText: "Process exited with code 0",
+    });
+  });
+
   it("skips malformed lines in non-strict mode", async () => {
     const root = await mkdtemp(join(tmpdir(), "agent-eval-transcript-"));
     const sessionPath = join(root, "malformed.jsonl");

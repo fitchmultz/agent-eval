@@ -41,7 +41,15 @@ import {
 import { collectSessionContexts } from "./summary/session-display.js";
 import type { SessionContext } from "./summary/types.js";
 import { buildSummaryArtifact } from "./summary-core.js";
-import { buildTemplateRegistry } from "./template-analysis.js";
+import {
+  addTemplateCorpusSession,
+  analyzeSessionTemplates,
+  buildTemplateCorpusIndex,
+  buildTemplateRegistry,
+  buildTemplateSummaries,
+  createTemplateCorpusBuilder,
+  createTemplateSummaryBuilder,
+} from "./template-analysis.js";
 import { parseTranscriptFile } from "./transcript/index.js";
 import {
   probeFallsInDateRange,
@@ -445,7 +453,7 @@ async function processDiscoveredSessions(
     );
   }
 
-  const parseTimeoutMs = options.parseTimeoutMs ?? 30000;
+  const parseTimeoutMs = options.parseTimeoutMs ?? 300000;
   const homeDirectory = getValidatedHomeDirectory();
   const processParsedSession = async (
     session: Awaited<ReturnType<typeof parseTranscriptFile>>,
@@ -480,6 +488,23 @@ async function processDiscoveredSessions(
   if (
     selectionWindow.sessionPaths.length > STREAMING_PROCESSING_SESSION_THRESHOLD
   ) {
+    const corpusBuilder = createTemplateCorpusBuilder();
+    await mapWithConcurrency(
+      selectionWindow.sessionPaths,
+      concurrency,
+      async (sessionPath) => {
+        const session = await parseTranscriptFile(sessionPath, {
+          sourceProvider: options.source,
+          timeoutMs: parseTimeoutMs,
+          signal,
+        });
+        addTemplateCorpusSession(corpusBuilder, session);
+      },
+      signal,
+    );
+
+    const templateIndex = buildTemplateCorpusIndex(corpusBuilder);
+    const templateSummaryBuilder = createTemplateSummaryBuilder();
     const processed = await mapWithConcurrency(
       selectionWindow.sessionPaths,
       concurrency,
@@ -489,7 +514,20 @@ async function processDiscoveredSessions(
           timeoutMs: parseTimeoutMs,
           signal,
         });
-        return processParsedSession(session);
+        return processParsedSession(session, {
+          sessionAnalyses: new Map([
+            [
+              session.sessionId,
+              analyzeSessionTemplates(
+                session,
+                templateIndex,
+                templateSummaryBuilder,
+              ),
+            ],
+          ]),
+          familySummaries: [],
+          labelSummaries: [],
+        });
       },
       signal,
     );
@@ -500,7 +538,10 @@ async function processDiscoveredSessions(
       inventory,
       corpusScope,
       appliedFilters,
-      templateLabelSummaries: [],
+      templateLabelSummaries: buildTemplateSummaries(
+        templateIndex,
+        templateSummaryBuilder,
+      ).labelSummaries,
       processed,
     };
   }

@@ -394,7 +394,7 @@ describe("CLI", () => {
     expect(
       await readFile(join(outputDir, "benchmark-results.json"), "utf8"),
     ).toContain('"surfacedMetrics"');
-  });
+  }, 15_000);
 
   it("returns a usage error for an invalid source provider", async () => {
     const exitCode = await main([

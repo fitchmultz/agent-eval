@@ -60,6 +60,60 @@ export function createParserContext(path: string): ParserContext {
  * @returns The parsed event record, or empty object if parsing fails
  * @throws TranscriptParseError if strict mode is enabled and parsing fails
  */
+function extractJsonStringField(
+  line: string,
+  field: string,
+): string | undefined {
+  const match = new RegExp(`"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`).exec(
+    line,
+  );
+  return match?.[1]?.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+}
+
+function parseLargeToolOutputEventLine(
+  line: string,
+): JsonlEventRecord | undefined {
+  const responseType = line.includes('"custom_tool_call_output"')
+    ? "custom_tool_call_output"
+    : line.includes('"function_call_output"')
+      ? "function_call_output"
+      : undefined;
+  if (!responseType) {
+    return undefined;
+  }
+
+  const callId = extractJsonStringField(line, "call_id");
+  if (!callId) {
+    return undefined;
+  }
+
+  let output = "";
+  if (
+    line.includes("Process exited with code 0") ||
+    line.includes("Command succeeded")
+  ) {
+    output = "Process exited with code 0";
+  } else if (
+    line.includes("Command failed with exit code") ||
+    line.includes("Process exited with code 1") ||
+    line.includes("Process exited with code 2")
+  ) {
+    output = "Command failed with exit code 1";
+  }
+
+  const timestamp = extractJsonStringField(line, "timestamp");
+
+  return {
+    ...(timestamp ? { timestamp } : {}),
+    type: "response_item",
+    payload: {
+      type: responseType,
+      call_id: callId,
+      output,
+    },
+  };
+}
+
 export function parseEventLine(
   line: string,
   lineNumber: number,
@@ -68,6 +122,12 @@ export function parseEventLine(
 ): JsonlEventRecord {
   // Check for abort before processing
   throwIfAborted(options.signal);
+
+  const largeToolOutputEvent =
+    line.length > 1_000_000 ? parseLargeToolOutputEventLine(line) : undefined;
+  if (largeToolOutputEvent) {
+    return largeToolOutputEvent;
+  }
 
   let parsedUnknown: unknown;
   try {

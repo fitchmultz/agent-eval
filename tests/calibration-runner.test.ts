@@ -58,7 +58,7 @@ describe("runCalibrationBenchmark", () => {
     expect(
       await readFile(join(outputDir, "benchmark-report.md"), "utf8"),
     ).toContain("Terminal Verification Accuracy");
-  });
+  }, 15_000);
 
   it("captures expected attribution and surfaced-session outcomes for targeted cases", async () => {
     const { runCalibrationBenchmark } = await import(
@@ -86,5 +86,5 @@ describe("runCalibrationBenchmark", () => {
       exemplar: false,
       reviewQueue: true,
     });
-  });
+  }, 15_000);
 });

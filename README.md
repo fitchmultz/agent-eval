@@ -97,7 +97,7 @@ pnpm eval --source pi --home ~/.pi \
   --time-bucket day
 ```
 
-By default, CLI evaluation uses a bounded window of the 100 most recent discovered sessions to avoid loading very large local corpora into memory. When `--session-limit` is set, the limit applies to the most recent discovered sessions after date filtering.
+By default, CLI evaluation uses a bounded window of the 100 most recent discovered sessions for fast local feedback. Use `--all` for full-history runs; large full-history corpora use a multi-pass memory-bounded path that preserves corpus-relative template detection without retaining every parsed transcript at once. When `--session-limit` is set, the limit applies to the most recent discovered sessions after date filtering.
 
 ## Supported sources
 
