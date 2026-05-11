@@ -383,6 +383,8 @@ async function discoverSessionInputs(
   };
 }
 
+const STREAMING_PROCESSING_SESSION_THRESHOLD = 500;
+
 async function processDiscoveredSessions(
   options: EvaluateOptions,
   concurrency: number,
@@ -444,6 +446,65 @@ async function processDiscoveredSessions(
   }
 
   const parseTimeoutMs = options.parseTimeoutMs ?? 30000;
+  const homeDirectory = getValidatedHomeDirectory();
+  const processParsedSession = async (
+    session: Awaited<ReturnType<typeof parseTranscriptFile>>,
+    templateRegistry?: ReturnType<typeof buildTemplateRegistry>,
+  ): Promise<ProcessedSession> => {
+    const baseProcessed = await processSession(session, homeDirectory, {
+      templateAnalysis: templateRegistry?.sessionAnalyses.get(
+        session.sessionId,
+      ),
+    });
+    const analysis =
+      baseProcessed.analysis ?? createEmptyProcessedSessionAnalysis();
+    return {
+      ...baseProcessed,
+      analysis: {
+        ...analysis,
+        attribution: assignSessionAttribution({
+          rawLabelCounts: analysis.rawLabelCounts,
+          deTemplatedLabelCounts: analysis.deTemplatedLabelCounts,
+          template: {
+            artifactScore: analysis.template.artifactScore,
+            textSharePct: analysis.template.textSharePct,
+            flags: analysis.template.flags,
+          },
+          writeCount: baseProcessed.metrics.writeCount,
+          endedVerified: baseProcessed.metrics.endedVerified,
+        }),
+      },
+    } satisfies ProcessedSession;
+  };
+
+  if (
+    selectionWindow.sessionPaths.length > STREAMING_PROCESSING_SESSION_THRESHOLD
+  ) {
+    const processed = await mapWithConcurrency(
+      selectionWindow.sessionPaths,
+      concurrency,
+      async (sessionPath) => {
+        const session = await parseTranscriptFile(sessionPath, {
+          sourceProvider: options.source,
+          timeoutMs: parseTimeoutMs,
+          signal,
+        });
+        return processParsedSession(session);
+      },
+      signal,
+    );
+
+    assertUniqueSessionIds(processed, "processed sessions");
+
+    return {
+      inventory,
+      corpusScope,
+      appliedFilters,
+      templateLabelSummaries: [],
+      processed,
+    };
+  }
+
   const parsedSessions = await mapWithConcurrency(
     selectionWindow.sessionPaths,
     concurrency,
@@ -456,36 +517,10 @@ async function processDiscoveredSessions(
     signal,
   );
   const templateRegistry = buildTemplateRegistry(parsedSessions);
-  const homeDirectory = getValidatedHomeDirectory();
   const processed = await mapWithConcurrency(
     parsedSessions,
     concurrency,
-    async (session) => {
-      const baseProcessed = await processSession(session, homeDirectory, {
-        templateAnalysis: templateRegistry.sessionAnalyses.get(
-          session.sessionId,
-        ),
-      });
-      const analysis =
-        baseProcessed.analysis ?? createEmptyProcessedSessionAnalysis();
-      return {
-        ...baseProcessed,
-        analysis: {
-          ...analysis,
-          attribution: assignSessionAttribution({
-            rawLabelCounts: analysis.rawLabelCounts,
-            deTemplatedLabelCounts: analysis.deTemplatedLabelCounts,
-            template: {
-              artifactScore: analysis.template.artifactScore,
-              textSharePct: analysis.template.textSharePct,
-              flags: analysis.template.flags,
-            },
-            writeCount: baseProcessed.metrics.writeCount,
-            endedVerified: baseProcessed.metrics.endedVerified,
-          }),
-        },
-      } satisfies ProcessedSession;
-    },
+    (session) => processParsedSession(session, templateRegistry),
     signal,
   );
 

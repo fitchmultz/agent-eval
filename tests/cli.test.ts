@@ -312,6 +312,17 @@ describe("CLI", () => {
     ).toBe(DEFAULT_SESSION_LIMIT);
   });
 
+  it("allows explicit full-history runs", () => {
+    expect(
+      normalizeOptions({
+        source: "codex",
+        home: "/tmp/codex-home",
+        outputDir: "/tmp/out",
+        all: true,
+      }).sessionLimit,
+    ).toBeUndefined();
+  });
+
   it("reads AGENT_EVAL_OUTPUT_DIR for the default artifact path", () => {
     vi.stubEnv("AGENT_EVAL_OUTPUT_DIR", "/tmp/agent-eval-from-env");
 

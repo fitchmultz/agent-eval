@@ -132,6 +132,11 @@ function buildProgram(): Command {
       (value) => Number.parseInt(value, 10),
     )
     .option(
+      "--all",
+      "Process every discovered session after date filtering. Use this for full-history runs.",
+      false,
+    )
+    .option(
       "--start-date <date-or-iso>",
       "Inclusive UTC start date filter (YYYY-MM-DD or ISO timestamp)",
     )
@@ -177,7 +182,7 @@ function buildProgram(): Command {
         "    AGENT_EVAL_CONCURRENCY_SUMMARY - Concurrency for summary evaluation",
         "    AGENT_EVAL_MAX_TURN_GAP        - Max turn gap for clustering",
         "",
-        `  Default session limit: ${DEFAULT_SESSION_LIMIT} most recent sessions. Pass --session-limit to choose a different bounded window.`,
+        `  Default session limit: ${DEFAULT_SESSION_LIMIT} most recent sessions. Pass --session-limit for a different bounded window or --all for full history.`,
         "",
         "Examples:",
         "  agent-eval inspect --source codex --home ~/.codex",

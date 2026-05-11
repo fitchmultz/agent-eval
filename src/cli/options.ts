@@ -23,6 +23,7 @@ export interface GlobalOptions {
   home: string;
   outputDir: string;
   sessionLimit?: number;
+  all?: boolean;
   summaryOnly?: boolean;
   concurrency?: number;
   maxTurnGap?: number;
@@ -137,7 +138,12 @@ export function normalizeOptions(options: GlobalOptions): GlobalOptions {
       ? getDefaultHome(source)
       : options.home;
 
-  const sessionLimit = options.sessionLimit ?? DEFAULT_SESSION_LIMIT;
+  if (options.all && typeof options.sessionLimit === "number") {
+    throw new ValidationError("--all cannot be combined with --session-limit.");
+  }
+  const sessionLimit = options.all
+    ? undefined
+    : (options.sessionLimit ?? DEFAULT_SESSION_LIMIT);
 
   validatePositiveIntegerOption(sessionLimit, "--session-limit");
   validatePositiveIntegerOption(options.concurrency, "--concurrency");
@@ -155,7 +161,7 @@ export function normalizeOptions(options: GlobalOptions): GlobalOptions {
     ...options,
     source,
     home,
-    sessionLimit,
+    ...(typeof sessionLimit === "number" ? { sessionLimit } : {}),
     ...(startDate ? { startDate } : {}),
     ...(endDate ? { endDate } : {}),
     timeBucket: normalizeTimeBucket(options.timeBucket),
