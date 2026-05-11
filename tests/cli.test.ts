@@ -10,7 +10,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { buildCliOverrides, getDefaultOutputDir } from "../src/cli/options.js";
+import {
+  buildCliOverrides,
+  DEFAULT_SESSION_LIMIT,
+  getDefaultOutputDir,
+  normalizeOptions,
+} from "../src/cli/options.js";
 import { main } from "../src/cli.js";
 import {
   createClaudeHome,
@@ -295,6 +300,16 @@ describe("CLI", () => {
     const exitCode = await main(["node", "cli", "inspect"]);
 
     expect(exitCode).toBe(0);
+  });
+
+  it("applies a bounded default session limit for CLI runs", () => {
+    expect(
+      normalizeOptions({
+        source: "codex",
+        home: "/tmp/codex-home",
+        outputDir: "/tmp/out",
+      }).sessionLimit,
+    ).toBe(DEFAULT_SESSION_LIMIT);
   });
 
   it("reads AGENT_EVAL_OUTPUT_DIR for the default artifact path", () => {

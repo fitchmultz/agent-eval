@@ -16,6 +16,8 @@ import { getValidatedHomeDirectory } from "../utils/environment.js";
 
 export type TimeBucket = "day" | "week" | "month";
 
+export const DEFAULT_SESSION_LIMIT = 100;
+
 export interface GlobalOptions {
   source: SourceProvider;
   home: string;
@@ -135,7 +137,9 @@ export function normalizeOptions(options: GlobalOptions): GlobalOptions {
       ? getDefaultHome(source)
       : options.home;
 
-  validatePositiveIntegerOption(options.sessionLimit, "--session-limit");
+  const sessionLimit = options.sessionLimit ?? DEFAULT_SESSION_LIMIT;
+
+  validatePositiveIntegerOption(sessionLimit, "--session-limit");
   validatePositiveIntegerOption(options.concurrency, "--concurrency");
   validatePositiveIntegerOption(options.maxTurnGap, "--max-turn-gap");
 
@@ -151,6 +155,7 @@ export function normalizeOptions(options: GlobalOptions): GlobalOptions {
     ...options,
     source,
     home,
+    sessionLimit,
     ...(startDate ? { startDate } : {}),
     ...(endDate ? { endDate } : {}),
     timeBucket: normalizeTimeBucket(options.timeBucket),

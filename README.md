@@ -97,7 +97,7 @@ pnpm eval --source pi --home ~/.pi \
   --time-bucket day
 ```
 
-When `--session-limit` is set, the limit applies to the most recent discovered sessions after date filtering.
+By default, CLI evaluation uses a bounded window of the 100 most recent discovered sessions to avoid loading very large local corpora into memory. When `--session-limit` is set, the limit applies to the most recent discovered sessions after date filtering.
 
 ## Supported sources
 

@@ -24,6 +24,7 @@ import {
 } from "./commands.js";
 import {
   buildCliOverrides,
+  DEFAULT_SESSION_LIMIT,
   type GlobalOptions,
   getDefaultHome,
   getDefaultOutputDir,
@@ -127,7 +128,7 @@ function buildProgram(): Command {
     )
     .option(
       "--session-limit <count>",
-      "Limit transcript files processed during this run after date filtering",
+      `Limit transcript files processed during this run after date filtering (default: ${DEFAULT_SESSION_LIMIT})`,
       (value) => Number.parseInt(value, 10),
     )
     .option(
@@ -175,6 +176,8 @@ function buildProgram(): Command {
         "    AGENT_EVAL_CONCURRENCY_FULL    - Concurrency for full evaluation",
         "    AGENT_EVAL_CONCURRENCY_SUMMARY - Concurrency for summary evaluation",
         "    AGENT_EVAL_MAX_TURN_GAP        - Max turn gap for clustering",
+        "",
+        `  Default session limit: ${DEFAULT_SESSION_LIMIT} most recent sessions. Pass --session-limit to choose a different bounded window.`,
         "",
         "Examples:",
         "  agent-eval inspect --source codex --home ~/.codex",

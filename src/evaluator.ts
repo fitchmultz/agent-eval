@@ -571,8 +571,10 @@ export async function evaluateArtifacts(
   );
   throwIfAborted(signal);
 
-  const rawTurns = extractTurns(parsed.processed);
-  const incidents = extractIncidents(parsed.processed);
+  const rawTurns =
+    outputMode === "full" ? extractTurns(parsed.processed) : undefined;
+  const incidents =
+    outputMode === "full" ? extractIncidents(parsed.processed) : undefined;
   const projections = parsed.processed.map(summarizeProcessedSession);
   const metrics = aggregateMetrics(parsed.processed, parsed.inventory, {
     corpusScope: parsed.corpusScope,
@@ -618,6 +620,8 @@ export async function evaluateArtifacts(
     releaseManifest,
     report,
     presentation,
-    ...(outputMode === "full" ? { rawTurns, incidents } : {}),
+    ...(outputMode === "full"
+      ? { rawTurns: rawTurns ?? [], incidents: incidents ?? [] }
+      : {}),
   };
 }
