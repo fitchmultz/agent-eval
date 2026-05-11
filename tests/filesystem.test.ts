@@ -168,6 +168,20 @@ describe("filesystem", () => {
       const content = await readFile(path, "utf8");
       expect(JSON.parse(content.trim())).toEqual(data[0]);
     });
+
+    it("writes large JSONL outputs in bounded chunks", async () => {
+      const path = join(testDir, "large.jsonl");
+      const data = Array.from({ length: 1500 }, (_, index) => ({
+        index,
+        payload: "x".repeat(1000),
+      }));
+      await writeJsonLinesFile(path, data);
+      const content = await readFile(path, "utf8");
+      const lines = content.trimEnd().split("\n");
+      expect(lines).toHaveLength(data.length);
+      expect(JSON.parse(lines[0] ?? "{}")).toEqual(data[0]);
+      expect(JSON.parse(lines.at(-1) ?? "{}")).toEqual(data.at(-1));
+    });
   });
 
   describe("writeTextFile", () => {

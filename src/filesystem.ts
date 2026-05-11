@@ -4,7 +4,14 @@
  * Notes: Uses async Node filesystem APIs and keeps traversal order stable for deterministic outputs.
  *        Supports depth limits, cycle detection, and timeouts for recursive operations.
  */
-import { mkdir, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  open,
+  readdir,
+  realpath,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import {
@@ -206,13 +213,37 @@ export async function ensureParentDirectory(path: string): Promise<void> {
  * await writeJsonLinesFile("./artifacts/incidents.jsonl", incidents);
  * ```
  */
+const JSONL_WRITE_CHUNK_CHARS = 1024 * 1024;
+
 export async function writeJsonLinesFile(
   path: string,
   records: readonly unknown[],
 ): Promise<void> {
   await ensureParentDirectory(path);
-  const content = records.map((record) => JSON.stringify(record)).join("\n");
-  await writeFile(path, content.length > 0 ? `${content}\n` : "", "utf8");
+  const file = await open(path, "w");
+  try {
+    let chunk = "";
+    for (const record of records) {
+      const line = `${JSON.stringify(record)}\n`;
+      if (
+        chunk.length > 0 &&
+        chunk.length + line.length > JSONL_WRITE_CHUNK_CHARS
+      ) {
+        await file.writeFile(chunk, "utf8");
+        chunk = "";
+      }
+      if (line.length > JSONL_WRITE_CHUNK_CHARS) {
+        await file.writeFile(line, "utf8");
+      } else {
+        chunk += line;
+      }
+    }
+    if (chunk.length > 0) {
+      await file.writeFile(chunk, "utf8");
+    }
+  } finally {
+    await file.close();
+  }
 }
 
 /**
