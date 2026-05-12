@@ -312,6 +312,7 @@ export const sessionMetricsSchema = z
     labeledTurnCount: z.int().nonnegative(),
     incidentCount: z.int().nonnegative(),
     parseWarningCount: z.int().nonnegative(),
+    interruptCount: z.int().nonnegative().optional(),
     userMessageCount: z.int().nonnegative(),
     assistantMessageCount: z.int().nonnegative(),
     toolCallCount: z.int().nonnegative(),

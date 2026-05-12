@@ -57,6 +57,7 @@ interface OpencodePartRecord {
   tool?: string;
   state?: Record<string, unknown>;
   time?: Record<string, unknown>;
+  tokens?: Record<string, unknown>;
 }
 
 interface OpencodeIndexedMessage {
@@ -80,6 +81,7 @@ interface OpencodeParseState {
   harness: string;
   modelProvider?: string;
   model?: string;
+  compactionInstants: Set<number>;
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
@@ -217,12 +219,14 @@ function parsePartRecord(
   const tool = asString(getValue(record, "tool"));
   const state = asRecord(getValue(record, "state"));
   const time = asRecord(getValue(record, "time"));
+  const tokens = asRecord(getValue(record, "tokens"));
   if (type) part.type = type;
   if (text) part.text = text;
   if (callID) part.callID = callID;
   if (tool) part.tool = tool;
   if (state) part.state = state;
   if (time) part.time = time;
+  if (tokens) part.tokens = tokens;
   return part;
 }
 
@@ -267,6 +271,7 @@ function createInitialState(
     scoringEvents: [],
     nextScoringSequenceIndex: 0,
     pendingToolCalls: new Map(),
+    compactionInstants: new Set(),
     inputTokens: 0,
     outputTokens: 0,
     totalTokens: 0,
@@ -301,6 +306,42 @@ function flushCurrentTurn(state: OpencodeParseState): void {
   state.currentTurn = createTurn(state.nextTurnIndex);
 }
 
+function readTokenCount(
+  tokens: Record<string, unknown> | undefined,
+  key: string,
+): number {
+  return asNumber(getOptionalValue(tokens, key)) ?? 0;
+}
+
+function readNestedTokenCount(
+  tokens: Record<string, unknown> | undefined,
+  objectKey: string,
+  key: string,
+): number {
+  const nested = asRecord(getOptionalValue(tokens, objectKey));
+  return readTokenCount(nested, key);
+}
+
+function addOpencodeTokenUsage(
+  state: OpencodeParseState,
+  tokens: Record<string, unknown> | undefined,
+): void {
+  if (!tokens) {
+    return;
+  }
+
+  const inputTokens =
+    readTokenCount(tokens, "input") +
+    readNestedTokenCount(tokens, "cache", "read") +
+    readNestedTokenCount(tokens, "cache", "write");
+  const outputTokens =
+    readTokenCount(tokens, "output") + readTokenCount(tokens, "reasoning");
+
+  state.inputTokens += inputTokens;
+  state.outputTokens += outputTokens;
+  state.totalTokens += inputTokens + outputTokens;
+}
+
 function updateStateMetadata(
   state: OpencodeParseState,
   message: OpencodeMessageRecord,
@@ -320,12 +361,7 @@ function updateStateMetadata(
   if (modelID) {
     state.model = modelID;
   }
-  const inputTokens = asNumber(getOptionalValue(message.tokens, "input")) ?? 0;
-  const outputTokens =
-    asNumber(getOptionalValue(message.tokens, "output")) ?? 0;
-  state.inputTokens += inputTokens;
-  state.outputTokens += outputTokens;
-  state.totalTokens += inputTokens + outputTokens;
+  addOpencodeTokenUsage(state, message.tokens);
   const completedAt =
     readTime(message.time, "completed") ?? readTime(message.time, "created");
   if (completedAt) {
@@ -372,12 +408,26 @@ function statusFromState(
   return "unknown";
 }
 
+function recordPartCompaction(
+  state: OpencodeParseState,
+  part: OpencodePartRecord,
+): void {
+  const stateTime = asRecord(getOptionalValue(part.state, "time"));
+  const compactedAt =
+    asNumber(getOptionalValue(part.time, "compacted")) ??
+    asNumber(getOptionalValue(stateTime, "compacted"));
+  if (typeof compactedAt === "number") {
+    state.compactionInstants.add(compactedAt);
+  }
+}
+
 function appendToolPart(
   state: OpencodeParseState,
   message: OpencodeMessageRecord,
   indexedPart: OpencodeIndexedPart,
 ): void {
   const { part } = indexedPart;
+  recordPartCompaction(state, part);
   const toolState = part.state;
   const toolCall: ParsedToolCall = {
     callId: part.callID ?? part.id,
@@ -406,6 +456,7 @@ function appendTextPart(
   message: OpencodeMessageRecord,
   indexedPart: OpencodeIndexedPart,
 ): void {
+  recordPartCompaction(state, indexedPart.part);
   const text = indexedPart.part.text;
   if (!text || indexedPart.part.synthetic) {
     return;
@@ -430,6 +481,17 @@ function applyMessage(
 ): void {
   const { message } = indexedMessage;
   updateStateMetadata(state, message);
+
+  for (const indexedPart of indexedMessage.parts) {
+    recordPartCompaction(state, indexedPart.part);
+  }
+  if (!message.tokens) {
+    for (const indexedPart of indexedMessage.parts) {
+      if (indexedPart.part.type === "step-finish") {
+        addOpencodeTokenUsage(state, indexedPart.part.tokens);
+      }
+    }
+  }
 
   if (message.role === "user" && hasTurnContent(state.currentTurn)) {
     flushCurrentTurn(state);
@@ -605,5 +667,6 @@ export async function parseOpencodeTranscriptFile(
     ...(state.inputTokens > 0 ? { inputTokens: state.inputTokens } : {}),
     ...(state.outputTokens > 0 ? { outputTokens: state.outputTokens } : {}),
     ...(state.totalTokens > 0 ? { totalTokens: state.totalTokens } : {}),
+    compactionCount: state.compactionInstants.size,
   };
 }

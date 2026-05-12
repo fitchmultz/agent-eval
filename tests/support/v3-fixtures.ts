@@ -142,7 +142,7 @@ export function createV3Metrics(
       },
       avgCompactionCount: null,
       sessionCountWithCompaction: 0,
-      sessionSharePct: 0,
+      sessionSharePct: null,
     },
     attributionSummary: {
       user_scope: 0,

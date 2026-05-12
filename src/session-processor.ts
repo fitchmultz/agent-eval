@@ -100,6 +100,7 @@ export interface SessionMetrics {
   labeledTurnCount: number;
   incidentCount: number;
   parseWarningCount: number;
+  interruptCount?: number;
   userMessageCount: number;
   assistantMessageCount: number;
   toolCallCount: number;
@@ -409,6 +410,7 @@ function buildSessionMetrics(
     labeledTurnCount,
     incidentCount: incidents.length,
     parseWarningCount,
+    interruptCount: session.interruptCount ?? 0,
     userMessageCount: sessionToolMetrics.userMessageCount,
     assistantMessageCount: sessionToolMetrics.assistantMessageCount,
     toolCallCount: sessionToolMetrics.toolCallCount,

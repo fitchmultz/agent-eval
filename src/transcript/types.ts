@@ -70,6 +70,7 @@ export interface ParsedSession {
   outputTokens?: number;
   totalTokens?: number;
   compactionCount?: number;
+  interruptCount?: number;
   turns: ParsedTurn[];
   scoringEvents?: ScoringEvent[] | undefined;
   parseWarningCount?: number | undefined;
@@ -115,6 +116,7 @@ export interface ParserContext {
   sessionOutputTokens?: number;
   sessionTotalTokens?: number;
   sessionCompactionCount?: number;
+  sessionInterruptCount?: number;
   turns: ParsedTurn[];
   currentTurn: ParsedTurn;
   nextTurnIndex: number;

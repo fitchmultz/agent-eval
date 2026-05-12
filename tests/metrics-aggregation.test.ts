@@ -178,6 +178,41 @@ describe("aggregateMetrics", () => {
     expect(metrics.labelCounts.interrupt).toBe(2);
   });
 
+  it("averages token fields over sessions where each field is present", () => {
+    const inputOnly = createMockSession("input-only");
+    inputOnly.metrics.inputTokens = 100;
+    const totalOnly = createMockSession("total-only");
+    totalOnly.metrics.totalTokens = 250;
+    const full = createMockSession("full");
+    full.metrics.inputTokens = 50;
+    full.metrics.outputTokens = 25;
+    full.metrics.totalTokens = 75;
+
+    const metrics = aggregateMetrics(
+      [inputOnly, totalOnly, full],
+      mockInventory,
+    );
+
+    expect(metrics.tokenStats.coverage).toEqual({
+      coveredSessionCount: 3,
+      totalSessionCount: 3,
+      coveragePct: 100,
+    });
+    expect(metrics.tokenStats.inputTokensAvg).toBe(75);
+    expect(metrics.tokenStats.outputTokensAvg).toBe(25);
+    expect(metrics.tokenStats.totalTokensAvg).toBe(141.7);
+  });
+
+  it("keeps compaction session share null when compaction coverage is absent", () => {
+    const metrics = aggregateMetrics(
+      [createMockSession("session-1")],
+      mockInventory,
+    );
+
+    expect(metrics.compactionStats.coverage.coveredSessionCount).toBe(0);
+    expect(metrics.compactionStats.sessionSharePct).toBeNull();
+  });
+
   it("should aggregate compliance summaries", () => {
     const sessions: ProcessedSession[] = [
       {

@@ -401,6 +401,9 @@ export function buildMetricsRecord(
   let tokenCoveredCount = 0;
   let durationCoveredCount = 0;
   let compactionCoveredCount = 0;
+  let tokenInputCoveredCount = 0;
+  let tokenOutputCoveredCount = 0;
+  let tokenTotalCoveredCount = 0;
   let tokenInputTotal = 0;
   let tokenOutputTotal = 0;
   let tokenTotal = 0;
@@ -468,9 +471,24 @@ export function buildMetricsRecord(
       typeof session.totalTokens === "number"
     ) {
       tokenCoveredCount += 1;
-      tokenInputTotal += session.inputTokens ?? 0;
-      tokenOutputTotal += session.outputTokens ?? 0;
-      tokenTotal += session.totalTokens ?? 0;
+    }
+    if (typeof session.inputTokens === "number") {
+      tokenInputCoveredCount += 1;
+      tokenInputTotal += session.inputTokens;
+    }
+    if (typeof session.outputTokens === "number") {
+      tokenOutputCoveredCount += 1;
+      tokenOutputTotal += session.outputTokens;
+    }
+    if (typeof session.totalTokens === "number") {
+      tokenTotalCoveredCount += 1;
+      tokenTotal += session.totalTokens;
+    } else if (
+      typeof session.inputTokens === "number" ||
+      typeof session.outputTokens === "number"
+    ) {
+      tokenTotalCoveredCount += 1;
+      tokenTotal += (session.inputTokens ?? 0) + (session.outputTokens ?? 0);
     }
 
     if (typeof session.durationMs === "number") {
@@ -547,16 +565,16 @@ export function buildMetricsRecord(
     tokenStats: {
       coverage: coverageStats(tokenCoveredCount, sessionCount),
       inputTokensAvg:
-        tokenCoveredCount > 0
-          ? roundAverage(tokenInputTotal, tokenCoveredCount)
+        tokenInputCoveredCount > 0
+          ? roundAverage(tokenInputTotal, tokenInputCoveredCount)
           : null,
       outputTokensAvg:
-        tokenCoveredCount > 0
-          ? roundAverage(tokenOutputTotal, tokenCoveredCount)
+        tokenOutputCoveredCount > 0
+          ? roundAverage(tokenOutputTotal, tokenOutputCoveredCount)
           : null,
       totalTokensAvg:
-        tokenCoveredCount > 0
-          ? roundAverage(tokenTotal, tokenCoveredCount)
+        tokenTotalCoveredCount > 0
+          ? roundAverage(tokenTotal, tokenTotalCoveredCount)
           : null,
     },
     durationStats: {
@@ -577,12 +595,12 @@ export function buildMetricsRecord(
         (session) => (session.compactionCount ?? 0) > 0,
       ).length,
       sessionSharePct:
-        sessionCount > 0
+        compactionCoveredCount > 0
           ? safeRate(
               sessionMetrics.filter(
                 (session) => (session.compactionCount ?? 0) > 0,
               ).length,
-              sessionCount,
+              compactionCoveredCount,
             )
           : null,
     },

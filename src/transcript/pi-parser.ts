@@ -14,6 +14,7 @@ import { createSourceRef } from "./event-router.js";
 import { createTranscriptLineReader, getReaderStream } from "./file-reader.js";
 import {
   appendScoringEvent,
+  asFiniteNumber,
   createTurn,
   hasTurnContent,
 } from "./session-builder.js";
@@ -52,6 +53,10 @@ interface PiParseState {
   harness: string;
   modelProvider?: string;
   model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  compactionCount: number;
   turns: ParsedTurn[];
   currentTurn: ParsedTurn;
   nextTurnIndex: number;
@@ -79,6 +84,7 @@ function createInitialState(path: string): PiParseState {
   return {
     sessionId: filename,
     harness: "pi",
+    compactionCount: 0,
     turns: [],
     currentTurn: createTurn(0),
     nextTurnIndex: 0,
@@ -385,6 +391,34 @@ function appendToolResult(
   }
 }
 
+function addPiUsage(
+  state: PiParseState,
+  usage: Record<string, unknown> | undefined,
+): void {
+  if (!usage) {
+    return;
+  }
+
+  const inputTokens = asFiniteNumber(getValue(usage, "input"));
+  const outputTokens = asFiniteNumber(getValue(usage, "output"));
+  const totalTokens = asFiniteNumber(getValue(usage, "totalTokens"));
+  if (typeof inputTokens === "number") {
+    state.inputTokens = (state.inputTokens ?? 0) + inputTokens;
+  }
+  if (typeof outputTokens === "number") {
+    state.outputTokens = (state.outputTokens ?? 0) + outputTokens;
+  }
+  if (typeof totalTokens === "number") {
+    state.totalTokens = (state.totalTokens ?? 0) + totalTokens;
+  } else if (
+    typeof inputTokens === "number" ||
+    typeof outputTokens === "number"
+  ) {
+    state.totalTokens =
+      (state.totalTokens ?? 0) + (inputTokens ?? 0) + (outputTokens ?? 0);
+  }
+}
+
 function applyPiMetadataRecord(
   state: PiParseState,
   record: PiEventRecord,
@@ -399,6 +433,18 @@ function applyPiMetadataRecord(
     }
     if (record.modelId) {
       state.model = record.modelId;
+    }
+  }
+
+  if (record.message) {
+    addPiUsage(state, asRecord(getValue(record.message, "usage")));
+    const provider = asString(getValue(record.message, "provider"));
+    const model = asString(getValue(record.message, "model"));
+    if (provider) {
+      state.modelProvider = provider;
+    }
+    if (model) {
+      state.model = model;
     }
   }
 }
@@ -551,6 +597,10 @@ export async function parsePiTranscriptFile(
     (stream as { destroy?: () => void } | undefined)?.destroy?.();
   }
 
+  state.compactionCount = parsedEntries.filter(
+    (entry) => entry.record.type === "compaction",
+  ).length;
+
   const currentBranchPath = buildCurrentBranchPath(parsedEntries);
   for (const entry of currentBranchPath) {
     const entryCwd = entry.record.cwd ?? state.cwd;
@@ -577,5 +627,15 @@ export async function parsePiTranscriptFile(
     ...(state.cwd ? { cwd: state.cwd } : {}),
     ...(state.modelProvider ? { modelProvider: state.modelProvider } : {}),
     ...(state.model ? { model: state.model } : {}),
+    ...(typeof state.inputTokens === "number"
+      ? { inputTokens: state.inputTokens }
+      : {}),
+    ...(typeof state.outputTokens === "number"
+      ? { outputTokens: state.outputTokens }
+      : {}),
+    ...(typeof state.totalTokens === "number"
+      ? { totalTokens: state.totalTokens }
+      : {}),
+    compactionCount: state.compactionCount,
   };
 }

@@ -15,10 +15,42 @@ import type {
   SourceRef,
 } from "./types.js";
 
-function asNumber(value: unknown): number | undefined {
+export function asFiniteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  return asFiniteNumber(value);
+}
+
+export function addTokenUsage(
+  context: Pick<
+    ParserContext,
+    "sessionInputTokens" | "sessionOutputTokens" | "sessionTotalTokens"
+  >,
+  usage: {
+    inputTokens?: number | undefined;
+    outputTokens?: number | undefined;
+    totalTokens?: number | undefined;
+  },
+): void {
+  if (typeof usage.inputTokens === "number") {
+    context.sessionInputTokens = usage.inputTokens;
+  }
+  if (typeof usage.outputTokens === "number") {
+    context.sessionOutputTokens = usage.outputTokens;
+  }
+  if (typeof usage.totalTokens === "number") {
+    context.sessionTotalTokens = usage.totalTokens;
+  } else if (
+    typeof usage.inputTokens === "number" ||
+    typeof usage.outputTokens === "number"
+  ) {
+    context.sessionTotalTokens =
+      (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
+  }
 }
 
 /**
@@ -191,6 +223,19 @@ export function handleTurnContextEvent(
 
   const turnId = asString(getValue(payload, "turn_id"));
   const turnCwd = asString(getValue(payload, "cwd")) ?? context.sessionCwd;
+  const modelProvider =
+    asString(getValue(payload, "modelProvider")) ??
+    asString(getValue(payload, "model_provider"));
+  const model =
+    asString(getValue(payload, "model")) ??
+    asString(getValue(payload, "modelId"));
+
+  if (modelProvider) {
+    context.sessionModelProvider ??= modelProvider;
+  }
+  if (model) {
+    context.sessionModel ??= model;
+  }
 
   if (turnId) {
     context.currentTurn.turnId = turnId;
@@ -256,6 +301,9 @@ export function buildParsedSession(
   }
   if (typeof context.sessionCompactionCount === "number") {
     parsedSession.compactionCount = context.sessionCompactionCount;
+  }
+  if (typeof context.sessionInterruptCount === "number") {
+    parsedSession.interruptCount = context.sessionInterruptCount;
   }
 
   return parsedSession;

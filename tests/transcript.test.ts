@@ -41,6 +41,7 @@ const sampleTranscript = [
     payload: {
       turn_id: "turn-1",
       cwd: "/workspace/demo",
+      model: "gpt-5.2-codex",
     },
   },
   {
@@ -128,12 +129,93 @@ describe("parseTranscriptFile", () => {
 
     expect(session.sessionId).toBe("session-1");
     expect(session.parentSessionId).toBe("parent-1");
+    expect(session.model).toBe("gpt-5.2-codex");
     expect(session.turns).toHaveLength(2);
     expect(
       session.turns[0]?.toolCalls.map((toolCall) => toolCall.toolName),
     ).toEqual(["exec_command", "apply_patch"]);
     expect(session.turns[0]?.toolCalls[0]?.status).toBe("completed");
     expect(session.turns[1]?.userMessages[0]).toContain("You lost context");
+  });
+
+  it("counts Codex compactions from compacted events", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agent-eval-codex-compacted-"));
+    const sessionPath = join(root, "compacted.jsonl");
+    await writeFile(
+      sessionPath,
+      `${[
+        ...sampleTranscript,
+        {
+          timestamp: "2026-03-06T19:00:08.000Z",
+          type: "compacted",
+          payload: { message: "Previous context was compacted." },
+        },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join("\n")}\n`,
+      "utf8",
+    );
+
+    const session = await parseTranscriptFile(sessionPath);
+
+    expect(session.compactionCount).toBe(1);
+  });
+
+  it("counts Codex interrupted turns from turn_aborted events", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agent-eval-codex-interrupt-"));
+    const sessionPath = join(root, "interrupt.jsonl");
+    await writeFile(
+      sessionPath,
+      `${[
+        ...sampleTranscript,
+        {
+          timestamp: "2026-03-06T19:00:08.000Z",
+          type: "event_msg",
+          payload: { type: "turn_aborted", reason: "interrupted" },
+        },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join("\n")}\n`,
+      "utf8",
+    );
+
+    const session = await parseTranscriptFile(sessionPath);
+
+    expect(session.interruptCount).toBe(1);
+  });
+
+  it("uses the latest Codex token_count event for session token metrics", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agent-eval-codex-tokens-"));
+    const sessionPath = join(root, "tokens.jsonl");
+    await writeFile(
+      sessionPath,
+      `${[
+        ...sampleTranscript,
+        {
+          timestamp: "2026-03-06T19:00:08.000Z",
+          type: "event_msg",
+          payload: {
+            type: "token_count",
+            info: {
+              total_token_usage: {
+                input_tokens: 123,
+                output_tokens: 45,
+                total_tokens: 168,
+              },
+            },
+          },
+        },
+      ]
+        .map((record) => JSON.stringify(record))
+        .join("\n")}\n`,
+      "utf8",
+    );
+
+    const session = await parseTranscriptFile(sessionPath);
+
+    expect(session.inputTokens).toBe(123);
+    expect(session.outputTokens).toBe(45);
+    expect(session.totalTokens).toBe(168);
   });
 
   it("parses large tool output lines without retaining full output", async () => {
@@ -487,6 +569,49 @@ describe("parseClaudeTranscriptFile", () => {
     );
   });
 
+  it("aggregates Claude assistant usage into session token metrics", async () => {
+    const sessionPath = await writeClaudeTranscript("usage", [
+      {
+        sessionId: "claude-session-usage",
+        timestamp: "2026-03-06T19:00:00.000Z",
+        uuid: "assistant-usage-1",
+        message: {
+          role: "assistant",
+          model: "claude-sonnet-4",
+          usage: {
+            input_tokens: 100,
+            cache_creation_input_tokens: 10,
+            cache_read_input_tokens: 5,
+            output_tokens: 20,
+          },
+          content: [{ type: "text", text: "Done." }],
+        },
+      },
+      {
+        sessionId: "claude-session-usage",
+        timestamp: "2026-03-06T19:00:01.000Z",
+        uuid: "assistant-usage-2",
+        message: {
+          role: "assistant",
+          model: "claude-sonnet-4",
+          usage: {
+            input_tokens: 7,
+            output_tokens: 3,
+          },
+          content: [{ type: "text", text: "Still done." }],
+        },
+      },
+    ]);
+
+    const session = await parseClaudeTranscriptFile(sessionPath);
+
+    expect(session.modelProvider).toBe("anthropic");
+    expect(session.model).toBe("claude-sonnet-4");
+    expect(session.inputTokens).toBe(122);
+    expect(session.outputTokens).toBe(23);
+    expect(session.totalTokens).toBe(145);
+  });
+
   it("starts a new turn only for a new user-authored prompt", async () => {
     const sessionPath = await writeClaudeTranscript("multi-turn", [
       {
@@ -824,6 +949,73 @@ describe("parseOpencodeTranscriptFile", () => {
     ).toBe(true);
   });
 
+  it("counts opencode cache/reasoning tokens and unique compaction instants", async () => {
+    const root = await mkdtemp(join(tmpdir(), "agent-eval-opencode-usage-"));
+    const storage = join(root, "storage");
+    const sessionId = "ses_usage";
+    const assistantId = "msg_assistant_usage";
+    const sessionPath = join(
+      storage,
+      "session",
+      "project-a",
+      `${sessionId}.json`,
+    );
+    await mkdir(dirname(sessionPath), { recursive: true });
+    await mkdir(join(storage, "message", sessionId), { recursive: true });
+    await mkdir(join(storage, "part", assistantId), { recursive: true });
+    await writeFile(sessionPath, JSON.stringify({ id: sessionId }));
+    await writeFile(
+      join(storage, "message", sessionId, `${assistantId}.json`),
+      JSON.stringify({
+        id: assistantId,
+        sessionID: sessionId,
+        role: "assistant",
+        time: { created: 1770000001000 },
+        tokens: {
+          input: 10,
+          output: 5,
+          reasoning: 2,
+          cache: { read: 100, write: 3 },
+        },
+      }),
+    );
+    await writeFile(
+      join(storage, "part", assistantId, "prt_step.json"),
+      JSON.stringify({
+        id: "prt_step",
+        sessionID: sessionId,
+        messageID: assistantId,
+        type: "step-finish",
+        tokens: { input: 999, output: 999 },
+        time: { compacted: 1770000002000 },
+      }),
+    );
+    await writeFile(
+      join(storage, "part", assistantId, "prt_tool.json"),
+      JSON.stringify({
+        id: "prt_tool",
+        sessionID: sessionId,
+        messageID: assistantId,
+        type: "tool",
+        callID: "call_usage",
+        tool: "bash",
+        state: {
+          status: "completed",
+          time: { compacted: 1770000002000 },
+        },
+      }),
+    );
+
+    const session = await parseOpencodeTranscriptFile(sessionPath, {
+      sourceProvider: "opencode",
+    });
+
+    expect(session.inputTokens).toBe(113);
+    expect(session.outputTokens).toBe(7);
+    expect(session.totalTokens).toBe(120);
+    expect(session.compactionCount).toBe(1);
+  });
+
   it("skips corrupt opencode message and part files in non-strict mode", async () => {
     const root = await mkdtemp(join(tmpdir(), "agent-eval-opencode-corrupt-"));
     const storage = join(root, "storage");
@@ -985,6 +1177,69 @@ describe("parsePiTranscriptFile", () => {
     );
   });
 
+  it("captures pi assistant usage and compaction metrics from the active branch", async () => {
+    const sessionPath = await writePiTranscript("usage-compaction", [
+      {
+        type: "session",
+        version: 3,
+        id: "pi-session-usage",
+        timestamp: "2026-03-06T19:00:00.000Z",
+        cwd: "/workspace/demo",
+      },
+      {
+        type: "message",
+        id: "user-1",
+        parentId: null,
+        timestamp: "2026-03-06T19:00:01.000Z",
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Summarize." }],
+        },
+      },
+      {
+        type: "message",
+        id: "assistant-1",
+        parentId: "user-1",
+        timestamp: "2026-03-06T19:00:02.000Z",
+        message: {
+          role: "assistant",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: { input: 10, output: 5, totalTokens: 20 },
+          content: [{ type: "text", text: "Summary." }],
+        },
+      },
+      {
+        type: "compaction",
+        id: "compaction-1",
+        parentId: "assistant-1",
+        timestamp: "2026-03-06T19:00:03.000Z",
+      },
+      {
+        type: "message",
+        id: "assistant-2",
+        parentId: "compaction-1",
+        timestamp: "2026-03-06T19:00:04.000Z",
+        message: {
+          role: "assistant",
+          provider: "openai",
+          model: "gpt-5.2",
+          usage: { input: 2, output: 1 },
+          content: [{ type: "text", text: "After compaction." }],
+        },
+      },
+    ]);
+
+    const session = await parsePiTranscriptFile(sessionPath);
+
+    expect(session.modelProvider).toBe("openai");
+    expect(session.model).toBe("gpt-5.2");
+    expect(session.inputTokens).toBe(12);
+    expect(session.outputTokens).toBe(6);
+    expect(session.totalTokens).toBe(23);
+    expect(session.compactionCount).toBe(1);
+  });
+
   it("parses only the current persisted branch path", async () => {
     const sessionPath = await writePiTranscript("branched", [
       {
@@ -1035,6 +1290,12 @@ describe("parsePiTranscriptFile", () => {
         },
       },
       {
+        type: "compaction",
+        id: "compaction-abandoned",
+        parentId: "assistant-abandoned",
+        timestamp: "2026-03-06T19:00:04.500Z",
+      },
+      {
         type: "branch_summary",
         id: "branch-summary-1",
         parentId: "assistant-1",
@@ -1075,6 +1336,7 @@ describe("parsePiTranscriptFile", () => {
     expect(session.turns.flatMap((turn) => turn.userMessages)).not.toContain(
       "Take the abandoned path.",
     );
+    expect(session.compactionCount).toBe(1);
   });
 
   it("honors abort signals on the pi parser path", async () => {

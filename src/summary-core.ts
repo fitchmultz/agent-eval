@@ -145,6 +145,10 @@ function buildUsageDashboard(
     (session) => session.endedVerified,
   ).length;
   const endedUnverified = Math.max(0, writeSessions.length - endedVerified);
+  const transcriptInterrupts = metrics.sessions.reduce(
+    (total, session) => total + (session.interruptCount ?? 0),
+    0,
+  );
 
   return {
     headlineMetrics: {
@@ -158,7 +162,7 @@ function buildUsageDashboard(
       avgToolCallsPerSession: metrics.toolStats.avgToolCallsPerSession,
       mcpSessionShare: metrics.mcpStats.sessionSharePct,
       interruptRatePer100Turns: safeRate(
-        metrics.labelCounts.interrupt ?? 0,
+        (metrics.labelCounts.interrupt ?? 0) + transcriptInterrupts,
         metrics.turnCount,
       ),
       compactionRate: metrics.compactionStats.sessionSharePct,

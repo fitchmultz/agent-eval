@@ -7,6 +7,8 @@
 import type { SourceProvider } from "../schema.js";
 import { handleMessageResponse } from "./message-extractor.js";
 import {
+  addTokenUsage,
+  asFiniteNumber,
   handleSessionMetaEvent,
   handleTurnContextEvent,
 } from "./session-builder.js";
@@ -16,7 +18,7 @@ import {
   handleFunctionCallOutputResponse,
   handleFunctionCallResponse,
 } from "./tool-call-handler.js";
-import { asString, getValue } from "./type-guards.js";
+import { asRecord, asString, getValue } from "./type-guards.js";
 import type { JsonlEventRecord, ParserContext, SourceRef } from "./types.js";
 
 /**
@@ -65,6 +67,38 @@ export function createSourceRef(
   };
 }
 
+function handleEventMessage(
+  payload: Record<string, unknown>,
+  context: ParserContext,
+): void {
+  const eventMessageType = asString(getValue(payload, "type"));
+  if (eventMessageType === "turn_aborted") {
+    const reason = asString(getValue(payload, "reason"));
+    if (!reason || reason === "interrupted") {
+      context.sessionInterruptCount = (context.sessionInterruptCount ?? 0) + 1;
+    }
+    return;
+  }
+
+  if (eventMessageType !== "token_count") {
+    return;
+  }
+
+  const info = asRecord(getValue(payload, "info"));
+  const totalTokenUsage = info
+    ? asRecord(getValue(info, "total_token_usage"))
+    : undefined;
+  if (!totalTokenUsage) {
+    return;
+  }
+
+  addTokenUsage(context, {
+    inputTokens: asFiniteNumber(getValue(totalTokenUsage, "input_tokens")),
+    outputTokens: asFiniteNumber(getValue(totalTokenUsage, "output_tokens")),
+    totalTokens: asFiniteNumber(getValue(totalTokenUsage, "total_tokens")),
+  });
+}
+
 /**
  * Routes an event to the appropriate handler based on event type.
  */
@@ -78,6 +112,10 @@ export function routeEvent(
   }
 
   switch (event.type) {
+    case "compacted":
+      context.sessionCompactionCount =
+        (context.sessionCompactionCount ?? 0) + 1;
+      break;
     case "session_meta":
       handleSessionMetaEvent(event.payload, event, context);
       break;
@@ -86,6 +124,9 @@ export function routeEvent(
       break;
     case "response_item":
       handleResponseItemEvent(event.payload, event, sourceRef, context);
+      break;
+    case "event_msg":
+      handleEventMessage(event.payload, context);
       break;
   }
 }

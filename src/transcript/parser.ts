@@ -39,6 +39,7 @@ export function createParserContext(path: string): ParserContext {
     sessionId: inferSessionIdFromFilename(path),
     sessionMetaSeen: false,
     sessionHarness: "codex",
+    sessionCompactionCount: 0,
     turns: [],
     currentTurn: createTurn(0),
     nextTurnIndex: 0,

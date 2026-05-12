@@ -14,6 +14,7 @@ import { createSourceRef } from "./event-router.js";
 import { createTranscriptLineReader, getReaderStream } from "./file-reader.js";
 import {
   appendScoringEvent,
+  asFiniteNumber,
   createTurn,
   hasTurnContent,
 } from "./session-builder.js";
@@ -378,6 +379,39 @@ function appendToolResults(
   }
 }
 
+function addClaudeUsage(
+  state: ClaudeParseState,
+  usage: Record<string, unknown> | undefined,
+): void {
+  if (!usage) {
+    return;
+  }
+
+  const inputTokens = asFiniteNumber(getValue(usage, "input_tokens"));
+  const outputTokens = asFiniteNumber(getValue(usage, "output_tokens"));
+  const cacheCreationInputTokens = asFiniteNumber(
+    getValue(usage, "cache_creation_input_tokens"),
+  );
+  const cacheReadInputTokens = asFiniteNumber(
+    getValue(usage, "cache_read_input_tokens"),
+  );
+  const totalInputTokens =
+    (inputTokens ?? 0) +
+    (cacheCreationInputTokens ?? 0) +
+    (cacheReadInputTokens ?? 0);
+
+  if (typeof inputTokens === "number") {
+    state.inputTokens = (state.inputTokens ?? 0) + totalInputTokens;
+  }
+  if (typeof outputTokens === "number") {
+    state.outputTokens = (state.outputTokens ?? 0) + outputTokens;
+  }
+  if (typeof inputTokens === "number" || typeof outputTokens === "number") {
+    state.totalTokens =
+      (state.totalTokens ?? 0) + totalInputTokens + (outputTokens ?? 0);
+  }
+}
+
 function applyClaudeRecord(
   state: ClaudeParseState,
   record: ClaudeEventRecord,
@@ -385,6 +419,15 @@ function applyClaudeRecord(
 ): void {
   const message = record.message;
   const role = message ? asString(getValue(message, "role")) : undefined;
+
+  if (message) {
+    addClaudeUsage(state, asRecord(getValue(message, "usage")));
+    const model = asString(getValue(message, "model"));
+    if (model && model !== "<synthetic>") {
+      state.model = model;
+      state.modelProvider = "anthropic";
+    }
+  }
 
   if (!message || (role !== "user" && role !== "assistant")) {
     return;
