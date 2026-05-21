@@ -14,7 +14,6 @@
     "allowUnreachableCode": false,
     "declaration": false,
     "sourceMap": true,
-    "esModuleInterop": false,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "verbatimModuleSyntax": true,
