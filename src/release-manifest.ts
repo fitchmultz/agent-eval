@@ -17,11 +17,21 @@ import {
   type MetricsRecord,
   metricsSchema,
   type SessionFactRecord,
+  type SourceProvider,
   type SummaryArtifact,
   sourceProviderValues,
   timeBucketValues,
 } from "./schema.js";
 import { SCHEMA_VERSION } from "./version.js";
+
+const evaluationSourceValues = [...sourceProviderValues, "all"] as const;
+
+type EvaluationSource = SourceProvider | "all";
+
+export interface ReleaseEvaluationOptions
+  extends Omit<EvaluateOptions, "source"> {
+  source: EvaluationSource;
+}
 
 export const releaseManifestSchema = z
   .object({
@@ -38,7 +48,7 @@ export const releaseManifestSchema = z
     configFingerprint: z.string().length(16),
     evaluation: z
       .object({
-        source: z.enum(sourceProviderValues),
+        source: z.enum(evaluationSourceValues),
         outputMode: z.enum(["summary", "full"]),
         sessionLimit: z.int().positive().nullable(),
         startDate: z.string().min(1).nullable(),
@@ -117,7 +127,7 @@ export function buildReleaseManifest(
   metrics: MetricsRecord,
   summary: SummaryArtifact,
   sessionFacts: readonly SessionFactRecord[],
-  options: EvaluateOptions,
+  options: ReleaseEvaluationOptions,
   artifactFiles: readonly string[],
 ): ReleaseManifest {
   return {

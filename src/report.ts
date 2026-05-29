@@ -223,7 +223,7 @@ export function renderSummaryReport(
     lines.push(
       "## No Data Yet",
       "",
-      "- The selected source home has the expected transcript layout, but no canonical session artifact files were discovered yet.",
+      "- The selected source home(s) were scanned, but no canonical session artifact files were discovered yet.",
       "- This is a valid first-run or freshly bootstrapped state, so the report renders a deterministic empty corpus instead of treating it as a runtime failure.",
       "",
     );

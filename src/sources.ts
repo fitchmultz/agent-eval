@@ -16,6 +16,7 @@ export const sourceProviderValues = [
 ] as const;
 
 export type SourceProvider = (typeof sourceProviderValues)[number];
+export type SourceSelection = SourceProvider | "all";
 
 export interface SourceDescriptor {
   provider: SourceProvider;
@@ -48,6 +49,10 @@ export const SOURCE_DESCRIPTORS: Record<SourceProvider, SourceDescriptor> = {
 
 export function isSourceProvider(value: string): value is SourceProvider {
   return sourceProviderValues.includes(value as SourceProvider);
+}
+
+export function isSourceSelection(value: string): value is SourceSelection {
+  return value === "all" || isSourceProvider(value);
 }
 
 export function getDefaultSourceHome(

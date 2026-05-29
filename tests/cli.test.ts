@@ -20,7 +20,10 @@ import { main } from "../src/cli.js";
 import {
   createClaudeHome,
   createCodexHome,
+  createOpencodeHome,
   createPiHome,
+  createPiHomeFromSessions,
+  createPiSessionContent,
 } from "./support/transcript-fixtures.js";
 
 describe("CLI", () => {
@@ -212,6 +215,90 @@ describe("CLI", () => {
     );
   });
 
+  it("evaluates all default provider homes into one combined report", async () => {
+    const userHome = join(testDirBase, "all-user-home");
+    await createCodexHome(userHome, ".codex");
+    await createClaudeHome(userHome, ".claude");
+    await createPiHome(userHome, ".pi");
+    await createOpencodeHome(userHome, ".local/share/opencode");
+    vi.stubEnv("HOME", userHome);
+    const outputDir = join(testDirBase, "eval-all-artifacts");
+    await mkdir(outputDir, { recursive: true });
+
+    const exitCode = await main([
+      "node",
+      "cli",
+      "eval",
+      "--source",
+      "all",
+      "--all",
+      "--summary-only",
+      "--output-dir",
+      outputDir,
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"sessionCount": 4'),
+    );
+    const metrics = JSON.parse(
+      await readFile(join(outputDir, "metrics.json"), "utf8"),
+    );
+    expect(
+      metrics.providerDistribution
+        .map((entry: { key: string }) => entry.key)
+        .sort(),
+    ).toEqual(["claude", "codex", "opencode", "pi"]);
+    const manifest = JSON.parse(
+      await readFile(join(outputDir, "release-manifest.json"), "utf8"),
+    );
+    expect(manifest.evaluation.source).toBe("all");
+  });
+
+  it("deduplicates pi session aliases before evaluation", async () => {
+    const sessionContent = createPiSessionContent("pi-duplicate-session");
+    const homeDir = await createPiHomeFromSessions(
+      testDirBase,
+      "eval-pi-duplicate",
+      [
+        { filename: "new.jsonl", content: sessionContent },
+        {
+          filename: "2026-03-06T19-00-00-000Z_pi-duplicate-session.jsonl",
+          content: sessionContent,
+        },
+      ],
+    );
+    const outputDir = join(homeDir, "artifacts");
+    await mkdir(outputDir, { recursive: true });
+
+    const exitCode = await main([
+      "node",
+      "cli",
+      "eval",
+      "--source",
+      "pi",
+      "--home",
+      homeDir,
+      "--output-dir",
+      outputDir,
+      "--summary-only",
+      "--all",
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"sessionCount": 1'),
+    );
+    const sessionFacts = await readFile(
+      join(outputDir, "session-facts.jsonl"),
+      "utf8",
+    );
+    expect(sessionFacts).toContain(
+      "2026-03-06T19-00-00-000Z_pi-duplicate-session.jsonl",
+    );
+    expect(sessionFacts).not.toContain("new.jsonl");
+  });
+
   it("limits evaluation to the most recent discovered sessions", async () => {
     const homeDir = await createCodexHome(testDirBase, "eval-limit", 3);
     const outputDir = join(homeDir, "artifacts");
@@ -286,7 +373,7 @@ describe("CLI", () => {
       expect.stringContaining("## No Data Yet"),
     );
     expect(await readFile(join(outputDir, "report.md"), "utf8")).toContain(
-      "The selected source home has the expected transcript layout, but no canonical session artifact files were discovered yet.",
+      "The selected source home(s) were scanned, but no canonical session artifact files were discovered yet.",
     );
     expect(await readFile(join(outputDir, "metrics.json"), "utf8")).toContain(
       '"sessionCount": 0',

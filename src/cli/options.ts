@@ -9,8 +9,8 @@ import { ENV_VARS, getEnvVarName } from "../config/index.js";
 import { ValidationError } from "../errors.js";
 import {
   getDefaultSourceHome,
-  isSourceProvider,
-  type SourceProvider,
+  isSourceSelection,
+  type SourceSelection,
 } from "../sources.js";
 import { getValidatedHomeDirectory } from "../utils/environment.js";
 
@@ -19,7 +19,7 @@ export type TimeBucket = "day" | "week" | "month";
 export const DEFAULT_SESSION_LIMIT = 100;
 
 export interface GlobalOptions {
-  source: SourceProvider;
+  source: SourceSelection;
   home: string;
   outputDir: string;
   sessionLimit?: number;
@@ -32,20 +32,24 @@ export interface GlobalOptions {
   timeBucket?: TimeBucket;
 }
 
-export function getDefaultSource(): SourceProvider {
+export function getDefaultSource(): SourceSelection {
   const envSource = process.env[getEnvVarName(ENV_VARS.SOURCE)];
 
-  if (envSource && isSourceProvider(envSource)) {
+  if (envSource && isSourceSelection(envSource)) {
     return envSource;
   }
 
   return "codex";
 }
 
-export function getDefaultHome(source: SourceProvider): string {
+export function getDefaultHome(source: SourceSelection): string {
   const envHome = process.env[getEnvVarName(ENV_VARS.SOURCE_HOME)];
   if (envHome) {
     return envHome;
+  }
+
+  if (source === "all") {
+    return "";
   }
 
   try {
@@ -124,19 +128,21 @@ function normalizeTimeBucket(value?: string): TimeBucket {
 
 export function normalizeOptions(options: GlobalOptions): GlobalOptions {
   const fallbackSource = getDefaultSource();
-  if (!isSourceProvider(options.source)) {
+  if (!isSourceSelection(options.source)) {
     throw new ValidationError(
-      `Invalid source provider: ${options.source}. Expected one of: codex, claude, pi, opencode.`,
+      `Invalid source provider: ${options.source}. Expected one of: codex, claude, pi, opencode, all.`,
     );
   }
 
   const source = options.source;
   const fallbackHome = getDefaultHome(fallbackSource);
   const home =
-    !options.home ||
-    (options.home === fallbackHome && source !== fallbackSource)
-      ? getDefaultHome(source)
-      : options.home;
+    source === "all"
+      ? options.home
+      : !options.home ||
+          (options.home === fallbackHome && source !== fallbackSource)
+        ? getDefaultHome(source)
+        : options.home;
 
   if (options.all && typeof options.sessionLimit === "number") {
     throw new ValidationError("--all cannot be combined with --session-limit.");

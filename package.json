@@ -39,6 +39,7 @@
     "lint": "biome check .",
     "parse": "tsx src/cli.ts parse",
     "eval": "tsx src/cli.ts eval",
+    "eval:all": "tsx src/cli.ts eval --source all --all --summary-only",
     "report": "tsx src/cli.ts report",
     "scan:artifacts": "node scripts/public-surface-scan.mjs",
     "scan:repo": "node scripts/public-surface-scan.mjs --mode=repo",

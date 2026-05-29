@@ -142,6 +142,7 @@ export interface ProcessedSessionAnalysis {
  */
 export interface ProcessedSession {
   sessionId: string;
+  path?: string;
   turns: RawTurnRecord[];
   incidents: IncidentRecord[];
   metrics: SessionMetrics;
@@ -491,6 +492,7 @@ export async function processSession(
 
   return {
     sessionId: session.sessionId,
+    path: session.path,
     turns,
     incidents,
     metrics: buildSessionMetrics(

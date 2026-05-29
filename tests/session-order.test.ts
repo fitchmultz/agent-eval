@@ -50,6 +50,7 @@ describe("probeSessionOrder", () => {
     );
 
     const probe = await probeSessionOrder(path, "codex");
+    expect(probe.sessionId).toBe("s1");
     expect(probe.startedAt).toBe("2026-03-10T10:00:00.000Z");
     expect(probe.earliestTimestamp).toBe("2026-03-10T10:00:01.000Z");
   });
@@ -80,8 +81,32 @@ describe("probeSessionOrder", () => {
     );
 
     const probe = await probeSessionOrder(path, "pi");
+    expect(probe.sessionId).toBe("pi-session-1");
     expect(probe.startedAt).toBe("2026-03-10T09:00:00.000Z");
     expect(probe.earliestTimestamp).toBe("2026-03-10T09:00:00.000Z");
+  });
+
+  it("captures opencode session identity and created time from JSON", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "agent-eval-session-order-"));
+    tempDirs.push(dir);
+    const path = join(dir, "ses_example.json");
+    await writeFile(
+      path,
+      JSON.stringify(
+        {
+          id: "ses_example",
+          time: { created: 1770000000000, updated: 1770000004000 },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const probe = await probeSessionOrder(path, "opencode");
+    expect(probe.sessionId).toBe("ses_example");
+    expect(probe.startedAt).toBe("2026-02-02T02:40:00.000Z");
+    expect(probe.earliestTimestamp).toBe("2026-02-02T02:40:00.000Z");
   });
 
   it("retains invalid startedAt while still capturing a valid earliest timestamp", async () => {

@@ -113,12 +113,12 @@ function buildProgram(): Command {
     .showHelpAfterError()
     .option(
       "--source <provider>",
-      "Source provider to inspect: codex, claude, pi, or opencode (env: AGENT_EVAL_SOURCE)",
+      "Source provider to inspect: codex, claude, pi, opencode, or all (env: AGENT_EVAL_SOURCE)",
       defaultSource,
     )
     .option(
       "--home <path>",
-      "Source home to inspect (env: AGENT_EVAL_SOURCE_HOME)",
+      "Source home to inspect; ignored when --source all (env: AGENT_EVAL_SOURCE_HOME)",
       defaultHome,
     )
     .option(
@@ -175,7 +175,7 @@ function buildProgram(): Command {
         "    - agent-eval.config.json",
         "",
         "  Environment variables:",
-        "    AGENT_EVAL_SOURCE              - Source provider (codex|claude|pi|opencode)",
+        "    AGENT_EVAL_SOURCE              - Source provider (codex|claude|pi|opencode|all)",
         "    AGENT_EVAL_SOURCE_HOME         - Source home directory",
         "    AGENT_EVAL_OUTPUT_DIR          - Output directory for artifacts",
         "    AGENT_EVAL_CONCURRENCY_FULL    - Concurrency for full evaluation",
@@ -189,6 +189,7 @@ function buildProgram(): Command {
         "  agent-eval inspect --source claude --home ~/.claude",
         "  agent-eval inspect --source pi --home ~/.pi",
         "  agent-eval inspect --source opencode --home ~/.local/share/opencode",
+        "  agent-eval eval --source all --all --summary-only --output-dir artifacts",
         "  agent-eval parse --source codex --home ~/.codex --output-dir artifacts",
         "  cat artifacts/raw-turns.jsonl",
         "  agent-eval eval --source claude --home ~/.claude --output-dir artifacts",

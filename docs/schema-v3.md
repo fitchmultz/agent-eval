@@ -53,7 +53,7 @@ Each generated bundle also includes a public-safe release manifest with:
 - git revision metadata when available
 - dirty-worktree state when available
 - config fingerprint
-- evaluation parameters
+- evaluation parameters, including `source: "all"` for combined provider runs
 - corpus scope and applied filters
 - emitted artifact inventory
 

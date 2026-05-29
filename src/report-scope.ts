@@ -47,9 +47,9 @@ export function describeCorpusScope(
       pill: `scope all ${formatSessionCount(sessionCount)}`,
       headline: `Corpus scope: all ${formatSessionCount(sessionCount)}`,
       detail:
-        "This report includes every discovered session in the selected source home for this run.",
+        "This report includes every discovered session in the selected source home(s) for this run.",
       comparability:
-        "Metrics are directly comparable only to reports built from the same source home, discovery moment, and date filter settings.",
+        "Metrics are directly comparable only to reports built from the same source home(s), discovery moment, and date filter settings.",
       isWindowed: false,
     };
   }

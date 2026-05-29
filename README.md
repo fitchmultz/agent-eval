@@ -4,6 +4,30 @@
 
 ![Static HTML report preview generated from synthetic transcript fixtures](docs/assets/report-preview.png)
 
+## Quick start
+
+Evaluate every discovered session from every supported local provider:
+
+```bash
+pnpm install
+pnpm eval:all
+open artifacts/report.html
+```
+
+`pnpm eval:all` scans the default homes for Codex, Claude Code, pi, and opencode, skips homes that are not present, processes full history with `--summary-only`, and writes one combined report to `artifacts/`.
+
+Need one provider only?
+
+```bash
+pnpm eval --source pi --home ~/.pi --all --summary-only --output-dir artifacts/pi
+```
+
+Need to see what will be scanned first?
+
+```bash
+pnpm inspect --source all
+```
+
 ## What you are seeing
 
 This screenshot shows the generated static HTML dashboard: navigation pills, metric cards, and verification status styling rendered from the same deterministic artifacts that the CLI writes to disk. The same report continues with SVG charts, exemplar sessions, review queue, attribution, and methodology sections. The preview image was generated from checked-in synthetic Codex fixtures, not from private local transcripts.
@@ -71,33 +95,43 @@ For a faster calibration-only check that does not generate the HTML report, run 
 
 ## Run it on your local transcripts
 
-Start with discovery. It inventories canonical transcripts plus optional enrichment stores when present.
+Most users only need one command:
 
 ```bash
-pnpm inspect --source codex --home ~/.codex
-pnpm inspect --source claude --home ~/.claude
-pnpm inspect --source pi --home ~/.pi
-pnpm inspect --source opencode --home ~/.local/share/opencode
+pnpm eval:all
 ```
 
-Run the full deterministic pipeline and open the static report from `artifacts/report.html`.
+This is shorthand for:
 
 ```bash
-pnpm eval --source pi --home ~/.pi --output-dir artifacts --summary-only
+pnpm eval --source all --all --summary-only --output-dir artifacts
 ```
 
-Use date filters and a time bucket when you want a bounded corpus:
+What it does:
+
+- scans default local homes for all supported providers
+- combines discovered sessions into one report
+- uses full history because `--all` is included
+- skips large raw-turn and incident files because `--summary-only` is included
+- writes `artifacts/report.html`
+
+Useful variants:
 
 ```bash
-pnpm eval --source pi --home ~/.pi \
-  --output-dir artifacts \
-  --summary-only \
+# Preview discovered inputs across all providers
+pnpm inspect --source all
+
+# Evaluate one provider only
+pnpm eval --source pi --home ~/.pi --all --summary-only --output-dir artifacts/pi
+
+# Evaluate a date range across all providers
+pnpm eval --source all --all --summary-only --output-dir artifacts/march \
   --start-date 2026-03-01 \
   --end-date 2026-03-31 \
   --time-bucket day
 ```
 
-By default, CLI evaluation uses a bounded window of the 100 most recent discovered sessions for fast local feedback. Use `--all` for full-history runs; large full-history corpora use a multi-pass memory-bounded path that preserves corpus-relative template detection without retaining every parsed transcript at once. When `--session-limit` is set, the limit applies to the most recent discovered sessions after date filtering.
+Without `--all`, CLI evaluation uses the 100 most recent eligible sessions for fast feedback. Use `--session-limit <count>` for a different recent window.
 
 ## Supported sources
 
@@ -111,11 +145,11 @@ Optional enrichment stores such as history, SQLite, shell snapshots, opencode da
 ## Command reference
 
 ```bash
-pnpm inspect --source pi --home ~/.pi
-pnpm inspect --source opencode --home ~/.local/share/opencode
-pnpm parse --source codex --home ~/.codex --output-dir artifacts
-pnpm eval --source claude --home ~/.claude --output-dir artifacts
-pnpm report --source codex --home ~/.codex --output-dir artifacts
+pnpm eval:all
+pnpm inspect --source all
+pnpm eval --source all --all --summary-only --output-dir artifacts
+pnpm eval --source pi --home ~/.pi --all --summary-only --output-dir artifacts/pi
+pnpm parse --source codex --home ~/.codex --output-dir artifacts/codex-parse
 pnpm benchmark
 ```
 
@@ -181,7 +215,7 @@ If a presentation artifact ever disagrees with the JSON artifacts, treat the JSO
 ## How it works
 
 ```text
-source home
+source home(s)
   -> discovery inventory
   -> source-specific parser
   -> normalized sessions + turns
@@ -285,4 +319,4 @@ make release-check
 
 ## Next action
 
-Generate the synthetic HTML preview first, then run `inspect` against the local agent home you actually use and open `artifacts/report.html` after `eval`.
+Run `pnpm eval:all`, then open `artifacts/report.html`.

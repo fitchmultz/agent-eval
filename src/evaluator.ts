@@ -99,6 +99,19 @@ export interface EvaluateOptions {
   outputMode?: EvaluationOutputMode;
 }
 
+export interface SourceHomeSelection {
+  /** Source provider for this home. */
+  source: SourceProvider;
+  /** Default or explicit home for this source. */
+  home: string;
+}
+
+export interface EvaluateAllSourcesOptions
+  extends Omit<EvaluateOptions, "source" | "home"> {
+  /** Provider homes to combine into one corpus. */
+  sources: readonly SourceHomeSelection[];
+}
+
 interface SessionSummaryProjection extends SessionFactProjection {
   metrics: ProcessedSession["metrics"];
   rawLabelCounts: LabelCountRecord;
@@ -112,6 +125,21 @@ interface SessionSummaryProjection extends SessionFactProjection {
 
 interface SelectedSessionWindow {
   sessionPaths: readonly string[];
+  discoveredSessionCount: number;
+  eligibleSessionCount: number;
+  undatedExcludedCount: number;
+  selection: MetricsRecord["corpusScope"]["selection"];
+}
+
+interface SessionInput {
+  source: SourceProvider;
+  path: string;
+}
+
+type SessionInputProbe = SessionOrderProbe & { source: SourceProvider };
+
+interface SelectedSessionInputWindow {
+  sessionInputs: readonly SessionInput[];
   discoveredSessionCount: number;
   eligibleSessionCount: number;
   undatedExcludedCount: number;
@@ -157,23 +185,107 @@ function compareSessionProbes(
   return left.path.localeCompare(right.path);
 }
 
-async function selectSessionWindow(
-  sessionFiles: readonly string[],
-  source: SourceProvider,
+function sessionInputIdentityKey(probe: SessionInputProbe): string {
+  return probe.source === "pi" && probe.sessionId
+    ? `${probe.source}:${probe.sessionId}`
+    : `${probe.source}:${probe.path}`;
+}
+
+function sessionPathBasename(path: string): string {
+  return path.split("/").pop() ?? path;
+}
+
+function isCanonicalPiSessionPath(probe: SessionInputProbe): boolean {
+  if (probe.source !== "pi" || !probe.sessionId) {
+    return false;
+  }
+
+  const filename = sessionPathBasename(probe.path);
+  return (
+    /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_/.test(filename) &&
+    filename.endsWith(`_${probe.sessionId}.jsonl`)
+  );
+}
+
+function sessionDuplicatePathRank(probe: SessionInputProbe): number {
+  if (isCanonicalPiSessionPath(probe)) {
+    return 3;
+  }
+
+  if (
+    probe.source === "pi" &&
+    sessionPathBasename(probe.path) === "new.jsonl"
+  ) {
+    return 0;
+  }
+
+  return 1;
+}
+
+function choosePreferredDuplicateSessionInput(
+  current: SessionInputProbe,
+  candidate: SessionInputProbe,
+): SessionInputProbe {
+  const currentRank = sessionDuplicatePathRank(current);
+  const candidateRank = sessionDuplicatePathRank(candidate);
+  if (candidateRank !== currentRank) {
+    return candidateRank > currentRank ? candidate : current;
+  }
+
+  const currentTime = resolveProbeTimeValue(current);
+  const candidateTime = resolveProbeTimeValue(candidate);
+  if (
+    currentTime !== null &&
+    candidateTime !== null &&
+    currentTime !== candidateTime
+  ) {
+    return candidateTime > currentTime ? candidate : current;
+  }
+
+  if (candidate.mtimeMs !== current.mtimeMs) {
+    return candidate.mtimeMs > current.mtimeMs ? candidate : current;
+  }
+
+  return candidate.path.localeCompare(current.path) < 0 ? candidate : current;
+}
+
+function dedupeSessionInputProbes(
+  probes: readonly SessionInputProbe[],
+): SessionInputProbe[] {
+  const byIdentity = new Map<string, SessionInputProbe>();
+
+  for (const probe of probes) {
+    const key = sessionInputIdentityKey(probe);
+    const current = byIdentity.get(key);
+    byIdentity.set(
+      key,
+      current ? choosePreferredDuplicateSessionInput(current, probe) : probe,
+    );
+  }
+
+  return [...byIdentity.values()];
+}
+
+async function selectSessionInputWindow(
+  sessionInputs: readonly SessionInput[],
   concurrency: number,
   options: Pick<EvaluateOptions, "sessionLimit" | "startDate" | "endDate">,
   signal?: AbortSignal,
-): Promise<SelectedSessionWindow> {
+): Promise<SelectedSessionInputWindow> {
   const probes = await mapWithConcurrency(
-    sessionFiles,
+    sessionInputs,
     concurrency,
-    (path) => probeSessionOrder(path, source),
+    async (input) => ({
+      ...(await probeSessionOrder(input.path, input.source)),
+      source: input.source,
+    }),
     signal,
   );
 
-  const filtered: SessionOrderProbe[] = [];
+  const uniqueProbes = dedupeSessionInputProbes(probes);
+  const filtered: SessionInputProbe[] = [];
   let undatedExcludedCount = 0;
-  for (const probe of probes) {
+  for (const probe of uniqueProbes) {
     const match = probeFallsInDateRange(
       probe,
       options.startDate,
@@ -187,18 +299,19 @@ async function selectSessionWindow(
     }
   }
 
-  const sortedPaths = filtered
-    .sort(compareSessionProbes)
-    .map((probe) => probe.path);
-  const sessionPaths =
+  const sortedInputs = filtered.sort(compareSessionProbes).map((probe) => ({
+    path: probe.path,
+    source: probe.source,
+  }));
+  const selectedInputs =
     typeof options.sessionLimit === "number"
-      ? sortedPaths.slice(-options.sessionLimit)
-      : sortedPaths;
+      ? sortedInputs.slice(-options.sessionLimit)
+      : sortedInputs;
   const hasDateFilter = Boolean(options.startDate || options.endDate);
 
   return {
-    sessionPaths,
-    discoveredSessionCount: sessionFiles.length,
+    sessionInputs: selectedInputs,
+    discoveredSessionCount: uniqueProbes.length,
     eligibleSessionCount: filtered.length,
     undatedExcludedCount,
     selection: hasDateFilter
@@ -207,9 +320,29 @@ async function selectSessionWindow(
         ? "date_filtered_window"
         : "date_filtered"
       : typeof options.sessionLimit === "number" &&
-          sessionFiles.length > options.sessionLimit
+          sessionInputs.length > options.sessionLimit
         ? "most_recent_window"
         : "all_discovered",
+  };
+}
+
+async function selectSessionWindow(
+  sessionFiles: readonly string[],
+  source: SourceProvider,
+  concurrency: number,
+  options: Pick<EvaluateOptions, "sessionLimit" | "startDate" | "endDate">,
+  signal?: AbortSignal,
+): Promise<SelectedSessionWindow> {
+  const { sessionInputs, ...selection } = await selectSessionInputWindow(
+    sessionFiles.map((path) => ({ path, source })),
+    concurrency,
+    options,
+    signal,
+  );
+
+  return {
+    ...selection,
+    sessionPaths: sessionInputs.map((input) => input.path),
   };
 }
 
@@ -316,7 +449,13 @@ function summarizeProcessedSession(
 }
 
 function buildCorpusScope(
-  selectionWindow: SelectedSessionWindow,
+  selectionWindow: Pick<
+    SelectedSessionWindow,
+    | "selection"
+    | "discoveredSessionCount"
+    | "eligibleSessionCount"
+    | "undatedExcludedCount"
+  >,
   options: Pick<
     EvaluateOptions,
     "sessionLimit" | "startDate" | "endDate" | "timeBucket"
@@ -335,7 +474,13 @@ function buildCorpusScope(
 }
 
 function buildAppliedFilters(
-  selectionWindow: SelectedSessionWindow,
+  selectionWindow: Pick<
+    SelectedSessionWindow,
+    | "selection"
+    | "discoveredSessionCount"
+    | "eligibleSessionCount"
+    | "undatedExcludedCount"
+  >,
   options: Pick<
     EvaluateOptions,
     "sessionLimit" | "startDate" | "endDate" | "timeBucket"
@@ -393,12 +538,7 @@ async function discoverSessionInputs(
 
 const STREAMING_PROCESSING_SESSION_THRESHOLD = 500;
 
-async function processDiscoveredSessions(
-  options: EvaluateOptions,
-  concurrency: number,
-  allowEmptyCorpus = false,
-  signal?: AbortSignal,
-): Promise<{
+type ProcessedSessionCorpus = {
   inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
   corpusScope: MetricsRecord["corpusScope"];
   appliedFilters: MetricsRecord["appliedFilters"];
@@ -406,51 +546,25 @@ async function processDiscoveredSessions(
     typeof buildTemplateRegistry
   >["labelSummaries"];
   processed: Awaited<ReturnType<typeof processSession>>[];
-}> {
-  const { inventory, sessionInventoryPath, sessionFiles } =
-    await discoverSessionInputs(options, signal);
+};
 
-  const selectionWindow = await selectSessionWindow(
-    sessionFiles,
-    options.source,
-    concurrency,
-    options,
-    signal,
-  );
-  const corpusScope = buildCorpusScope(selectionWindow, options);
-  const appliedFilters = buildAppliedFilters(selectionWindow, options);
-  const hasDateFilter = Boolean(options.startDate || options.endDate);
-
-  if (sessionFiles.length === 0) {
-    if (allowEmptyCorpus || hasDateFilter) {
-      return {
-        inventory,
-        corpusScope,
-        appliedFilters,
-        templateLabelSummaries: [],
-        processed: [],
-      };
-    }
-    throw new MissingTranscriptInputError(
-      sessionInventoryPath,
-      "no-jsonl-files",
-    );
-  }
-
-  if (selectionWindow.sessionPaths.length === 0) {
-    if (allowEmptyCorpus || hasDateFilter) {
-      return {
-        inventory,
-        corpusScope,
-        appliedFilters,
-        templateLabelSummaries: [],
-        processed: [],
-      };
-    }
-    throw new MissingTranscriptInputError(
-      sessionInventoryPath,
-      "no-jsonl-files",
-    );
+async function processSelectedSessionInputs(
+  inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"],
+  corpusScope: MetricsRecord["corpusScope"],
+  appliedFilters: MetricsRecord["appliedFilters"],
+  sessionInputs: readonly SessionInput[],
+  options: Pick<EvaluateOptions, "parseTimeoutMs">,
+  concurrency: number,
+  signal: AbortSignal | undefined,
+): Promise<ProcessedSessionCorpus> {
+  if (sessionInputs.length === 0) {
+    return {
+      inventory,
+      corpusScope,
+      appliedFilters,
+      templateLabelSummaries: [],
+      processed: [],
+    };
   }
 
   const parseTimeoutMs = options.parseTimeoutMs ?? 300000;
@@ -485,16 +599,14 @@ async function processDiscoveredSessions(
     } satisfies ProcessedSession;
   };
 
-  if (
-    selectionWindow.sessionPaths.length > STREAMING_PROCESSING_SESSION_THRESHOLD
-  ) {
+  if (sessionInputs.length > STREAMING_PROCESSING_SESSION_THRESHOLD) {
     const corpusBuilder = createTemplateCorpusBuilder();
     await mapWithConcurrency(
-      selectionWindow.sessionPaths,
+      sessionInputs,
       concurrency,
-      async (sessionPath) => {
-        const session = await parseTranscriptFile(sessionPath, {
-          sourceProvider: options.source,
+      async (input) => {
+        const session = await parseTranscriptFile(input.path, {
+          sourceProvider: input.source,
           timeoutMs: parseTimeoutMs,
           signal,
         });
@@ -506,11 +618,11 @@ async function processDiscoveredSessions(
     const templateIndex = buildTemplateCorpusIndex(corpusBuilder);
     const templateSummaryBuilder = createTemplateSummaryBuilder();
     const processed = await mapWithConcurrency(
-      selectionWindow.sessionPaths,
+      sessionInputs,
       concurrency,
-      async (sessionPath) => {
-        const session = await parseTranscriptFile(sessionPath, {
-          sourceProvider: options.source,
+      async (input) => {
+        const session = await parseTranscriptFile(input.path, {
+          sourceProvider: input.source,
           timeoutMs: parseTimeoutMs,
           signal,
         });
@@ -547,11 +659,11 @@ async function processDiscoveredSessions(
   }
 
   const parsedSessions = await mapWithConcurrency(
-    selectionWindow.sessionPaths,
+    sessionInputs,
     concurrency,
-    (sessionPath) =>
-      parseTranscriptFile(sessionPath, {
-        sourceProvider: options.source,
+    (input) =>
+      parseTranscriptFile(input.path, {
+        sourceProvider: input.source,
         timeoutMs: parseTimeoutMs,
         signal,
       }),
@@ -576,6 +688,119 @@ async function processDiscoveredSessions(
   };
 }
 
+async function processDiscoveredSessions(
+  options: EvaluateOptions,
+  concurrency: number,
+  allowEmptyCorpus = false,
+  signal?: AbortSignal,
+): Promise<ProcessedSessionCorpus> {
+  const { inventory, sessionInventoryPath, sessionFiles } =
+    await discoverSessionInputs(options, signal);
+
+  const selectionWindow = await selectSessionWindow(
+    sessionFiles,
+    options.source,
+    concurrency,
+    options,
+    signal,
+  );
+  const corpusScope = buildCorpusScope(selectionWindow, options);
+  const appliedFilters = buildAppliedFilters(selectionWindow, options);
+  const hasDateFilter = Boolean(options.startDate || options.endDate);
+
+  if (sessionFiles.length === 0) {
+    if (allowEmptyCorpus || hasDateFilter) {
+      return processSelectedSessionInputs(
+        inventory,
+        corpusScope,
+        appliedFilters,
+        [],
+        options,
+        concurrency,
+        signal,
+      );
+    }
+    throw new MissingTranscriptInputError(
+      sessionInventoryPath,
+      "no-jsonl-files",
+    );
+  }
+
+  if (selectionWindow.sessionPaths.length === 0) {
+    if (allowEmptyCorpus || hasDateFilter) {
+      return processSelectedSessionInputs(
+        inventory,
+        corpusScope,
+        appliedFilters,
+        [],
+        options,
+        concurrency,
+        signal,
+      );
+    }
+    throw new MissingTranscriptInputError(
+      sessionInventoryPath,
+      "no-jsonl-files",
+    );
+  }
+
+  return processSelectedSessionInputs(
+    inventory,
+    corpusScope,
+    appliedFilters,
+    selectionWindow.sessionPaths.map((path) => ({
+      path,
+      source: options.source,
+    })),
+    options,
+    concurrency,
+    signal,
+  );
+}
+
+async function processAllDiscoveredSessions(
+  options: EvaluateAllSourcesOptions,
+  concurrency: number,
+  signal?: AbortSignal,
+): Promise<ProcessedSessionCorpus> {
+  const discoveries = await mapWithConcurrency(
+    options.sources,
+    Math.max(1, Math.min(options.sources.length, concurrency)),
+    (sourceHome) =>
+      discoverArtifacts(sourceHome.home, {
+        provider: sourceHome.source,
+        signal,
+      }),
+    signal,
+  );
+  const inventory = discoveries.flatMap((discovered) => discovered.inventory);
+  const sessionInputs = discoveries.flatMap((discovered) =>
+    discovered.sessionFiles.map((path) => ({
+      path,
+      source: discovered.provider,
+    })),
+  );
+
+  const selectionWindow = await selectSessionInputWindow(
+    sessionInputs,
+    concurrency,
+    options,
+    signal,
+  );
+  const corpusScope = buildCorpusScope(selectionWindow, options);
+  const appliedFilters = buildAppliedFilters(selectionWindow, options);
+
+  return processSelectedSessionInputs(
+    inventory,
+    corpusScope,
+    appliedFilters,
+    selectionWindow.sessionInputs,
+    options,
+    concurrency,
+    signal,
+  );
+}
+
 async function collectParsedArtifacts(
   options: EvaluateOptions,
   concurrency: number,
@@ -590,6 +815,29 @@ async function collectParsedArtifacts(
     options,
     concurrency,
     allowEmptyCorpus,
+    signal,
+  );
+  throwIfAborted(signal);
+
+  return {
+    inventory,
+    processed,
+    rawTurns: extractTurns(processed),
+  };
+}
+
+async function collectAllSourceParsedArtifacts(
+  options: EvaluateAllSourcesOptions,
+  concurrency: number,
+  signal?: AbortSignal,
+): Promise<{
+  inventory: Awaited<ReturnType<typeof discoverArtifacts>>["inventory"];
+  processed: Awaited<ReturnType<typeof processSession>>[];
+  rawTurns: RawTurnRecord[];
+}> {
+  const { inventory, processed } = await processAllDiscoveredSessions(
+    options,
+    concurrency,
     signal,
   );
   throwIfAborted(signal);
@@ -626,27 +874,36 @@ export async function parseArtifacts(
   };
 }
 
-/**
- * Performs a canonical evaluation of transcript artifacts.
- */
-export async function evaluateArtifacts(
-  options: EvaluateOptions,
+export async function parseAllSourceArtifacts(
+  options: EvaluateAllSourcesOptions,
   signal?: AbortSignal,
-): Promise<EvaluationArtifacts> {
-  const outputMode = options.outputMode ?? "full";
-  const concurrency =
-    outputMode === "summary"
-      ? getConfig().concurrency.summary
-      : getConfig().concurrency.full;
-
-  const parsed = await processDiscoveredSessions(
-    { ...options, outputMode },
-    concurrency,
-    true,
+): Promise<ParseArtifactsResult> {
+  const parsed = await collectAllSourceParsedArtifacts(
+    options,
+    getConfig().concurrency.full,
     signal,
   );
-  throwIfAborted(signal);
 
+  return {
+    inventory: parsed.inventory,
+    sessionCount: parsed.processed.length,
+    parseWarningCount: parsed.processed.reduce(
+      (total, session) => total + session.metrics.parseWarningCount,
+      0,
+    ),
+    rawTurns: parsed.rawTurns,
+  };
+}
+
+type EvaluationArtifactOptions = Omit<EvaluateOptions, "source"> & {
+  source: SourceProvider | "all";
+};
+
+function buildEvaluationArtifactBundle(
+  parsed: ProcessedSessionCorpus,
+  options: EvaluationArtifactOptions,
+  outputMode: EvaluationOutputMode,
+): EvaluationArtifacts {
   const rawTurns =
     outputMode === "full" ? extractTurns(parsed.processed) : undefined;
   const incidents =
@@ -700,4 +957,56 @@ export async function evaluateArtifacts(
       ? { rawTurns: rawTurns ?? [], incidents: incidents ?? [] }
       : {}),
   };
+}
+
+/**
+ * Performs a canonical evaluation of transcript artifacts.
+ */
+export async function evaluateArtifacts(
+  options: EvaluateOptions,
+  signal?: AbortSignal,
+): Promise<EvaluationArtifacts> {
+  const outputMode = options.outputMode ?? "full";
+  const concurrency =
+    outputMode === "summary"
+      ? getConfig().concurrency.summary
+      : getConfig().concurrency.full;
+
+  const parsed = await processDiscoveredSessions(
+    { ...options, outputMode },
+    concurrency,
+    true,
+    signal,
+  );
+  throwIfAborted(signal);
+
+  return buildEvaluationArtifactBundle(
+    parsed,
+    { ...options, outputMode },
+    outputMode,
+  );
+}
+
+export async function evaluateAllSourceArtifacts(
+  options: EvaluateAllSourcesOptions,
+  signal?: AbortSignal,
+): Promise<EvaluationArtifacts> {
+  const outputMode = options.outputMode ?? "full";
+  const concurrency =
+    outputMode === "summary"
+      ? getConfig().concurrency.summary
+      : getConfig().concurrency.full;
+
+  const parsed = await processAllDiscoveredSessions(
+    { ...options, outputMode },
+    concurrency,
+    signal,
+  );
+  throwIfAborted(signal);
+
+  return buildEvaluationArtifactBundle(
+    parsed,
+    { ...options, home: "", source: "all", outputMode },
+    outputMode,
+  );
 }

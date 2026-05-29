@@ -6,12 +6,14 @@
  * Invariants/Assumptions: Timestamp probing is best-effort; invalid or missing timestamps fall back to file mtime and lexical order.
  */
 
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
+import { basename } from "node:path";
 import type { SourceProvider } from "../schema.js";
 import { createTranscriptLineReader, getReaderStream } from "./file-reader.js";
 
 export interface SessionOrderProbe {
   path: string;
+  sessionId?: string;
   startedAt?: string;
   earliestTimestamp?: string;
   mtimeMs: number;
@@ -48,87 +50,140 @@ function chooseEarlier(
   return leftMs <= rightMs ? left : right;
 }
 
+function asString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function getRecordValue(
+  record: Record<string, unknown> | undefined,
+  key: string,
+): unknown {
+  return record?.[key];
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
 function extractCodexStartedAt(
   record: Record<string, unknown>,
 ): string | undefined {
-  // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-  if (record["type"] !== "session_meta") {
+  if (getRecordValue(record, "type") !== "session_meta") {
     return undefined;
   }
 
-  const payload =
-    // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-    typeof record["payload"] === "object" &&
-    // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-    record["payload"] !== null &&
-    // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-    !Array.isArray(record["payload"])
-      ? // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-        (record["payload"] as Record<string, unknown>)
-      : undefined;
-  const payloadTimestamp =
-    // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-    payload && typeof payload["timestamp"] === "string"
-      ? // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-        payload["timestamp"]
-      : undefined;
+  const payload = asRecord(getRecordValue(record, "payload"));
   return (
-    payloadTimestamp ??
-    // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-    (typeof record["timestamp"] === "string"
-      ? // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-        record["timestamp"]
-      : undefined)
+    asString(getRecordValue(payload, "timestamp")) ??
+    asString(getRecordValue(record, "timestamp"))
+  );
+}
+
+function extractCodexSessionId(
+  record: Record<string, unknown>,
+): string | undefined {
+  if (getRecordValue(record, "type") !== "session_meta") {
+    return undefined;
+  }
+
+  return asString(
+    getRecordValue(asRecord(getRecordValue(record, "payload")), "id"),
   );
 }
 
 function extractPiStartedAt(
   record: Record<string, unknown>,
 ): string | undefined {
-  // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-  if (record["type"] !== "session") {
+  if (getRecordValue(record, "type") !== "session") {
     return undefined;
   }
 
-  return (
-    // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-    typeof record["timestamp"] === "string"
-      ? // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-        record["timestamp"]
-      : undefined
-  );
+  return asString(getRecordValue(record, "timestamp"));
 }
 
-function extractRecordTimestamp(
+function extractPiSessionId(
+  record: Record<string, unknown>,
+): string | undefined {
+  if (getRecordValue(record, "type") !== "session") {
+    return undefined;
+  }
+
+  return asString(getRecordValue(record, "id"));
+}
+
+function extractRecordMetadata(
   record: Record<string, unknown>,
   provider: SourceProvider,
-): { startedAt?: string; timestamp?: string } {
-  const timestamp =
-    // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-    typeof record["timestamp"] === "string"
-      ? // biome-ignore lint/complexity/useLiteralKeys: Record access must preserve index-signature compatibility under noPropertyAccessFromIndexSignature.
-        record["timestamp"]
-      : undefined;
+): { sessionId?: string; startedAt?: string; timestamp?: string } {
+  const timestamp = asString(getRecordValue(record, "timestamp"));
 
   if (provider === "claude") {
+    const sessionId = asString(getRecordValue(record, "sessionId"));
     return {
+      ...(sessionId ? { sessionId } : {}),
       ...(timestamp ? { startedAt: timestamp, timestamp } : {}),
     };
   }
 
   if (provider === "pi") {
     const startedAt = extractPiStartedAt(record);
+    const sessionId = extractPiSessionId(record);
     return {
+      ...(sessionId ? { sessionId } : {}),
       ...(startedAt ? { startedAt } : {}),
       ...(timestamp ? { timestamp } : {}),
     };
   }
 
   const startedAt = extractCodexStartedAt(record);
+  const sessionId = extractCodexSessionId(record);
   return {
+    ...(sessionId ? { sessionId } : {}),
     ...(startedAt ? { startedAt } : {}),
     ...(timestamp ? { timestamp } : {}),
   };
+}
+
+function toIsoTime(value: unknown): string | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  return new Date(value).toISOString();
+}
+
+async function probeOpencodeSessionOrder(
+  path: string,
+  mtimeMs: number,
+): Promise<SessionOrderProbe> {
+  try {
+    const parsedUnknown: unknown = JSON.parse(await readFile(path, "utf8"));
+    const record = asRecord(parsedUnknown);
+    if (!record) {
+      return { path, mtimeMs };
+    }
+
+    const sessionId = asString(getRecordValue(record, "id"));
+    const time = asRecord(getRecordValue(record, "time"));
+    const startedAt = toIsoTime(getRecordValue(time, "created"));
+    const endedAt = toIsoTime(getRecordValue(time, "updated"));
+    const earliestTimestamp = chooseEarlier(startedAt, endedAt);
+    return {
+      path,
+      ...(sessionId ? { sessionId } : {}),
+      ...(startedAt ? { startedAt } : {}),
+      ...(earliestTimestamp ? { earliestTimestamp } : {}),
+      mtimeMs,
+    };
+  } catch {
+    return {
+      path,
+      sessionId: basename(path).replace(/\.json$/, ""),
+      mtimeMs,
+    };
+  }
 }
 
 export function resolveProbeTimeValue(probe: SessionOrderProbe): number | null {
@@ -184,8 +239,13 @@ export async function probeSessionOrder(
   provider: SourceProvider,
 ): Promise<SessionOrderProbe> {
   const fileStat = await stat(path);
+  if (provider === "opencode") {
+    return probeOpencodeSessionOrder(path, fileStat.mtimeMs);
+  }
+
   const reader = createTranscriptLineReader(path);
   const stream = getReaderStream(reader);
+  let sessionId: string | undefined;
   let startedAt: string | undefined;
   let earliestTimestamp: string | undefined;
 
@@ -207,7 +267,8 @@ export async function probeSessionOrder(
         }
 
         const record = parsedUnknown as Record<string, unknown>;
-        const extracted = extractRecordTimestamp(record, provider);
+        const extracted = extractRecordMetadata(record, provider);
+        sessionId ??= extracted.sessionId;
         startedAt ??= extracted.startedAt;
         earliestTimestamp = chooseEarlier(
           earliestTimestamp,
@@ -222,6 +283,7 @@ export async function probeSessionOrder(
 
   return {
     path,
+    ...(sessionId ? { sessionId } : {}),
     ...(startedAt ? { startedAt } : {}),
     ...(earliestTimestamp ? { earliestTimestamp } : {}),
     mtimeMs: fileStat.mtimeMs,
